@@ -6,7 +6,7 @@
 # BigQuery 명령은 모두 scripts/bq.sh 래퍼를 거친다(개인 프로젝트·리전 고정).
 # 단계마다 ops.build_log 에 1행을 쓰고, 실패하면 그 단계를 failed 로 기록한 뒤 즉시 종료한다.
 # 8단계 검사가 하나라도 어긋나면 exit 1.
-# 환경 변수: NP_MAX_BYTES (단계당 청구 바이트 상한, 기본 500000000). 넘으면 BigQuery 가 쿼리를 거부하고 단계가 실패한다.
+# 환경 변수: NP_MAX_BYTES (단계당 청구 바이트 상한, 기본 5000000000). 넘으면 BigQuery 가 쿼리를 거부하고 단계가 실패한다.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +14,7 @@ BQ="$ROOT/scripts/bq.sh"
 SQL="$ROOT/bigquery/sql"
 SCHEMA="$ROOT/bigquery/schema"
 RAW="$ROOT/data/raw"
-MAX_BYTES="${NP_MAX_BYTES:-500000000}"
+MAX_BYTES="${NP_MAX_BYTES:-5000000000}"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)"
 
 SKIP_RAW=0

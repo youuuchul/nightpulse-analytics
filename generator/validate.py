@@ -100,6 +100,9 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     client_users: dict[str, set[str]] = defaultdict(set)
     dates: set[str] = set()
     n_rows = 0
+    last_day = end_date.isoformat()
+    last_day_apply = 0
+    last_day_pay = 0
 
     with gzip.open(raw / "ga4_events.ndjson.gz", "rt", encoding="utf-8") as f:
         for line in f:
@@ -108,6 +111,11 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
             e = r["event_name"]
             names[e] += 1
             dates.add(r["event_date"])
+            if r["event_date"] == last_day:
+                if e == "apply_event":
+                    last_day_apply += 1
+                elif e == "purchase":
+                    last_day_pay += 1
             k = (r["user_pseudo_id"], r["ga_session_id"])
             s = sessions.get(k)
             if s is None:
@@ -239,6 +247,27 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     paid_apps = [a for a in apps if price[a["event_id"]] > 0]
     ad_days = {a["date"] for a in ads}
     ad_window = [s for s in visit if s.date in ad_days]
+
+    last_day_hours = {datetime.fromtimestamp(s.ts_min // 1_000_000, KST).hour for s in visit if s.date == last_day}
+    check(
+        "마지막 날 시간별 세션 0~23시 전부 존재",
+        last_day_hours == set(range(24)),
+        f"{len(last_day_hours)}개 시간대: {sorted(last_day_hours)}",
+    )
+    check("마지막 날 신청 건수 > 0", last_day_apply > 0, f"{last_day_apply}")
+    check("마지막 날 결제 건수 > 0", last_day_pay > 0, f"{last_day_pay}")
+    day_people: dict[str, set[str]] = defaultdict(set)
+    for s in visit:
+        day_people[s.date].add(person_of.get(s.client, s.client))
+    prev_days = [(end_date - timedelta(days=i)).isoformat() for i in range(1, 8)]
+    prev_avg = sum(len(day_people.get(d, set())) for d in prev_days) / 7
+    last_day_visitors = len(day_people.get(last_day, set()))
+    check(
+        "마지막 날 방문자 >= 직전 7일 평균의 60%",
+        prev_avg == 0 or last_day_visitors >= 0.6 * prev_avg,
+        f"{last_day_visitors} vs 직전 7일 평균 {prev_avg:.1f}",
+    )
+
     values = {
         "신규 방문자 W1 리텐션": ret[1],
         "W4 리텐션": ret[4],

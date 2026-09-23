@@ -456,8 +456,11 @@ class Generator:
         for w in range(1, self.weeks + 1):
             per_week = self._phase(w)[4]
             k = int(rng.integers(per_week - 1, per_week + 2))
-            for _ in range(k):
-                d = (w - 1) * 7 + self._choice(dow_start)
+            for j in range(k):
+                if w == self.weeks and j == 0:
+                    d = self.n_days - 1  # 관측 마지막 날에도 신청 가능한 행사를 보장한다
+                else:
+                    d = (w - 1) * 7 + self._choice(dow_start)
                 d_date = self._day_date(d)
                 hour = int(rng.choice([20, 21, 22, 23], p=[0.25, 0.3, 0.3, 0.15]))
                 starts = self.day0 + d * 86400 + hour * 3600
@@ -734,7 +737,7 @@ class Generator:
         last = -(10**12)
         for kind, st, dev_i, ch in plan:
             st = max(st, last + 1860)
-            if st >= self.range_end - 3600:
+            if st >= self.range_end:
                 continue
             out.append((kind, st, dev_i, ch))
             last = st + 600
@@ -1095,7 +1098,9 @@ class Generator:
             if is_paid:
                 eng_ms = int(eng_ms * 0.6)
         if start + span_s >= self.range_end:
-            start = int(self.range_end - span_s - 2)
+            # 세션 시작 시각(따라서 시(hour))은 유지하고 길이만 줄여 관측 마지막 날 경계 밖으로 새지 않게 한다
+            span_s = max(1.0, self.range_end - start - 2)
+            eng_ms = min(eng_ms, int(span_s * 1000))
         # 시각: 랜딩까지는 거의 동시, 이후는 구간 안 정렬 균등
         head = 0
         for e, _ in steps:

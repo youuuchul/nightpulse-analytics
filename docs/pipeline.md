@@ -43,7 +43,7 @@ python3 bigquery/build_catalog.py --export dashboard/public/catalog.json   # + �
 |---|---|---|
 | `[1] raw… 실패: data/raw 에 … 없음` | 생성기 출력 파일명 | 생성기 재실행. 적재는 새 이름 우선, 이전 이름(`events.ndjson.gz` 등)도 받는다 |
 | `[1]` 적재 오류 (스키마·형식) | 오류 메시지의 열 이름 | `bigquery/schema/*.json` 과 CSV 헤더 대조 |
-| `[n] … 실패: … bytesBilled` | `NP_MAX_BYTES` (기본 500MB) | 날짜 필터·열 선택을 먼저 줄인다. 상한을 올리는 건 마지막 |
+| `[n] … 실패: … bytesBilled` | `NP_MAX_BYTES` (기본 5GB) | 날짜 필터·열 선택을 먼저 줄인다. 상한을 올리는 건 마지막 |
 | `… Cannot replace a table with a different partitioning spec` 류 | 표의 파티션·클러스터 설정을 바꿨다 | `CREATE OR REPLACE` 는 설정 변경을 거부한다. `scripts/bq.sh rm -f -t <데이터셋>.<표>` 로 그 표만 지우고 해당 단계를 다시 돌린다 |
 | `[8] 검사 실패 k건` | 아래 첫 쿼리 | C(대조)는 SQL 버그, R(범위)은 생성기 보정, I(무결성)는 원천 문제일 가능성이 크다 |
 
@@ -70,7 +70,7 @@ ORDER BY started_at;
 
 ## 비용
 
-전체 실행 1회에 쿼리 처리량 약 0.73GB(52주·이벤트 약 89만 행 기준). 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
+전체 실행 1회에 쿼리 처리량 약 7.3GB(52주·이벤트 약 876만 행 기준, 정제 2.2GB·세션 1.4GB가 대부분). 단계당 상한 `NP_MAX_BYTES` 기본 5GB. 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
 
 | 단계 | 처리량 | 비고 |
 |---|---:|---|
@@ -81,7 +81,7 @@ ORDER BY started_at;
 | 나머지 | 각 25MB 이하 | |
 
 - 이벤트 표(`raw.ga4_events`, `staging.events_clean`)는 일 파티션 + 파티션 필터 필수다. 전체 재생성 SQL도 기간을 명시한다.
-- 단계마다 `--maximum_bytes_billed` 상한(`NP_MAX_BYTES`, 기본 500MB)이 걸려 있어 상한을 넘는 쿼리는 실행되지 않는다.
+- 단계마다 `--maximum_bytes_billed` 상한(`NP_MAX_BYTES`, 기본 5GB)이 걸려 있어 상한을 넘는 쿼리는 실행되지 않는다.
 - 마트·중간 표는 날짜 파티션과 세그먼트 클러스터를 둔다. 화면 조회는 기간 필터로 파티션만 읽는다.
 
 ## 운영 가정
