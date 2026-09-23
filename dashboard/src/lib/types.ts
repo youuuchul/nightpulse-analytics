@@ -160,25 +160,32 @@ export interface Meta {
 
 export interface Data {
   meta: Meta
+  files: Partial<Record<LazyKey | 'person_day_meta', string>>
   daily_metrics: DailyMetric[]
-  hourly_metrics: HourlyMetric[]
-  daily_channel: DailyChannel[]
   daily_ad: DailyAd[]
   daily_event: DailyEvent[]
-  daily_venue: DailyVenue[]
   funnel_daily: FunnelDaily[]
   weekly_cohort: WeeklyCohort[]
   monthly_cohort: MonthlyCohort[]
   weekly_activity: WeeklyActivity[]
   monthly_summary: MonthlySummary[]
   weekly_audience_funnel?: WeeklyAudienceFunnel[]
-  weekly_path?: WeeklyPath[]
-  person_day?: PersonDay
 }
 
+export interface LazyTables {
+  hourly_metrics: HourlyMetric[]
+  daily_channel: DailyChannel[]
+  daily_venue: DailyVenue[]
+  weekly_path: WeeklyPath[]
+  person_day: PersonDay
+}
+
+export type LazyKey = keyof LazyTables
+
+/** person_day.bin 을 읽은 그대로. 행 i = w[2i], w[2i+1] (비트 배치는 persons.ts). 날짜 순 정렬. */
 export interface PersonDay {
-  cols: string[]
-  rows: number[][]
-  codes: { c: string[]; p: string[]; m: string[] }
   base_date: string
+  codes: { c: string[]; p: string[]; m: string[] }
+  n: number
+  w: Uint32Array
 }

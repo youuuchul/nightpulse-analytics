@@ -4,6 +4,7 @@ import { addDays, md, mondayOf } from '../lib/date'
 import { num, pct, ratio } from '../lib/format'
 import { S } from '../lib/labels'
 import { F, uniquePersons } from '../lib/persons'
+import { ready, useTable, waitOf } from '../lib/source'
 import { TimeChart } from '../components/charts'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
 import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
@@ -13,7 +14,10 @@ export default function Members({ data, s, range }: TabProps) {
   const m = useMemo(() => data.daily_metrics.filter(seg), [data, s.ch, s.pf, s.ms])
   const cur = sum(inRange(m, range.from, range.to), ['new_persons', 'signups'])
   const prev = sum(inRange(m, range.prevFrom, range.prevTo), ['new_persons', 'signups'])
-  const pd = data.person_day
+  const pdL = useTable(data, 'person_day')
+  const hourL = useTable(data, 'hourly_metrics', range.oneDay)
+  const pd = ready(pdL)
+  const pw = waitOf(pdL)
   const visitors = (from: string, to: string) => {
     if (!pd) {
       const rows = inRange(m, from, to)
@@ -25,8 +29,8 @@ export default function Members({ data, s, range }: TabProps) {
     const u = uniquePersons(pd, from, to, F.visited, { ch: s.ch, pf: s.pf, ms: s.ms }, (r) => ['', r.member_seg])
     return { all: u.get('') ?? 0, member: u.get('member') ?? 0 }
   }
-  const vCur = useMemo(() => visitors(range.from, range.to), [data, m, range.from, range.to])
-  const vPrev = useMemo(() => visitors(range.prevFrom, range.prevTo), [data, m, range.prevFrom, range.prevTo])
+  const vCur = useMemo(() => visitors(range.from, range.to), [data, pd, m, range.from, range.to])
+  const vPrev = useMemo(() => visitors(range.prevFrom, range.prevTo), [data, pd, m, range.prevFrom, range.prevTo])
   const memCur = vCur.member
   const memPrev = vPrev.member
   const conv = ratio(cur.signups, cur.new_persons)
@@ -46,14 +50,14 @@ export default function Members({ data, s, range }: TabProps) {
       weekly: true,
       rows: b.rows.map((r) => ({ ...r, member: u.get(`${r.date}|member`) ?? 0, guest: u.get(`${r.date}|guest`) ?? 0 })),
     }
-  }, [data, m, range])
+  }, [data, pd, m, range])
 
   const hourly = useMemo(() => {
     const out = Array.from({ length: 24 }, (_, h) => ({ hour: h, member: 0, guest: 0 }))
-    for (const r of data.hourly_metrics)
+    for (const r of ready(hourL) ?? [])
       if (r.kst_date === range.from && seg(r)) out[r.kst_hour][r.member_seg] += r.sessions
     return out
-  }, [data, range.from, s.ch, s.pf, s.ms])
+  }, [hourL, range.from, s.ch, s.pf, s.ms])
 
   const lastFullWeek = mondayOf(addDays(data.meta.to_date, -6))
   const cohort = useMemo(() => {
@@ -110,12 +114,14 @@ export default function Members({ data, s, range }: TabProps) {
           value={num(memCur)}
           unit="명"
           delta={delta(data, range, memCur, memPrev)}
+          wait={pw}
         />
         <Tile
           label="방문자 중 회원 비중"
           value={pct(ratio(memCur, vCur.all))}
           sub={`방문자 ${num(vCur.all)}명 중`}
           delta={ptDelta(data, range, ratio(memCur, vCur.all), ratio(memPrev, vPrev.all))}
+          wait={pw}
         />
         <Tile
           label={cohort.span ? `W1 리텐션 · ${cohort.span}` : 'W1 리텐션'}
@@ -134,6 +140,8 @@ export default function Members({ data, s, range }: TabProps) {
           title={range.oneDay ? '시간별 세션 · 회원 구분' : '방문자 · 회원 구분'}
           meta={range.oneDay ? range.from : `${grain(split.weekly)} · 명`}
           right={<Legend items={series} />}
+          wait={range.oneDay ? waitOf(hourL) : split.weekly ? pw : null}
+          waitH={260}
         >
           {range.oneDay ? (
             <TimeChart data={hourly} xKey="hour" xFormat={hourX} tipTitle={hourTip} kind="stack" series={series} height={260} />

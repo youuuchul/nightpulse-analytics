@@ -82,13 +82,28 @@
 | 오디언스 주별 전환율 | 주마다 Σ payment ÷ Σ landing (주 2개 이상일 때만 그림) | 사람·주 |
 | 경로 비중 | 링크 세션 ÷ 출발 노드 세션(그 화면 세션 중), 링크 세션 ÷ step 1 세션 합(전체 세션 대비). 노드는 기간 안 세션 상위 12개 화면만 이름을 두고 나머지는 `(기타)` | 세션 |
 
-오디언스끼리는 겹치므로 합산하지 않는다. 드릴다운 두 카드는 주 단위라 기간 프리셋이 1일·7일이어도 그 날짜가 속한 주 전체를 쓰며, 카드 머리에 주 수와 범위를 적는다. 두 키가 `data.json` 에 없으면 카드는 '데이터 없음'.
+오디언스끼리는 겹치므로 합산하지 않는다. 드릴다운 두 카드는 주 단위라 기간 프리셋이 1일·7일이어도 그 날짜가 속한 주 전체를 쓰며, 카드 머리에 주 수와 범위를 적는다. 두 표가 추출에 없으면(`weekly_audience_funnel` 키·`files.weekly_path` 부재) 카드는 '데이터 없음'.
 
 코호트 히트맵은 선택한 주(월)까지 완결된 칸만 칠한다. 색은 한 색상의 명도 단계(값이 클수록 진함), 칸 안 숫자는 %.
 
-## 4. 데이터 계약 (`dashboard/public/data.json`)
+## 4. 데이터 계약 (`dashboard/public/data/`)
 
-최상위 키 = 마트 이름, 값 = 행 배열. 열 이름은 `docs/architecture.md` §2 마트 열과 같다. 날짜는 `YYYY-MM-DD`(KST), 월은 `YYYY-MM`, 금액은 정수 원.
+**파일 분할과 로딩.** 첫 화면에 필요한 표만 `index.json` 에 담고, 큰 표는 화면이 필요할 때 받는다.
+
+| 파일 | 내용 | 받는 시점 |
+|---|---|---|
+| `index.json` (고정 이름) | `meta` + `files` + `daily_metrics, daily_ad, daily_event, funnel_daily, weekly_cohort, monthly_cohort, weekly_activity, monthly_summary, weekly_audience_funnel` | 첫 요청 |
+| `hourly_metrics.<해시>.json` | 행 배열 | 1일 보기(개요·행사·회원), 퍼널 탭 시간대 히트맵 |
+| `daily_channel.<해시>.json` | 행 배열 | 유입·광고 탭 채널 보기 |
+| `daily_venue.<해시>.json` | 행 배열 | 개요 상단 공간 수, 행사·결제 탭 공간별 보기 |
+| `weekly_path.<해시>.json` | 행 배열 | 퍼널 탭 경로 탐색 |
+| `person_day.<해시>.bin` + `person_day.meta.<해시>.json` | 사람×일 행동 비트(아래) | 사람 단위 지표가 있는 탭(개요·퍼널·행사 흐름·회원) |
+
+- `files` = `{표 이름: 파일 이름}`(`person_day` 는 `.bin`, `person_day_meta` 는 메타 JSON). 이름의 8자리는 내용 SHA-256 앞자리라 내용이 바뀌면 이름이 바뀐다(캐시 무효화). `files` 에 없는 표는 추출되지 않은 것으로 본다.
+- 화면은 `index.json` 도착 후 스코어보드를 그리고, 지연 표에 의존하는 타일·카드는 받는 동안 값 자리에 회색 바, 실패하면 `불러오지 못함` 한 줄. 같은 파일은 한 번만 받아 메모리에 둔다.
+- 기준 크기(2026-09-23 추출, 사람 80,000명·52주): `index.json` 7.5MB(gzip 0.36MB), `person_day.bin` 5.6MB(gzip 2.6MB), 지연 JSON 4개 합 35.5MB(gzip 1.3MB).
+
+**표 열.** 아래 키 = 마트 이름, 값 = 행 배열(`index.json` 의 키 또는 지연 JSON 파일 전체). 열 이름은 `docs/architecture.md` §2 마트 열과 같다. 날짜는 `YYYY-MM-DD`(KST), 월은 `YYYY-MM`, 금액은 정수 원.
 
 | 키 | 열 |
 |---|---|
@@ -106,7 +121,7 @@
 | `weekly_audience_funnel` | `week_start, audience_id(new/returning/paid_inflow/past_payer/apply_no_pay/explorer_only), step(landing/detail/signup/apply_view/payment), channel1, device_platform, member_seg, persons` |
 | `weekly_path` | `week_start, channel1, device_platform, member_seg, step(1..4, 정수), from_screen, to_screen, sessions` |
 | `monthly_summary` | `month, persons, new_persons, signups, applies, pay_count, pay_amount, cancels, w1_retention, top_channel` |
-| `person_day` | 행 배열이 아니라 열 배열 객체 `{base_date, cols, codes, rows}`. `cols = [pk, d, c, p, m, f]`, `rows` 는 `[pk, d, c, p, m, f]` 정수 배열(날짜·사람 키 순). 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. `meta.tables.person_day` 는 행 수 |
+| `person_day` | 바이너리 `person_day.<해시>.bin`: 행당 8바이트, 리틀엔디언 Uint32 2개. word0 = `pk`(비트 0–19) \| `d`(20–28) \| `c`(29) \| `p`(30–31), word1 = `m`(0) \| `f`(1–15), 나머지 비트 0. 행은 날짜·사람 키 순. 메타 `person_day.meta.<해시>.json` = `{base_date, codes, rows, row_bytes, layout}`. 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. 폭을 넘는 값이 나오면 `extract.py` 가 중단한다(`PD_BITS` 를 늘리고 `persons.ts` 를 같이 고친다). `meta.tables.person_day` 는 행 수 |
 
 세그먼트 값: `channel1` ∈ {paid, non_paid}, `device_platform` ∈ {ios, android, web}, `member_seg` ∈ {member, guest}. 세그먼트 속성은 행마다 1개라 조합의 합이 전체다. `channel2` 는 `staging.map_channel` 의 2단계 값(direct·organic_search·organic_social·influencer·paid_social·referral·ai_referral·other), `top_channel` 도 같은 값을 쓴다. `price_tier` ∈ {free, standard, premium}.
 
@@ -132,10 +147,10 @@
 4. 데이터 흐름 도식(행동 로그·서비스 DB·광고 리포트 → raw → staging → marts, ops → JSON 추출 → 정적 웹). 폭 768px 미만은 세로 도식
 5. 문서 카드 6개: 데이터 페이지(내부 이동) · SQL 카탈로그(`bigquery/README.md`) · 데이터 아키텍처 · 지표 정의 · 대시보드 설계 · 저장소
 
-**데이터** — `public/catalog.json`(계약은 `docs/backlog.md` §6, 생성기 `bigquery/build_catalog.py --export`) + `data.json`.
+**데이터** — `public/catalog.json`(계약은 `docs/backlog.md` §6, 생성기 `bigquery/build_catalog.py --export`) + `public/data/`.
 
 - 왼쪽: 층별 접이식 표 목록(표 이름 + 1행 그레인). 폭 1024px 미만은 상단 선택기(층별 그룹)로 바뀐다.
-- 오른쪽: 선택 표 헤더(`층.표`, SQL 파일 GitHub 링크, 1행·키·파티션·클러스터·행 수·크기·원천·소비·검사) → 컬럼 표(이름·타입·설명, 폰 폭에서는 타입이 이름 아래로) → 미리보기(marts 만, `data.json` 의 같은 이름 키 첫 20행). 미리보기 열 순서는 카탈로그 컬럼 순서이며, 추출되지 않은 컬럼(`step_order` 등)은 빠지고 카탈로그에 없는 추출 열은 뒤에 붙는다. 숫자는 오른쪽 정렬·고정폭, 가로 스크롤.
+- 오른쪽: 선택 표 헤더(`층.표`, SQL 파일 GitHub 링크, 1행·키·파티션·클러스터·행 수·크기·원천·소비·검사) → 컬럼 표(이름·타입·설명, 폰 폭에서는 타입이 이름 아래로) → 미리보기(marts 만, 같은 이름 표의 첫 20행. 지연 표는 그 표를 고를 때 받는다. `person_day` 는 바이너리라 미리보기 없음). 미리보기 열 순서는 카탈로그 컬럼 순서이며, 추출되지 않은 컬럼(`step_order` 등)은 빠지고 카탈로그에 없는 추출 열은 뒤에 붙는다. 숫자는 오른쪽 정렬·고정폭, 가로 스크롤.
 - 선택은 `table=<층.표>`. 없거나 모르는 값이면 `marts.daily_metrics`(없으면 첫 표).
 - `catalog.json` 이 없거나 표가 0개면 `카탈로그 없음` 한 줄.
 

@@ -3,6 +3,7 @@ import { bucketed, groupSum, inRange, segFilter, sum, uniqueByMasks } from '../l
 import { num, pct, ratio, won } from '../lib/format'
 import { PRICE_TIER, S } from '../lib/labels'
 import { F } from '../lib/persons'
+import { ready, useTable, waitOf } from '../lib/source'
 import { Funnel, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
@@ -15,7 +16,10 @@ function Flow({ data, s, range }: TabProps) {
   const keys = ['detail_viewers', 'apply_viewers', 'applies', 'payers', 'pay_count', 'pay_amount', 'cancels'] as const
   const cur = sum(inRange(m, range.from, range.to), [...keys])
   const prev = sum(inRange(m, range.prevFrom, range.prevTo), [...keys])
-  const pd = data.person_day
+  const pdL = useTable(data, 'person_day')
+  const hourL = useTable(data, 'hourly_metrics', range.oneDay)
+  const pd = ready(pdL)
+  const pw = waitOf(pdL)
   const people = (from: string, to: string, t: typeof cur) => {
     if (!pd) return { detail: t.detail_viewers, apply_view: t.apply_viewers, paid: t.payers, payers: t.payers }
     const d = F.event_detail
@@ -23,21 +27,21 @@ function Flow({ data, s, range }: TabProps) {
     const u = uniqueByMasks(pd, from, to, masks, { ch: s.ch, pf: s.pf, ms: s.ms }).get('')
     return { detail: u?.[0] ?? 0, apply_view: u?.[1] ?? 0, paid: u?.[2] ?? 0, payers: u?.[3] ?? 0 }
   }
-  const pCur = useMemo(() => people(range.from, range.to, cur), [data, m, range.from, range.to])
-  const pPrev = useMemo(() => people(range.prevFrom, range.prevTo, prev), [data, m, range.prevFrom, range.prevTo])
+  const pCur = useMemo(() => people(range.from, range.to, cur), [data, pd, m, range.from, range.to])
+  const pPrev = useMemo(() => people(range.prevFrom, range.prevTo, prev), [data, pd, m, range.prevFrom, range.prevTo])
   const arppu = ratio(cur.pay_amount, pCur.payers)
   const cancel = ratio(cur.cancels, cur.applies)
 
   const trend = bucketed(inRange(m, range.from, range.to), ['applies', 'pay_count'], range)
   const hourly = useMemo(() => {
     const out = Array.from({ length: 24 }, (_, h) => ({ hour: h, applies: 0, pay_count: 0 }))
-    for (const r of data.hourly_metrics)
+    for (const r of ready(hourL) ?? [])
       if (r.kst_date === range.from && seg(r)) {
         out[r.kst_hour].applies += r.applies
         out[r.kst_hour].pay_count += r.pay_count
       }
     return out
-  }, [data, range.from, s.ch, s.pf, s.ms])
+  }, [hourL, range.from, s.ch, s.pf, s.ms])
 
   const series = [
     { key: 'applies', label: '신청', color: S(1) },
@@ -56,6 +60,7 @@ function Flow({ data, s, range }: TabProps) {
           unit="원"
           sub={`결제자 ${num(pCur.payers)}명`}
           delta={delta(data, range, arppu, ratio(prev.pay_amount, pPrev.payers))}
+          wait={pw}
         />
         <Tile
           label="취소율"
@@ -70,6 +75,7 @@ function Flow({ data, s, range }: TabProps) {
           title={range.oneDay ? '시간별 신청·결제' : '신청·결제 추이'}
           meta={range.oneDay ? range.from : `${grain(trend.weekly)} · 건`}
           right={<Legend items={series.map((x) => ({ ...x, kind: range.oneDay ? 'box' : 'line' }))} />}
+          wait={range.oneDay ? waitOf(hourL) : null}
         >
           {range.oneDay ? (
             <TimeChart data={hourly} xKey="hour" xFormat={hourX} tipTitle={hourTip} kind="bar" series={series} height={240} />
@@ -77,7 +83,7 @@ function Flow({ data, s, range }: TabProps) {
             <TimeChart data={trend.rows} kind="line" tipTitle={weekTip(trend.weekly)} series={series} height={240} />
           )}
         </Card>
-        <Card title="결제 퍼널">
+        <Card title="결제 퍼널" wait={pw}>
           <Funnel
             steps={[
               { label: '행사 상세', value: pCur.detail },

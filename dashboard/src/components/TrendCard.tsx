@@ -6,6 +6,8 @@ import { compact, num } from '../lib/format'
 import { S } from '../lib/labels'
 import { type SegState, uniquePersons } from '../lib/persons'
 import type { PersonDay, Seg } from '../lib/types'
+import type { Wait } from '../lib/source'
+import { Pending } from './ui'
 
 export interface TrendMetric<D, H> {
   label: string
@@ -162,6 +164,8 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   dataFrom,
   dataTo,
   onDrill,
+  personWait = null,
+  hourWait = null,
 }: {
   title: string
   metrics: [TrendMetric<D, H>] | [TrendMetric<D, H>, TrendMetric<D, H>]
@@ -173,6 +177,8 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   dataFrom: string
   dataTo: string
   onDrill: (p: { p: '1'; d: string } | { p: 'custom'; from: string; to: string }) => void
+  personWait?: Wait
+  hourWait?: Wait
 }) {
   const [pick, setPick] = useState<Grain>('auto')
   const [axisPick, setAxis] = useState<Axis>('ms')
@@ -334,6 +340,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
     }
   }
 
+  const wait = (main.flag != null ? personWait : null) ?? (grain === 'hour' && main.hour ? hourWait : null)
   const clickable = grain !== 'hour'
   const dots = series.points.length <= 31
   const secondOn = !!second && (grain !== 'hour' || !!second.hour)
@@ -370,6 +377,9 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
         </div>
       </header>
 
+      {wait ? (
+        <Pending wait={wait} h={260} />
+      ) : (
       <div className={chartable ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_188px]' : ''}>
         {chartable && (
           <div className="min-w-0">
@@ -540,6 +550,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
           </div>
         </div>
       </div>
+      )}
     </section>
   )
 }

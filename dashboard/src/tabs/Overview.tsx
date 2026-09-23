@@ -3,9 +3,10 @@ import { inRange, segFilter, sum } from '../lib/agg'
 import { md } from '../lib/date'
 import { num, pct, ratio, won } from '../lib/format'
 import { F, uniquePersons } from '../lib/persons'
+import { ready, useTable, waitOf } from '../lib/source'
 import type { DailyMetric, HourlyMetric } from '../lib/types'
 import TrendCard, { type TrendMetric } from '../components/TrendCard'
-import { Tile, TileRow } from '../components/ui'
+import { Pending, Tile, TileRow } from '../components/ui'
 import { delta, ptDelta, type TabProps } from './common'
 
 const KEYS = [
@@ -41,30 +42,35 @@ export default function Overview({ data, s, set, range }: TabProps) {
   const d = (k: (typeof KEYS)[number], goodUp = true) => delta(data, range, cur[k], prev[k], goodUp)
 
   const segState = { ch: s.ch, pf: s.pf, ms: s.ms }
-  const pd = data.person_day
+  const pdL = useTable(data, 'person_day')
+  const hourL = useTable(data, 'hourly_metrics', range.oneDay)
+  const venueL = useTable(data, 'daily_venue')
+  const pd = ready(pdL)
   const visitors = (from: string, to: string, fallback: number) =>
     pd ? (uniquePersons(pd, from, to, F.visited, segState).get('') ?? 0) : fallback
-  const vCur = useMemo(() => visitors(range.from, range.to, cur.persons), [data, range.from, range.to, s.ch, s.pf, s.ms])
+  const vCur = useMemo(() => visitors(range.from, range.to, cur.persons), [data, pd, range.from, range.to, s.ch, s.pf, s.ms])
   const vPrev = useMemo(
     () => visitors(range.prevFrom, range.prevTo, prev.persons),
-    [data, range.prevFrom, range.prevTo, s.ch, s.pf, s.ms],
+    [data, pd, range.prevFrom, range.prevTo, s.ch, s.pf, s.ms],
   )
 
   const status = useMemo(() => {
     const to = data.meta.to_date
     let members = 0
     for (const r of data.daily_metrics) if (r.kst_date <= to) members += r.signups
-    const venues = new Set(data.daily_venue.filter((r) => r.kst_date <= to).map((r) => r.venue_id)).size
+    const dv = ready(venueL)
+    const venues = dv ? new Set(dv.filter((r) => r.kst_date <= to).map((r) => r.venue_id)).size : null
     return { to, members, venues }
-  }, [data])
+  }, [data, venueL])
 
   const engaged = ratio(cur.engaged_sessions, cur.sessions)
   const engagedPrev = ratio(prev.engaged_sessions, prev.sessions)
 
   const card = {
     daily: data.daily_metrics,
-    hourly: data.hourly_metrics,
+    hourly: ready(hourL) ?? [],
     persons: pd,
+    hourWait: range.oneDay ? waitOf(hourL) : null,
     seg: segState,
     range,
     dataFrom: data.meta.from_date,
@@ -80,12 +86,18 @@ export default function Overview({ data, s, set, range }: TabProps) {
           누적 회원 <span className="tnum font-semibold text-ink">{num(status.members)}</span>명
         </span>
         <span className="text-ink2">
-          공간 <span className="tnum font-semibold text-ink">{num(status.venues)}</span>곳
+          공간{' '}
+          {status.venues == null && waitOf(venueL) ? (
+            <Pending wait={waitOf(venueL)} h={14} w="w-10" inline />
+          ) : (
+            <span className="tnum font-semibold text-ink">{num(status.venues)}</span>
+          )}
+          {waitOf(venueL) !== 'error' && '곳'}
         </span>
       </section>
 
       <TileRow cols="sm:grid-cols-4 lg:grid-cols-8">
-        <Tile label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} />
+        <Tile label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} wait={waitOf(pdL)} />
         <Tile label="세션" value={num(cur.sessions)} delta={d('sessions')} />
         <Tile
           label="활성 세션 비율"
@@ -100,7 +112,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
         <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={d('pay_amount')} />
       </TileRow>
 
-      <TrendCard title="방문자" metrics={VISITORS} {...card} />
+      <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />
       <TrendCard title="활성 세션" metrics={ENGAGED} {...card} />
       <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} />
       <TrendCard title="신청 · 결제" metrics={APPLY_PAY} {...card} />

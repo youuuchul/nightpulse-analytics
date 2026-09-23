@@ -3,6 +3,7 @@ import { campaignSpans, resolveRange } from './lib/agg'
 import { md } from './lib/date'
 import { type State, type TabId, toHref, useUrlState } from './lib/state'
 import type { Data } from './lib/types'
+import { loadIndex, ready, useTable } from './lib/source'
 import { MonthLine, PeriodLine, SegmentControls, SegmentLine, WeekLine } from './components/FilterBar'
 import { Segmented, Select } from './components/ui'
 import Overview from './tabs/Overview'
@@ -99,8 +100,7 @@ export default function App() {
   const [, toggleTheme] = useTheme()
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}data.json`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    loadIndex()
       .then(setData)
       .catch(() => setErr(true))
   }, [])
@@ -111,6 +111,7 @@ export default function App() {
   const p = s.p === '' || (s.p === 'target' && view !== 'campaign') ? (view === 'campaign' ? 'target' : '28') : s.p
   const st: State = { ...s, tab: tab.id, view, p }
   const range = useMemo(() => (data ? resolveRange(st, data) : null), [data, st.p, st.d, st.from, st.to, st.camp])
+  const venues = ready(useTable(data, 'daily_venue', tab.id === 'events' && view === 'venue')) ?? []
 
   const go = (patch: Partial<State>) => {
     const next = { ...st, ...patch }
@@ -196,14 +197,14 @@ export default function App() {
             value={st.rg}
             width="w-32"
             onChange={(rg) => set({ rg })}
-            options={[{ value: 'all', label: '전체' }, ...uniq(data.daily_venue.map((r) => r.region))]}
+            options={[{ value: 'all', label: '전체' }, ...uniq(venues.map((r) => r.region))]}
           />
           <Select
             label="장르"
             value={st.gn}
             width="w-32"
             onChange={(gn) => set({ gn })}
-            options={[{ value: 'all', label: '전체' }, ...uniq(data.daily_venue.map((r) => r.genre))]}
+            options={[{ value: 'all', label: '전체' }, ...uniq(venues.map((r) => r.genre))]}
           />
         </>
       )

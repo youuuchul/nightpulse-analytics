@@ -6,6 +6,7 @@ import { TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Tile, TileRow } from '../components/ui'
 import { grain, type TabProps, weekTip } from './common'
+import { ready, useTable, waitOf } from '../lib/source'
 
 interface VenueRow {
   venue_id: number
@@ -18,17 +19,20 @@ interface VenueRow {
 }
 
 export default function Venues({ data, s, range }: TabProps) {
+  const vL = useTable(data, 'daily_venue')
+  const dv = ready(vL) ?? []
+  const w = waitOf(vL)
   const rows = useMemo(
     () =>
-      inRange(data.daily_venue, range.from, range.to).filter(
+      inRange(dv, range.from, range.to).filter(
         (r) => (s.rg === 'all' || r.region === s.rg) && (s.gn === 'all' || r.genre === s.gn),
       ),
-    [data, range.from, range.to, s.rg, s.gn],
+    [dv, range.from, range.to, s.rg, s.gn],
   )
   const keys = ['detail_viewers', 'applies', 'pay_count'] as const
   const tot = sum(rows, [...keys])
   const g = groupSum(rows, (r) => String(r.venue_id), [...keys])
-  const meta = new Map(data.daily_venue.map((r) => [String(r.venue_id), r]))
+  const meta = new Map(dv.map((r) => [String(r.venue_id), r]))
   const list: VenueRow[] = [...g.entries()].map(([id, v]) => {
     const x = meta.get(id)!
     return { venue_id: x.venue_id, venue_name: x.venue_name, region: x.region, genre: x.genre, ...v }
@@ -54,12 +58,12 @@ export default function Venues({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-3">
-        <Tile label="조회된 공간" value={num(list.length)} unit="곳" />
-        <Tile label="신청" value={num(tot.applies)} unit="건" />
-        <Tile label="결제" value={num(tot.pay_count)} unit="건" />
+        <Tile label="조회된 공간" value={num(list.length)} unit="곳" wait={w} />
+        <Tile label="신청" value={num(tot.applies)} unit="건" wait={w} />
+        <Tile label="결제" value={num(tot.pay_count)} unit="건" wait={w} />
       </TileRow>
       {!range.oneDay && (
-        <Card title="공간 상세 조회 추이" meta={`${grain(trend.weekly)} · 공간별 조회 사람의 합`}>
+        <Card title="공간 상세 조회 추이" meta={`${grain(trend.weekly)} · 공간별 조회 사람의 합`} wait={w} waitH={220}>
           <TimeChart
             data={trend.rows}
             kind="bar"
@@ -69,7 +73,7 @@ export default function Venues({ data, s, range }: TabProps) {
           />
         </Card>
       )}
-      <Card title="공간 순위" meta={`${list.length}곳`}>
+      <Card title="공간 순위" meta={`${list.length}곳`} wait={w}>
         <DataTable cols={cols} rows={list} sortKey="detail_viewers" rowKey={(r) => String(r.venue_id)} />
       </Card>
     </div>

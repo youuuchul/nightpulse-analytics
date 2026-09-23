@@ -12,6 +12,7 @@ import {
 } from '../lib/labels'
 import { F, type PersonRow } from '../lib/persons'
 import type { State } from '../lib/state'
+import { ready, useTable, waitOf } from '../lib/source'
 import type { FunnelStep, PersonDay, Seg } from '../lib/types'
 import { Funnel, Heatmap, TimeChart } from '../components/charts'
 import { PathSankey, type PathLink } from '../components/PathSankey'
@@ -199,7 +200,8 @@ function Audience({ data, s, set, range }: TabProps) {
 }
 
 function Paths({ data, s, range }: TabProps) {
-  const all = data.weekly_path ?? []
+  const pathL = useTable(data, 'weekly_path')
+  const all = ready(pathL) ?? []
   const seg = segFilter(s)
   const weeks = useMemo(() => weeksIn(range, all.map((r) => r.week_start)), [all, range.from, range.to])
   const base = useMemo(() => {
@@ -232,6 +234,7 @@ function Paths({ data, s, range }: TabProps) {
     <Card
       title="경로 탐색"
       meta={all.length ? `${weekMeta(weeks)} · 세션 ${num(total)}` : undefined}
+      wait={waitOf(pathL)}
     >
       {!all.length || !weeks.length || !links.length ? (
         <NoData />
@@ -257,11 +260,16 @@ export default function FunnelTab(p: TabProps) {
   const { data, s, range } = p
   const seg = segFilter(s)
   const f = useMemo(() => data.funnel_daily.filter(seg), [data, s.ch, s.pf, s.ms])
-  const pd = data.person_day
+  const pdL = useTable(data, 'person_day')
+  const hourL = useTable(data, 'hourly_metrics')
+  const pd = ready(pdL)
+  const pw = waitOf(pdL)
+  const hw = waitOf(hourL)
+  const hourRows = ready(hourL) ?? []
   const steps = (from: string, to: string) =>
     pd ? (personSteps(pd, from, to, s).get('') ?? zero()) : stepSums(inRange(f, from, to), () => true)
-  const cur = useMemo(() => steps(range.from, range.to), [data, f, range.from, range.to])
-  const prev = useMemo(() => steps(range.prevFrom, range.prevTo), [data, f, range.prevFrom, range.prevTo])
+  const cur = useMemo(() => steps(range.from, range.to), [data, pd, f, range.from, range.to])
+  const prev = useMemo(() => steps(range.prevFrom, range.prevTo), [data, pd, f, range.prevFrom, range.prevTo])
   const hasPrev = range.prevFrom >= data.meta.from_date
 
   const conv = ratio(cur.payment, cur.landing)
@@ -297,8 +305,8 @@ export default function FunnelTab(p: TabProps) {
     const u = uniqueByMasks(pd, from, to, [F.visited, F.visited | F.explored], { ch: s.ch, pf: s.pf, ms: s.ms }).get('')
     return { persons: u?.[0] ?? 0, explorers: u?.[1] ?? 0 }
   }
-  const dm = useMemo(() => explore(range.from, range.to), [data, m, range.from, range.to])
-  const dmPrev = useMemo(() => explore(range.prevFrom, range.prevTo), [data, m, range.prevFrom, range.prevTo])
+  const dm = useMemo(() => explore(range.from, range.to), [data, pd, m, range.from, range.to])
+  const dmPrev = useMemo(() => explore(range.prevFrom, range.prevTo), [data, pd, m, range.prevFrom, range.prevTo])
 
   const weekly = range.days >= 28
   const trend = useMemo(() => {
@@ -318,7 +326,7 @@ export default function FunnelTab(p: TabProps) {
       a: ratio(t.apply_view, t.detail),
       b: ratio(t.payment, t.apply_view),
     }))
-  }, [data, f, range.from, range.to, weekly])
+  }, [data, pd, f, range.from, range.to, weekly])
   const series = [
     { key: 'a', label: '행사 상세 → 신청 화면', color: S(1) },
     { key: 'b', label: '신청 화면 → 결제', color: S(2) },
@@ -328,7 +336,7 @@ export default function FunnelTab(p: TabProps) {
   const segSteps = useMemo(
     () =>
       pd ? personSteps(pd, range.from, range.to, s, (p) => segRows.filter((x) => x.test(p as unknown as Seg)).map((x) => x.key)) : null,
-    [data, range.from, range.to, s.ch, s.pf, s.ms],
+    [data, pd, range.from, range.to, s.ch, s.pf, s.ms],
   )
   const segTable: ReachRow[] = segRows.map((r) => {
     const t = segSteps ? (segSteps.get(r.key) ?? zero()) : stepSums(inRange(f, range.from, range.to), r.test)
@@ -337,17 +345,17 @@ export default function FunnelTab(p: TabProps) {
 
   const heat = useMemo(() => {
     const grid = Array.from({ length: 7 }, () => Array<number>(24).fill(0))
-    for (const r of data.hourly_metrics)
+    for (const r of hourRows)
       if (r.kst_date >= range.from && r.kst_date <= range.to && seg(r)) grid[weekday(r.kst_date)][r.kst_hour] += r.sessions
     const cnt = Array<number>(7).fill(0)
     for (const d of eachDay(range.from, range.to)) cnt[weekday(d)] += 1
     return grid.map((row, i) => row.map((v) => (cnt[i] ? v / cnt[i] : 0)))
-  }, [data, range.from, range.to, s.ch, s.pf, s.ms])
+  }, [hourL, range.from, range.to, s.ch, s.pf, s.ms])
   const hourly = useMemo(() => {
     const out = Array.from({ length: 24 }, (_, h) => ({ hour: h, sessions: 0 }))
-    for (const r of data.hourly_metrics) if (r.kst_date === range.from && seg(r)) out[r.kst_hour].sessions += r.sessions
+    for (const r of hourRows) if (r.kst_date === range.from && seg(r)) out[r.kst_hour].sessions += r.sessions
     return out
-  }, [data, range.from, s.ch, s.pf, s.ms])
+  }, [hourL, range.from, s.ch, s.pf, s.ms])
 
   return (
     <div className="flex flex-col gap-4">
@@ -357,12 +365,14 @@ export default function FunnelTab(p: TabProps) {
           value={pct(conv, 2)}
           sub={`랜딩 ${num(cur.landing)}명 중 ${num(cur.payment)}명`}
           delta={ptDelta(data, range, conv, ratio(prev.payment, prev.landing))}
+          wait={pw}
         />
         <Tile
           label="최대 이탈 단계"
           value={drop.i ? FUNNEL_LABEL[STEPS[drop.i]] : '—'}
           sub={drop.i ? `${FUNNEL_LABEL[STEPS[drop.i - 1]]}에서 −${dec(drop.v * 100)}%p` : undefined}
           delta={drop.i ? ptDelta(data, range, drop.v, prevDrop, false) : undefined}
+          wait={pw}
         />
         <Tile
           label="가장 크게 변한 단계"
@@ -375,18 +385,20 @@ export default function FunnelTab(p: TabProps) {
                 : '직전 기간 없음'
           }
           delta={moved.i ? ptDelta(data, range, stepRate(cur, moved.i), stepRate(prev, moved.i)) : undefined}
+          wait={pw}
         />
         <Tile
           label="탐색 도달률"
           value={pct(ratio(dm.explorers, dm.persons))}
           sub={`방문자 ${num(dm.persons)}명 중`}
           delta={ptDelta(data, range, ratio(dm.explorers, dm.persons), ratio(dmPrev.explorers, dmPrev.persons))}
+          wait={pw}
         />
       </TileRow>
 
       <div className="grid gap-4 xl:grid-cols-[6fr_6fr]">
         {range.oneDay ? (
-          <Card title="단계 전환" meta={`${range.from} · 명`}>
+          <Card title="단계 전환" meta={`${range.from} · 명`} wait={pw}>
             <Funnel steps={STEPS.map((k) => ({ label: FUNNEL_LABEL[k], value: cur[k] }))} />
           </Card>
         ) : (
@@ -394,6 +406,8 @@ export default function FunnelTab(p: TabProps) {
             title="단계 전환율 추이"
             meta={weekly ? '주별' : '일별'}
             right={<Legend items={series.map((x) => ({ ...x, kind: 'line' as const }))} />}
+            wait={pw}
+            waitH={260}
           >
             <TimeChart
               data={trend}
@@ -407,7 +421,7 @@ export default function FunnelTab(p: TabProps) {
             />
           </Card>
         )}
-        <Card title="세그먼트별 퍼널" meta="랜딩 대비 도달률 · 명">
+        <Card title="세그먼트별 퍼널" meta="랜딩 대비 도달률 · 명" wait={pw}>
           <ReachTable rows={segTable} steps={REACH_STEPS} baseLabel="랜딩" unit="명" />
         </Card>
       </div>
@@ -416,7 +430,7 @@ export default function FunnelTab(p: TabProps) {
       <Paths {...p} />
 
       {range.oneDay ? (
-        <Card title="시간별 세션" meta={range.from}>
+        <Card title="시간별 세션" meta={range.from} wait={hw} waitH={220}>
           <TimeChart
             data={hourly}
             xKey="hour"
@@ -428,7 +442,7 @@ export default function FunnelTab(p: TabProps) {
           />
         </Card>
       ) : (
-        <Card title="요일 × 시간대 세션" meta="하루 평균">
+        <Card title="요일 × 시간대 세션" meta="하루 평균" wait={hw} waitH={200}>
           <Heatmap
             cols={Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h) : ''))}
             rows={heat.map((cells, i) => ({ label: WEEKDAYS[i], cells }))}

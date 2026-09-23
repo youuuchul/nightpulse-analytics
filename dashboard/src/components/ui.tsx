@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { Wait } from '../lib/source'
 
 export function Segmented<T extends string>({
   options,
@@ -81,24 +82,44 @@ export function Tile({
   unit,
   sub,
   delta,
+  wait = null,
 }: {
   label: string
   value: string
   unit?: string
   sub?: string
   delta?: Delta
+  wait?: Wait
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 px-4 py-3.5">
       <div className="truncate text-[13px] text-ink2">{label}</div>
-      <div className="flex items-baseline gap-1">
-        <span className="text-[26px] font-semibold leading-tight tracking-tight text-ink">{value}</span>
-        {unit && value !== '—' && <span className="text-sm text-ink2">{unit}</span>}
-      </div>
-      <div className="flex min-h-[18px] items-center text-xs text-muted">{delta && <DeltaText d={delta} />}</div>
-      <div className="min-h-[16px] truncate text-xs text-muted">{sub}</div>
+      {wait ? (
+        <div className="flex h-[33px] items-center">
+          <Pending wait={wait} h={22} w="w-24" />
+        </div>
+      ) : (
+        <div className="flex items-baseline gap-1">
+          <span className="text-[26px] font-semibold leading-tight tracking-tight text-ink">{value}</span>
+          {unit && value !== '—' && <span className="text-sm text-ink2">{unit}</span>}
+        </div>
+      )}
+      <div className="flex min-h-[18px] items-center text-xs text-muted">{!wait && delta && <DeltaText d={delta} />}</div>
+      <div className="min-h-[16px] truncate text-xs text-muted">{!wait && sub}</div>
     </div>
   )
+}
+
+/** 지연 표를 받는 동안 값 자리의 회색 바, 실패하면 한 줄. */
+export function Pending({ wait, h = 240, w = 'w-full', inline = false }: { wait: Wait; h?: number; w?: string; inline?: boolean }) {
+  const Tag = inline ? 'span' : 'div'
+  if (wait === 'error')
+    return (
+      <Tag className={`${inline ? 'inline' : 'flex items-center'} text-sm text-muted`} style={inline ? undefined : { minHeight: Math.min(h, 22) }}>
+        불러오지 못함
+      </Tag>
+    )
+  return <Tag data-pending="loading" className={`${inline ? 'inline-block align-middle' : 'block'} ${w} animate-pulse rounded-md bg-wash`} style={{ height: h }} />
 }
 
 function DeltaText({ d }: { d: Delta }) {
@@ -135,23 +156,27 @@ export function Card({
   right,
   children,
   className = '',
+  wait = null,
+  waitH = 240,
 }: {
   title: string
   meta?: string
   right?: ReactNode
   children: ReactNode
   className?: string
+  wait?: Wait
+  waitH?: number
 }) {
   return (
     <section className={`card flex min-w-0 flex-col p-4 sm:p-5 ${className}`}>
       <header className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-baseline gap-2">
           <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-          {meta && <span className="truncate text-xs text-muted">{meta}</span>}
+          {meta && !wait && <span className="truncate text-xs text-muted">{meta}</span>}
         </div>
-        {right}
+        {!wait && right}
       </header>
-      {children}
+      {wait ? <Pending wait={wait} h={waitH} /> : children}
     </section>
   )
 }

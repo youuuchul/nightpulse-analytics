@@ -7,6 +7,7 @@ import { BarList, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Stage, Tile, TileRow } from '../components/ui'
 import { delta, grain, ptDelta, type TabProps, weekTip } from './common'
+import { ready, useTable, waitOf } from '../lib/source'
 
 interface ChannelRow {
   key: string
@@ -22,7 +23,9 @@ interface ChannelRow {
 
 function Channels({ data, s, range }: TabProps) {
   const seg = segFilter(s)
-  const c = useMemo(() => data.daily_channel.filter(seg), [data, s.ch, s.pf, s.ms])
+  const cL = useTable(data, 'daily_channel')
+  const w = waitOf(cL)
+  const c = useMemo(() => (ready(cL) ?? []).filter(seg), [cL, s.ch, s.pf, s.ms])
   const keys = ['sessions', 'persons', 'new_persons', 'signups', 'applies', 'pay_amount'] as const
   const curRows = inRange(c, range.from, range.to)
   const prevRows = inRange(c, range.prevFrom, range.prevTo)
@@ -85,22 +88,25 @@ function Channels({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-5">
-        <Tile label="세션" value={num(cur.sessions)} delta={delta(data, range, cur.sessions, prev.sessions)} />
+        <Tile label="세션" value={num(cur.sessions)} delta={delta(data, range, cur.sessions, prev.sessions)} wait={w} />
         <Tile
           label="광고 세션 비중"
           value={pct(paidShare)}
           sub={`세션 ${num(cur.sessions)} 중`}
           delta={ptDelta(data, range, paidShare, ratio(paid(prevRows), prev.sessions), null)}
+          wait={w}
         />
-        <Tile label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={delta(data, range, cur.new_persons, prev.new_persons)} />
-        <Tile label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} />
-        <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} />
+        <Tile label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={delta(data, range, cur.new_persons, prev.new_persons)} wait={w} />
+        <Tile label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} wait={w} />
+        <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} wait={w} />
       </TileRow>
 
       <Card
         title="유입 유형별 세션"
         meta={range.oneDay ? range.from : `${grain(stack.weekly)} · 세션 라스트클릭`}
         right={range.oneDay ? undefined : <Legend items={series} />}
+        wait={w}
+        waitH={280}
       >
         {range.oneDay ? (
           <BarList
@@ -117,7 +123,7 @@ function Channels({ data, s, range }: TabProps) {
         )}
       </Card>
 
-      <Card title="채널별 성과" meta={`${list.length}개`}>
+      <Card title="채널별 성과" meta={`${list.length}개`} wait={w}>
         <DataTable cols={cols} rows={list} sortKey="sessions" rowKey={(r) => r.key} />
       </Card>
     </div>

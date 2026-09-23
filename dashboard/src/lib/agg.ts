@@ -1,5 +1,5 @@
 import { addDays, diffDays, eachDay, mondayOf } from './date'
-import type { PersonRow, SegState } from './persons'
+import { type PersonRow, type SegState, pdCh, pdDay, pdFlags, pdKey, pdMs, pdPf, pdSpan } from './persons'
 import type { Data, PersonDay, Seg } from './types'
 import type { State } from './state'
 
@@ -143,7 +143,7 @@ export function bucketed<T extends { kst_date: string }, K extends keyof T>(
  * `uniquePersons` 와 같다.
  *
  * Args:
- *   pd: data.json 의 person_day.
+ *   pd: person_day.bin 을 읽은 것.
  *   from: 기간 시작일.
  *   to: 기간 끝일.
  *   masks: 비트 마스크 목록(F 값의 OR).
@@ -161,29 +161,30 @@ export function uniqueByMasks(
   seg: SegState,
   groups: (r: PersonRow) => string[] = () => [''],
 ): Map<string, number[]> {
-  const ix = (k: string) => pd.cols.indexOf(k)
-  const [iK, iD, iC, iP, iM, iF] = ['pk', 'd', 'c', 'p', 'm', 'f'].map(ix)
   const lo = diffDays(pd.base_date, from)
   const hi = diffDays(pd.base_date, to)
+  const [i0, i1] = pdSpan(pd, lo, hi)
+  const w = pd.w
   const sets = new Map<string, Set<number>[]>()
   const row: PersonRow = { off: 0, channel1: '', device_platform: '', member_seg: '' }
-  for (const r of pd.rows) {
-    const d = r[iD]
-    if (d < lo || d > hi) continue
-    const f = r[iF]
+  for (let i = i0; i < i1; i++) {
+    const a = w[2 * i]
+    const b = w[2 * i + 1]
+    const f = pdFlags(b)
     if (!masks.some((m) => (f & m) === m)) continue
-    row.channel1 = pd.codes.c[r[iC]]
-    row.device_platform = pd.codes.p[r[iP]]
-    row.member_seg = pd.codes.m[r[iM]]
+    row.channel1 = pd.codes.c[pdCh(a)]
+    row.device_platform = pd.codes.p[pdPf(a)]
+    row.member_seg = pd.codes.m[pdMs(b)]
     if (seg.ch !== 'all' && row.channel1 !== seg.ch) continue
     if (seg.pf !== 'all' && row.device_platform !== seg.pf) continue
     if (seg.ms !== 'all' && row.member_seg !== seg.ms) continue
-    row.off = d - lo
+    row.off = pdDay(a) - lo
+    const k = pdKey(a)
     for (const g of groups(row)) {
       let s = sets.get(g)
       if (!s) sets.set(g, (s = masks.map(() => new Set<number>())))
-      masks.forEach((m, i) => {
-        if ((f & m) === m) s[i].add(r[iK])
+      masks.forEach((m, j) => {
+        if ((f & m) === m) s[j].add(k)
       })
     }
   }

@@ -66,13 +66,17 @@ try {
     else if (catalogFile)
       await page.route('**/catalog.json', (route) => route.fulfill({ json: JSON.parse(readFileSync(catalogFile, 'utf8')) }))
     if (opts.strip)
-      await page.route('**/data.json', async (route) => {
+      await page.route('**/data/index.json', async (route) => {
         const body = await (await route.fetch()).json()
-        for (const k of opts.strip) delete body[k]
+        for (const k of opts.strip) {
+          delete body[k]
+          delete body.files[k]
+        }
         await route.fulfill({ json: body })
       })
     await page.goto(`${BASE}?${q}`, { waitUntil: 'networkidle' })
     await page.waitForSelector(opts.wait ?? 'main section, main .card', { timeout: 10000 })
+    await page.waitForFunction(() => !document.querySelector('[data-pending]'), null, { timeout: 20000 })
     await page.waitForTimeout(400)
     if (opts.drill) {
       const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.drill}")`) })

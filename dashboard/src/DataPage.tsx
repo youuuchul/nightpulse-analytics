@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Card } from './components/ui'
-import type { Data } from './lib/types'
+import { useTable, waitOf } from './lib/source'
+import type { Data, LazyKey } from './lib/types'
 
 const REPO = 'https://github.com/youuuchul/nightpulse-analytics'
 const PREVIEW_ROWS = 20
@@ -190,8 +191,19 @@ function Preview({ t, rows }: { t: CatalogTable; rows: Record<string, unknown>[]
   )
 }
 
+const LAZY_ROWS: string[] = ['hourly_metrics', 'daily_channel', 'daily_venue', 'weekly_path'] satisfies LazyKey[]
+
 function Detail({ t, data }: { t: CatalogTable; data: Data | null }) {
-  const rows = t.layer === 'marts' && data ? ((data as unknown as Record<string, unknown>)[t.name] as Record<string, unknown>[] | undefined) : undefined
+  const lazy = t.layer === 'marts' && LAZY_ROWS.includes(t.name)
+  const lz = useTable(data, (lazy ? t.name : 'daily_venue') as Exclude<LazyKey, 'person_day'>, lazy)
+  const wait = lazy ? waitOf(lz) : null
+  const rows = !(t.layer === 'marts' && data)
+    ? undefined
+    : lazy
+      ? lz.state === 'ready'
+        ? (lz.value as unknown as Record<string, unknown>[])
+        : undefined
+      : ((data as unknown as Record<string, unknown>)[t.name] as Record<string, unknown>[] | undefined)
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <section className="card flex flex-col gap-4 p-4 sm:p-5">
@@ -269,7 +281,13 @@ function Detail({ t, data }: { t: CatalogTable; data: Data | null }) {
         )}
       </Card>
 
-      {rows && rows.length > 0 && <Preview t={t} rows={rows} />}
+      {wait ? (
+        <Card title="미리보기" wait={wait}>
+          {null}
+        </Card>
+      ) : (
+        rows && rows.length > 0 && <Preview t={t} rows={rows} />
+      )}
     </div>
   )
 }

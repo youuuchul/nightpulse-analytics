@@ -33,10 +33,36 @@ export interface PersonRow {
 }
 
 /**
+ * person_day.bin 한 행의 비트 배치(extract.py PD_BITS 와 같다).
+ * w0 = pk(0..19) | d(20..28) | c(29) | p(30..31), w1 = m(0) | f(1..15).
+ */
+export const pdKey = (w0: number) => w0 & 0xfffff
+export const pdDay = (w0: number) => (w0 >>> 20) & 0x1ff
+export const pdCh = (w0: number) => (w0 >>> 29) & 1
+export const pdPf = (w0: number) => w0 >>> 30
+export const pdMs = (w1: number) => w1 & 1
+export const pdFlags = (w1: number) => w1 >>> 1
+
+/** 날짜 오프셋 [lo, hi] 에 드는 행 구간 [start, end). 행은 날짜 순. */
+export function pdSpan(pd: PersonDay, lo: number, hi: number): [number, number] {
+  const bound = (d: number) => {
+    let a = 0
+    let b = pd.n
+    while (a < b) {
+      const m = (a + b) >>> 1
+      if (pdDay(pd.w[2 * m]) < d) a = m + 1
+      else b = m
+    }
+    return a
+  }
+  return [bound(lo), bound(hi + 1)]
+}
+
+/**
  * 기간·세그먼트 안에서 flag 를 가진 고유 사람 수를 그룹별로 센다.
  *
  * Args:
- *   pd: data.json 의 person_day (열 배열 형식).
+ *   pd: person_day.bin 을 읽은 것.
  *   from: 기간 시작일(YYYY-MM-DD).
  *   to: 기간 끝일.
  *   flag: 비트 플래그(F 의 값).
@@ -54,26 +80,27 @@ export function uniquePersons(
   seg: SegState,
   groups: (r: PersonRow) => string[] = () => [''],
 ): Map<string, number> {
-  const ix = (k: string) => pd.cols.indexOf(k)
-  const [iK, iD, iC, iP, iM, iF] = ['pk', 'd', 'c', 'p', 'm', 'f'].map(ix)
   const lo = diffDays(pd.base_date, from)
   const hi = diffDays(pd.base_date, to)
+  const [i0, i1] = pdSpan(pd, lo, hi)
+  const w = pd.w
   const sets = new Map<string, Set<number>>()
   const row: PersonRow = { off: 0, channel1: '', device_platform: '', member_seg: '' }
-  for (const r of pd.rows) {
-    const d = r[iD]
-    if (d < lo || d > hi || (r[iF] & flag) === 0) continue
-    row.channel1 = pd.codes.c[r[iC]]
-    row.device_platform = pd.codes.p[r[iP]]
-    row.member_seg = pd.codes.m[r[iM]]
+  for (let i = i0; i < i1; i++) {
+    const a = w[2 * i]
+    const b = w[2 * i + 1]
+    if ((pdFlags(b) & flag) === 0) continue
+    row.channel1 = pd.codes.c[pdCh(a)]
+    row.device_platform = pd.codes.p[pdPf(a)]
+    row.member_seg = pd.codes.m[pdMs(b)]
     if (seg.ch !== 'all' && row.channel1 !== seg.ch) continue
     if (seg.pf !== 'all' && row.device_platform !== seg.pf) continue
     if (seg.ms !== 'all' && row.member_seg !== seg.ms) continue
-    row.off = d - lo
+    row.off = pdDay(a) - lo
     for (const g of groups(row)) {
       let s = sets.get(g)
       if (!s) sets.set(g, (s = new Set()))
-      s.add(r[iK])
+      s.add(pdKey(a))
     }
   }
   const out = new Map<string, number>()

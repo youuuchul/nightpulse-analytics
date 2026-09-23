@@ -1,16 +1,27 @@
-"""BigQuery 마트 → dashboard/public/data.json 추출기.
+"""BigQuery 마트 → dashboard/public/data/ 분할 추출기.
 
-marts 데이터셋의 표 14개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 data.json 계약 모양으로 쓴다.
+marts 데이터셋의 표 14개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 분할 파일로 쓴다.
 조회는 SELECT 뿐이며 표를 만들거나 바꾸지 않는다. 마트가 적재된 뒤에 실행한다.
 
-    uv run dashboard/scripts/extract.py --out dashboard/public/data.json
+    uv run dashboard/scripts/extract.py
+    uv run dashboard/scripts/extract.py --from-json /tmp/sample.json   # BigQuery 없이 합친 JSON 을 분할만
+
+출력(계약은 docs/dashboard.md §4):
+    index.json                     meta + files + 첫 화면 표(고정 이름)
+    <표>.<해시8>.json              지연 표(행 배열)
+    person_day.<해시8>.bin         행당 8바이트 고정 바이너리
+    person_day.meta.<해시8>.json   base_date·codes·rows·비트 배치
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import re
 import subprocess
+import sys
+from array import array
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -19,6 +30,13 @@ BQ = ROOT / "scripts" / "bq.sh"
 DATASET = "marts"
 
 SEG = ["channel1", "device_platform", "member_seg"]
+
+# 화면이 필요할 때 따로 받는 표. 나머지 표는 index.json 에 넣는다.
+LAZY = ["hourly_metrics", "daily_channel", "daily_venue", "weekly_path"]
+
+# person_day.bin 비트 배치: (필드, 워드, 시작 비트, 비트 수). 리틀엔디언 Uint32 2개 = 행당 8바이트.
+PD_BITS = [("pk", 0, 0, 20), ("d", 0, 20, 9), ("c", 0, 29, 1), ("p", 0, 30, 2), ("m", 1, 0, 1), ("f", 1, 1, 15)]
+HASHED = re.compile(r"^[a-z_]+(\.meta)?\.[0-9a-f]{8}\.(json|bin)$")
 
 # 표 이름 → (열 목록, 정렬 열). 열 이름은 docs/architecture.md §2 marts 와 docs/dashboard.md 계약을 따른다.
 TABLES: dict[str, tuple[list[str], list[str]]] = {
@@ -249,12 +267,12 @@ def person_day() -> dict:
     return {"base_date": base.isoformat(), "cols": ["pk", "d", "c", "p", "m", "f"], "codes": codes, "rows": packed}
 
 
-def main() -> None:
-    """마트를 읽어 data.json 을 쓴다."""
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--out", default=str(ROOT / "dashboard" / "public" / "data.json"))
-    a = ap.parse_args()
+def fetch() -> dict:
+    """마트를 읽어 합친 사전(meta + 표 + person_day)을 만든다.
 
+    Returns:
+        {"meta", <표>: 행 배열, "person_day": 열 배열 사전}.
+    """
     out: dict[str, object] = {}
     for table, (cols, order) in TABLES.items():
         ints = INT_OVERRIDE.get(table, set())
@@ -265,8 +283,7 @@ def main() -> None:
         print(f"{table:22s} {len(out[table]):>8,d}")
 
     out["person_day"] = person_day()
-    pd_bytes = len(json.dumps(out["person_day"], separators=(",", ":")))
-    print(f"{'person_day':22s} {len(out['person_day']['rows']):>8,d}  {pd_bytes / 1e6:.2f}MB")
+    print(f"{'person_day':22s} {len(out['person_day']['rows']):>8,d}")
 
     dates = [r["kst_date"] for r in out["daily_metrics"]]
     if not dates:
@@ -278,10 +295,101 @@ def main() -> None:
         "source": "bigquery",
         "tables": {k: len(v["rows"]) if isinstance(v, dict) else len(v) for k, v in out.items()},
     }
-    path = Path(a.out)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"meta": meta, **out}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    print(f"{path} {path.stat().st_size / 1e6:.1f}MB")
+    return {"meta": meta, **out}
+
+
+def pack_person_day(pd: dict) -> tuple[bytes, dict]:
+    """열 배열 person_day 를 행당 8바이트 바이너리와 메타로 바꾼다.
+
+    Args:
+        pd: {"base_date", "cols", "codes", "rows"} 사전. rows 는 날짜·사람 키 순.
+
+    Returns:
+        (바이너리, 메타 사전).
+    """
+    ix = {c: pd["cols"].index(c) for c in ("pk", "d", "c", "p", "m", "f")}
+    words = array("I")
+    if words.itemsize != 4:
+        raise SystemExit("array('I') 가 4바이트가 아니다")
+    for r in pd["rows"]:
+        w = [0, 0]
+        for name, wi, lo, n in PD_BITS:
+            v = r[ix[name]]
+            if not 0 <= v < (1 << n):
+                raise SystemExit(f"person_day.{name}={v} 가 {n}비트를 넘는다 — PD_BITS 를 늘린다")
+            w[wi] |= v << lo
+        words.extend(w)
+    if sys.byteorder == "big":
+        words.byteswap()
+    meta = {
+        "base_date": pd["base_date"],
+        "codes": pd["codes"],
+        "rows": len(pd["rows"]),
+        "row_bytes": 8,
+        "layout": [{"field": f, "word": w, "shift": lo, "bits": n} for f, w, lo, n in PD_BITS],
+    }
+    return words.tobytes(), meta
+
+
+def dump(obj: object) -> bytes:
+    """계약 JSON 직렬화(공백 없음, 한글 그대로)."""
+    return json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def hashed(stem: str, body: bytes, ext: str) -> str:
+    """내용 해시 8자리를 붙인 파일 이름."""
+    return f"{stem}.{hashlib.sha256(body).hexdigest()[:8]}.{ext}"
+
+
+def split(data: dict, out_dir: Path) -> None:
+    """합친 사전을 index.json + 지연 표 + person_day 바이너리로 나눠 쓴다.
+
+    출력 폴더에 남은 이전 해시 파일은 지운다(이번에 쓴 파일과 index.json 만 남긴다).
+
+    Args:
+        data: fetch() 또는 합친 JSON 과 같은 모양의 사전.
+        out_dir: 출력 폴더.
+    """
+    blobs: dict[str, bytes] = {}
+    files: dict[str, str] = {}
+    for key in LAZY:
+        if key not in data:
+            continue
+        body = dump(data[key])
+        files[key] = hashed(key, body, "json")
+        blobs[files[key]] = body
+    if data.get("person_day"):
+        bin_body, pd_meta = pack_person_day(data["person_day"])
+        meta_body = dump(pd_meta)
+        files["person_day"] = hashed("person_day", bin_body, "bin")
+        files["person_day_meta"] = hashed("person_day.meta", meta_body, "json")
+        blobs[files["person_day"]] = bin_body
+        blobs[files["person_day_meta"]] = meta_body
+
+    index = {"meta": data["meta"], "files": files}
+    index.update({k: v for k, v in data.items() if k not in ("meta", "person_day", *LAZY)})
+    index_body = dump(index)
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for name, body in blobs.items():
+        (out_dir / name).write_bytes(body)
+    (out_dir / "index.json").write_bytes(index_body)
+    for old in out_dir.iterdir():
+        if HASHED.match(old.name) and old.name not in blobs:
+            old.unlink()
+    for name in ["index.json", *blobs]:
+        print(f"{name:40s} {(out_dir / name).stat().st_size / 1e6:6.2f}MB")
+
+
+def main() -> None:
+    """마트(또는 합친 JSON)를 읽어 분할 파일을 쓴다."""
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--out", default=str(ROOT / "dashboard" / "public" / "data"), help="출력 폴더")
+    ap.add_argument("--from-json", help="BigQuery 대신 읽을 합친 JSON(이전 data.json·샘플 생성기 출력)")
+    a = ap.parse_args()
+
+    data = json.loads(Path(a.from_json).read_text(encoding="utf-8")) if a.from_json else fetch()
+    split(data, Path(a.out))
 
 
 if __name__ == "__main__":
