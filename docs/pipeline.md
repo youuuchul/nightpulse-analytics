@@ -26,8 +26,8 @@ bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 | 4 | `sql/03_int_session.sql` | `staging.int_session` | 전체 교체 |
 | 5 | `sql/04_int_person_day.sql` | `staging.int_person_day` | 전체 교체 |
 | 6 | `sql/05_dim_member.sql` `06_fct_order.sql` `06_dim_event.sql` `06_dim_venue.sql` `06_ad_spend.sql` | 차원·원장 정리 5개 | 전체 교체, `fct_order` → `dim_event` 순서 |
-| 7 | `sql/marts/*.sql` 11개 | `marts.*` | 전체 교체, `weekly_cohort` → `monthly_summary` 순서 |
-| 8 | `checks/reconciliation.sql` | `ops.reconciliation` 에 18행 추가 | 누적. 실패 1건 이상이면 exit 1 |
+| 7 | `sql/marts/*.sql` 13개 | `marts.*` | 전체 교체, `weekly_cohort` → `monthly_summary` 순서 |
+| 8 | `checks/reconciliation.sql` | `ops.reconciliation` 에 20행 추가 | 누적. 실패 1건 이상이면 exit 1 |
 | 9 | `sql/09_freshness.sql` | `ops.freshness` | 전체 교체 |
 
 모든 단계가 멱등이다. 같은 입력이면 같은 표가 나오고, `ops.build_log`·`ops.reconciliation` 만 실행마다 누적된다.
@@ -81,6 +81,8 @@ ORDER BY started_at;
 | C3 | 대조 | 일 방문 사람: `daily_metrics` 합 vs `int_person_day` 재집계 (날짜별) | 차이 0, 불일치 날짜 0 |
 | C4 | 대조 | 주간 코호트 크기: `weekly_cohort` 0주차 vs 첫 방문 사람 (코호트 주별) | 차이 0 |
 | C5 | 대조 | 채널 합: `daily_channel` 의 `sessions + auto_load_sessions` 합 vs `int_session` 행 수 (날짜별) | 차이 0 |
+| C6 | 대조 | 오디언스 퍼널: `weekly_audience_funnel` 의 `new` + `returning` `landing` 합 vs `weekly_activity.wau` (주 × 세그먼트별) | 차이 0, 불일치 키 0 |
+| C7 | 대조 | 경로: `weekly_path` `step = 1` 세션 합 vs `weekly_activity.valid_sessions` (주 × 세그먼트별) | 차이 0, 불일치 키 0 |
 | R1~R8 | 범위 | architecture.md §6 의 8개 지표 | 범위 안 |
 | I1 | 무결성 | 기기당 회원 1명 | 위반 0 |
 | I2 | 무결성 | 채널 매핑 누락 세션 | 0 |
@@ -91,13 +93,14 @@ ORDER BY started_at;
 
 ## 비용
 
-전체 실행 1회에 쿼리 처리량 약 0.65GB(52주·이벤트 약 89만 행 기준). 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
+전체 실행 1회에 쿼리 처리량 약 0.73GB(52주·이벤트 약 89만 행 기준). 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
 
 | 단계 | 처리량 | 비고 |
 |---|---:|---|
 | 3 `events_clean` | 약 220MB | 원천 전 열을 한 번 읽는 유일한 단계 |
 | 4 `int_session` | 약 140MB | 정제 이벤트 전체 |
 | 7 `daily_event` · `daily_venue` | 각 약 60MB | 정제 이벤트에서 필요한 열만 |
+| 7 `weekly_path` | 약 68MB | 정제 이벤트 `screen_view` 만, 필요한 열만 |
 | 나머지 | 각 25MB 이하 | |
 
 - 이벤트 표(`raw.ga4_events`, `staging.events_clean`)는 일 파티션 + 파티션 필터 필수다. 전체 재생성 SQL도 기간을 명시한다.

@@ -1,7 +1,10 @@
--- marts.daily_ad — 광고 성과 마트
--- 그레인: 일(KST) × 캠페인. 키: (kst_date, campaign_id)
+-- 표: marts.daily_ad — 광고 성과 마트
+-- 1행: 일(KST) × 캠페인
+-- 키: (kst_date, campaign_id)
+-- 파티션·클러스터: kst_date / campaign_id
 -- 원천: staging.ad_spend (집행), staging.int_session (광고 세션 = 세션 라스트클릭 channel1 paid, campaign 일치)
 -- 소비: 유입·광고 탭 캠페인 보기 — 집행(지출·노출·클릭) → 유입(세션·방문자·활성 방문자) → 행동(가입·신청·결제). CTR·CAC·ROAS 는 화면에서 나눈다
+--
 -- 귀속: 세션 라스트클릭. 광고 세션 안에서 일어난 가입·신청·결제만 캠페인에 붙인다(이후 재방문 전환은 제외)
 -- 집행 없는 날의 광고 세션도 행으로 남긴다(spend 0). sessions 는 자동 로드 제외.
 

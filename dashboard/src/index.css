@@ -29,6 +29,7 @@
   --good: #006300;
   --bad: #c42f2f;
   --bar-wash: rgba(42, 120, 214, 0.1);
+  --exit: #c3c2b7;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -59,6 +60,7 @@
     --good: #0ca30c;
     --bad: #e66767;
     --bar-wash: rgba(57, 135, 229, 0.14);
+    --exit: #62615c;
   }
 }
 
@@ -89,6 +91,7 @@
   --good: #0ca30c;
   --bad: #e66767;
   --bar-wash: rgba(57, 135, 229, 0.14);
+  --exit: #62615c;
 }
 
 html,

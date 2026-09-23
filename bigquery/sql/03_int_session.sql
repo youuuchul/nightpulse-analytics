@@ -1,7 +1,13 @@
--- staging.int_session — 세션 판정 단일 원본
--- 그레인: 세션 1건. 키: (client_id, session_id)
+-- 표: staging.int_session — 세션 판정 단일 원본
+-- 1행: 세션 1건
+-- 키: (client_id, session_id)
+-- 파티션·클러스터: session_date / person_id
 -- 원천: staging.events_clean, staging.map_channel
--- 소비: staging.int_person_day·dim_member, marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary
+-- 소비: staging.int_person_day·dim_member,
+--       marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path,
+--       ops.reconciliation
+-- 검사: I1·I2·R7·R8
+--
 -- 규칙
 --   세션 날짜·시   첫 이벤트 시각(KST). 자정을 넘긴 세션도 시작일에 속한다
 --   신원          person_id = COALESCE(기기에 붙은 member_id, client_id). 신원 규칙은 여기서 한 번만 적용한다

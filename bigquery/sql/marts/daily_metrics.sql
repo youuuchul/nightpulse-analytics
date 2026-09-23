@@ -1,7 +1,11 @@
--- marts.daily_metrics — 일 지표 마트
--- 그레인: 일(KST) × channel1 × device_platform × member_seg. 키: 이 네 열
+-- 표: marts.daily_metrics — 일 지표 마트
+-- 1행: 일(KST) × channel1 × device_platform × member_seg
+-- 키: 이 네 열
+-- 파티션·클러스터: kst_date / channel1, device_platform, member_seg
 -- 원천: staging.int_person_day
--- 소비: 개요·탐색·행사·결제 흐름·회원 탭 스코어보드와 추이. 세그먼트 조합의 합 = 전체
+-- 소비: 개요·탐색·행사·결제 흐름·회원 탭 스코어보드와 추이. 세그먼트 조합의 합 = 전체. ops.reconciliation
+-- 검사: C3·R4
+--
 -- 사람 열은 그날 고유 사람 수다. 여러 날을 더하면 '사람·일'이 된다(기간 고유 사람은 weekly_activity·monthly_summary).
 -- 세션 열은 자동 로드를 뺀 방문 세션이다. 자동 로드는 auto_load_sessions 로 따로 둔다.
 -- 건수·금액(applies·pay_count·pay_amount·cancels)은 로그 이벤트 기준이며 원장과의 일치는 검사 C1·C2 가 확인한다.

@@ -6,7 +6,8 @@ import type { Data } from './lib/types'
 import { MonthLine, PeriodLine, SegmentControls, SegmentLine, WeekLine } from './components/FilterBar'
 import { Segmented, Select } from './components/ui'
 import Overview from './tabs/Overview'
-import Explore from './tabs/Explore'
+import FunnelTab from './tabs/FunnelTab'
+import About from './About'
 import Events from './tabs/Events'
 import Members from './tabs/Members'
 import Acquisition from './tabs/Acquisition'
@@ -23,15 +24,7 @@ interface TabDef {
 
 const TABS: TabDef[] = [
   { id: 'overview', label: '개요', el: Overview },
-  {
-    id: 'explore',
-    label: '탐색',
-    el: Explore,
-    views: [
-      { value: 'flow', label: '흐름' },
-      { value: 'venue', label: '공간별' },
-    ],
-  },
+  { id: 'funnel', label: '퍼널', el: FunnelTab },
   {
     id: 'events',
     label: '행사·결제',
@@ -39,6 +32,7 @@ const TABS: TabDef[] = [
     views: [
       { value: 'flow', label: '흐름' },
       { value: 'event', label: '행사별' },
+      { value: 'venue', label: '공간별' },
     ],
   },
   { id: 'members', label: '회원', el: Members },
@@ -109,7 +103,8 @@ export default function App() {
       .catch(() => setErr(true))
   }, [])
 
-  const tab = TABS.find((t) => t.id === s.tab) ?? TABS[0]
+  const legacy = (s.tab as string) === 'explore' ? (s.view === 'venue' ? 'events' : 'funnel') : s.tab
+  const tab = TABS.find((t) => t.id === legacy) ?? TABS[0]
   const view = tab.views ? (tab.views.some((v) => v.value === s.view) ? s.view : tab.views[0].value) : ''
   const p = s.p === '' || (s.p === 'target' && view !== 'campaign') ? (view === 'campaign' ? 'target' : '28') : s.p
   const st: State = { ...s, tab: tab.id, view, p }
@@ -121,6 +116,73 @@ export default function App() {
     else if (next.view !== 'campaign' && st.p === 'target') patch = { ...patch, p: '' }
     set(patch)
   }
+
+  const openAbout = () => {
+    window.history.pushState(null, '', window.location.href)
+    set({ page: 'about' })
+    window.scrollTo(0, 0)
+  }
+  const header = (
+    <header className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 pb-2 pt-5 sm:px-6">
+      <svg width="22" height="22" viewBox="0 0 16 16" aria-hidden className="shrink-0">
+        <path
+          d="M1 9h3l2-6 3 10 2-6h4"
+          fill="none"
+          stroke="var(--accent)"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+      <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight">
+        NightPulse <span className="font-normal text-ink2">KPI</span>
+      </h1>
+      <span className="shrink-0 whitespace-nowrap rounded-md bg-wash px-1.5 py-0.5 text-[11px] font-medium text-ink2">합성 데이터</span>
+      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
+        {data && s.page !== 'about' && (
+          <>
+            <span className="tnum hidden text-xs text-muted sm:inline">기준일 {data.meta.to_date}</span>
+            <span className="tnum text-xs text-muted sm:hidden">{md(data.meta.to_date)}</span>
+          </>
+        )}
+        {s.page === 'about' ? (
+          <button
+            type="button"
+            onClick={() => {
+              set({ page: '' })
+              window.scrollTo(0, 0)
+            }}
+            className="h-8 shrink-0 whitespace-nowrap rounded-lg bg-wash px-2.5 text-[13px] text-ink2 hover:text-ink"
+          >
+            대시보드
+          </button>
+        ) : (
+          <button type="button" onClick={openAbout} className="h-8 shrink-0 whitespace-nowrap rounded-lg bg-wash px-2.5 text-[13px] text-ink2 hover:text-ink">
+            소개
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label="테마 전환"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-wash text-ink2 hover:text-ink"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" />
+          </svg>
+        </button>
+      </div>
+    </header>
+  )
+
+  if (s.page === 'about')
+    return (
+      <div className="min-h-screen">
+        {header}
+        <About />
+      </div>
+    )
 
   if (err)
     return <div className="flex h-screen items-center justify-center text-sm text-muted">데이터를 불러오지 못했습니다</div>
@@ -238,37 +300,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <header className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 pb-2 pt-5 sm:px-6">
-        <svg width="22" height="22" viewBox="0 0 16 16" aria-hidden className="shrink-0">
-          <path
-            d="M1 9h3l2-6 3 10 2-6h4"
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <h1 className="text-lg font-semibold tracking-tight">
-          NightPulse <span className="font-normal text-ink2">KPI</span>
-        </h1>
-        <span className="rounded-md bg-wash px-1.5 py-0.5 text-[11px] font-medium text-ink2">합성 데이터</span>
-        <div className="ml-auto flex items-center gap-3">
-          <span className="tnum hidden text-xs text-muted sm:inline">기준일 {max}</span>
-          <span className="tnum text-xs text-muted sm:hidden">{md(max)}</span>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label="테마 전환"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-wash text-ink2 hover:text-ink"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" />
-            </svg>
-          </button>
-        </div>
-      </header>
+      {header}
 
       <div className="sticky top-0 z-20 bg-page">
         <nav className="scrollbar-none mx-auto flex max-w-[1280px] gap-1 overflow-x-auto border-b border-line px-4 sm:px-6">

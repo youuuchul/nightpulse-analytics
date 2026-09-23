@@ -36,6 +36,9 @@
 | E03 | 신청 화면 도달률 | 사람 | 신청 화면을 본 사람 | 일 방문자 | `daily_metrics.apply_viewers / persons` |
 | E04 | 행사 상세 조회 | 사람 | 그 행사 상세를 본 사람 | — | `daily_event.detail_viewers` |
 | E05 | 공간 상세 조회 | 사람 | 그 공간 상세를 본 사람 | — | `daily_venue.detail_viewers` |
+| E06 | 화면 경로 전이 | 세션 | n번째 화면에서 n+1번째 화면으로 넘어간 방문 세션 | 그 단계 from 화면의 세션 | `weekly_path.sessions` (`step` 1~4, `to_screen = '(이탈)'` 은 n번째 화면에서 끝난 세션) |
+
+`weekly_path` 는 세션 안 `screen_view` 를 시각 순으로 앞 5개만 쓴다. 같은 화면이 연달아 나와도 그대로 센다. 기간 전체 기준 상위 12개 화면 밖은 `(기타)` 로 접는다. 단계 n 의 세션 합 = 화면을 n개 이상 본 세션 수이고, `step = 1` 합은 그 주 방문 세션 수와 같다(검사 C7).
 
 ## 전환
 
@@ -51,6 +54,24 @@
 | C08 | 방문 퍼널 단계 | 사람 × 일 | 그날 그 단계까지 도달한 사람 | 이전 단계 | `funnel_daily.persons` (`step` landing → detail → signup → apply_view → payment) |
 
 `funnel_daily` 의 단계는 누적 조건이다. 방문 → +행사 상세 → +로그인 상태(회원 ID 가 실린 방문 세션, 그날 가입 포함) → +신청 화면 → +결제. 같은 날 안에서 판정하며 뒤 단계는 앞 단계보다 클 수 없다.
+
+### 오디언스별 퍼널 (C09)
+
+| 코드 | 이름 | 단위 | 분자 | 분모 | 마트 열 |
+|---|---|---|---|---|---|
+| C09 | 오디언스별 퍼널 단계 | 사람 × 주 | 그 주 그 오디언스 중 그 단계까지 도달한 사람 | 이전 단계 (또는 `landing`) | `weekly_audience_funnel.persons` (`audience_id` × `step`) |
+
+- 대상은 그 주 방문한 사람이다. 단계는 `funnel_daily` 와 같은 누적 조건을 주 안에서 판정한다(플래그를 주 안에서 OR 한 뒤 누적 AND). 요일이 달라도 같은 주면 이어진다.
+- 오디언스는 사람 × 주로 판정하며 서로 겹친다. 오디언스끼리 더하지 않는다. `new` + `returning` 의 `landing` 합은 `weekly_activity.wau` 와 같다(검사 C6).
+
+| 오디언스 | 조건 |
+|---|---|
+| `new` 신규 | 그 주가 첫 방문 주 (`weekly_activity.new_persons` 와 같은 판정) |
+| `returning` 재방문 | 그 주 이전에 첫 방문 |
+| `paid_inflow` 광고 유입 | 그 주 방문 세션 중 세션 라스트클릭 `channel1 = 'paid'` 1개 이상 |
+| `past_payer` 결제 경험 | 그 주 시작 전 결제 1회 이상 (로그 결제 이벤트) |
+| `apply_no_pay` 신청 후 미결제 | 그 주 시작 전 신청 1회 이상, 그 주 시작 전 결제 0회 |
+| `explorer_only` 탐색만 | 그 주 행사 상세 조회 있음, 신청 화면 조회 없음 |
 
 ## 리텐션
 

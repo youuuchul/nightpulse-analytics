@@ -1,5 +1,7 @@
--- staging.dim_event — 행사 차원
--- 그레인: 행사 1건. 키: event_id
+-- 표: staging.dim_event — 행사 차원
+-- 1행: 행사 1건
+-- 키: event_id
+-- 파티션·클러스터: 없음 / event_id
 -- 원천: raw.db_events, raw.db_venues, staging.fct_order
 -- 소비: marts.daily_event (행사 속성), 행사 리스트
 

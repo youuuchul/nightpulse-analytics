@@ -1,7 +1,11 @@
--- marts.daily_channel — 세션 채널 마트
--- 그레인: 일(KST) × 세션 채널 3단계 × device_platform × member_seg. 키: 이 여섯 열
+-- 표: marts.daily_channel — 세션 채널 마트
+-- 1행: 일(KST) × 세션 채널 3단계 × device_platform × member_seg
+-- 키: 이 여섯 열
+-- 파티션·클러스터: kst_date / channel2, device_platform, member_seg
 -- 원천: staging.int_session (세션 라스트클릭 채널), staging.int_person_day (기기·회원 세그먼트)
--- 소비: 유입·광고 탭 채널 보기. 광고 세션 비중 = channel1 = 'paid' 의 sessions / 전체 sessions
+-- 소비: 유입·광고 탭 채널 보기. 광고 세션 비중 = channel1 = 'paid' 의 sessions / 전체 sessions. ops.reconciliation
+-- 검사: C5
+--
 -- 이 마트의 channel1·channel2·channel3 은 세션 라스트클릭 채널이다(다른 마트의 channel1 = 사람의 첫 유입과 다르다).
 -- 세션 속성이라 세션 합은 조합 합 = 전체지만, persons·payers 는 채널끼리 더하면 중복이 생긴다.
 -- sessions 는 자동 로드 제외. 자동 로드는 auto_load_sessions (sessions + auto_load_sessions = int_session 행 수, 검사 C5).

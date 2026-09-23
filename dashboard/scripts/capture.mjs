@@ -12,19 +12,22 @@ const all = process.argv.includes('--all')
 
 const tabs = [
   ['01_overview', 'tab=overview'],
-  ['02_explore', 'tab=explore'],
+  ['02_funnel', 'tab=funnel'],
   ['03_events', 'tab=events'],
   ['04_members', 'tab=members'],
   ['05_acquisition', 'tab=acquisition'],
   ['06_periodic', 'tab=periodic'],
 ]
 const extras = [
-  ['07_explore_venue', 'tab=explore&view=venue'],
+  ['07_events_venue', 'tab=events&view=venue'],
   ['08_events_event', 'tab=events&view=event'],
   ['09_acquisition_campaign', 'tab=acquisition&view=campaign'],
   ['10_periodic_month', 'tab=periodic&view=month'],
   ['11_overview_1day', 'tab=overview&p=1'],
-  ['12_explore_1year_paid_ios', 'tab=explore&p=365&ch=paid&pf=ios'],
+  ['12_funnel_1year_paid_ios', 'tab=funnel&p=365&ch=paid&pf=ios'],
+  ['14_funnel_1day', 'tab=funnel&p=1'],
+  ['15_funnel_7_member', 'tab=funnel&p=7&ms=member&aud=new,returning,past_payer,apply_no_pay'],
+  ['30_about', 'page=about'],
   ['13_members_90', 'tab=members&p=90'],
 ]
 
@@ -53,11 +56,24 @@ try {
     const errors = []
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    if (opts.strip)
+      await page.route('**/data.json', async (route) => {
+        const body = await (await route.fetch()).json()
+        for (const k of opts.strip) delete body[k]
+        await route.fulfill({ json: body })
+      })
     await page.goto(`${BASE}?${q}`, { waitUntil: 'networkidle' })
     await page.waitForSelector('main section, main .card', { timeout: 10000 })
     await page.waitForTimeout(400)
     const file = `${OUT}${name}.png`
-    await page.screenshot({ path: file, fullPage: true })
+    if (opts.section) {
+      const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.section}")`) })
+      if (opts.click != null) {
+        await card.locator('svg path').nth(opts.click).dispatchEvent('click')
+        await page.waitForTimeout(200)
+      }
+      await card.screenshot({ path: file })
+    } else await page.screenshot({ path: file, fullPage: true })
     console.log(`${file}${errors.length ? `  오류 ${errors.length}: ${errors[0]}` : ''}`)
     await ctx.close()
   }
@@ -68,6 +84,14 @@ try {
     await shoot('21_periodic_dark', 'tab=periodic', { scheme: 'dark' })
     await shoot('22_overview_phone', 'tab=overview', { viewport: { width: 390, height: 844 }, scale: 2 })
     await shoot('23_periodic_phone', 'tab=periodic', { viewport: { width: 390, height: 844 }, scale: 2 })
+    await shoot('17_funnel_audience', 'tab=funnel&p=90', { section: '오디언스별 퍼널' })
+    await shoot('18_funnel_path_click', 'tab=funnel&p=90', { section: '경로 탐색', click: 0 })
+    await shoot('19_funnel_nodata', 'tab=funnel', { strip: ['weekly_audience_funnel', 'weekly_path'] })
+    await shoot('24_funnel_dark', 'tab=funnel', { scheme: 'dark' })
+    await shoot('25_funnel_phone', 'tab=funnel', { viewport: { width: 390, height: 844 }, scale: 2 })
+    await shoot('31_about_dark', 'page=about', { scheme: 'dark' })
+    await shoot('32_about_phone', 'page=about', { viewport: { width: 390, height: 844 }, scale: 2 })
+    await shoot('33_about_phone_dark', 'page=about', { viewport: { width: 390, height: 844 }, scale: 2, scheme: 'dark' })
   }
   await browser.close()
 } finally {

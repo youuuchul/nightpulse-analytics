@@ -30,3 +30,49 @@ export const FUNNEL_LABEL: Record<string, string> = {
   apply_view: '신청 화면',
   payment: '결제',
 }
+
+export const AUDIENCES: { id: string; label: string }[] = [
+  { id: 'new', label: '신규' },
+  { id: 'returning', label: '재방문' },
+  { id: 'paid_inflow', label: '광고 유입' },
+  { id: 'past_payer', label: '결제 경험' },
+  { id: 'apply_no_pay', label: '신청 후 미결제' },
+  { id: 'explorer_only', label: '탐색만' },
+]
+
+export const EXIT_NODE = '(이탈)'
+export const OTHER_NODE = '(기타)'
+
+const SCREEN_LABEL: Record<string, string> = {
+  home: '홈',
+  map_main: '지도',
+  search_main: '검색',
+  search_result: '검색 결과',
+  event_detail: '행사 상세',
+  venue_detail: '공간 상세',
+  venue_review: '공간 리뷰',
+  login: '로그인',
+  taste_setup: '취향 설정',
+  event_apply: '신청 화면',
+  payment_confirm: '결제 확인',
+  payment_success: '결제 완료',
+  '(other_screen)': '기타 화면',
+  [OTHER_NODE]: '기타',
+  [EXIT_NODE]: '이탈',
+}
+
+export function screenLabel(k: string): string {
+  return SCREEN_LABEL[k] ?? k
+}
+
+export const SCREEN_GROUPS: { key: string; label: string; color: string; screens: string[] }[] = [
+  { key: 'browse', label: '탐색', color: S(1), screens: ['home', 'map_main', 'search_main', 'search_result'] },
+  { key: 'detail', label: '상세', color: S(3), screens: ['event_detail', 'venue_detail', 'venue_review'] },
+  { key: 'auth', label: '로그인·가입', color: S(4), screens: ['login', 'taste_setup'] },
+  { key: 'order', label: '신청·결제', color: S(2), screens: ['event_apply', 'payment_confirm', 'payment_success'] },
+]
+
+export function screenColor(k: string): string {
+  if (k === EXIT_NODE) return 'var(--exit)'
+  return SCREEN_GROUPS.find((g) => g.screens.includes(k))?.color ?? 'var(--muted)'
+}

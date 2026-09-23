@@ -1,7 +1,11 @@
--- staging.events_clean — 정제 이벤트
--- 그레인: 이벤트 1건. 키: (client_id, session_id, event_at, event_name)
+-- 표: staging.events_clean — 정제 이벤트
+-- 1행: 이벤트 1건
+-- 키: (client_id, session_id, event_at, event_name)
+-- 파티션·클러스터: kst_date / event_name, client_id
 -- 원천: raw.ga4_events
--- 소비: staging.int_session, marts.daily_event·daily_venue, checks/reconciliation.sql
+-- 소비: staging.int_session, marts.daily_event·daily_venue·weekly_path, ops.reconciliation
+-- 검사: C1a·C1b·C2·I3
+--
 -- 처리: 식별자 이름 정리(user_pseudo_id→client_id, user_id→member_id, ga_session_id→session_id),
 --       KST 날짜·시, 파라미터 평탄화, 중복 제거(키 기준 첫 행), 테스트 제외(서비스 도메인 밖 page_location)
 

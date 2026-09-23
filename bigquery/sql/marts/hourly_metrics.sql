@@ -1,7 +1,10 @@
--- marts.hourly_metrics — 시간대 마트
--- 그레인: 일(KST) × 시(KST, 세션 시작 시) × channel1 × device_platform × member_seg. 키: 이 다섯 열
+-- 표: marts.hourly_metrics — 시간대 마트
+-- 1행: 일(KST) × 시(KST, 세션 시작 시) × channel1 × device_platform × member_seg
+-- 키: 이 다섯 열
+-- 파티션·클러스터: kst_date / channel1, device_platform, member_seg
 -- 원천: staging.int_session (세션), staging.int_person_day (세그먼트: 사람 × 일)
 -- 소비: 요일 × 시간대 세션 히트맵, 1일 선택 시 시간별 차트. 세그먼트 필터를 받아야 해서 축을 둔다
+--
 -- persons 는 그 시에 방문 세션을 시작한 고유 사람 수라 시간끼리 더하면 중복이 생긴다.
 
 CREATE OR REPLACE TABLE marts.hourly_metrics (

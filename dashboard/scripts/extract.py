@@ -1,6 +1,6 @@
 """BigQuery 마트 → dashboard/public/data.json 추출기.
 
-marts 데이터셋의 표 11개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 data.json 계약 모양으로 쓴다.
+marts 데이터셋의 표 13개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 data.json 계약 모양으로 쓴다.
 조회는 SELECT 뿐이며 표를 만들거나 바꾸지 않는다. 마트가 적재된 뒤에 실행한다.
 
     uv run dashboard/scripts/extract.py --out dashboard/public/data.json
@@ -115,6 +115,14 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
         ["week_start", *SEG, "wau", "new_persons", "returning_persons", "two_plus_days"],
         ["week_start"],
     ),
+    "weekly_audience_funnel": (
+        ["week_start", "audience_id", "step", *SEG, "persons"],
+        ["week_start", "audience_id"],
+    ),
+    "weekly_path": (
+        ["week_start", *SEG, "step", "from_screen", "to_screen", "sessions"],
+        ["week_start", "step"],
+    ),
     "monthly_summary": (
         [
             "month",
@@ -153,9 +161,14 @@ STRING_COLS = {
     "region",
     "genre",
     "top_channel",
+    "audience_id",
+    "from_screen",
+    "to_screen",
 }
 FLOAT_COLS = {"w1_retention"}
 MONTH_COLS = {"cohort_month", "month"}
+# 표마다 타입이 다른 열: weekly_path.step 은 정수 1~4 (funnel_daily.step 은 문자열)
+INT_OVERRIDE: dict[str, set[str]] = {"weekly_path": {"step"}}
 
 
 def query(sql: str) -> list[dict]:
@@ -176,18 +189,21 @@ def query(sql: str) -> list[dict]:
     return json.loads(res.stdout or "[]")
 
 
-def coerce(col: str, value: str | None) -> object:
+def coerce(col: str, value: str | None, table: str = "") -> object:
     """bq 문자열 값을 계약 타입으로 바꾼다.
 
     Args:
         col: 열 이름.
         value: bq 가 준 값.
+        table: 표 이름. INT_OVERRIDE 판정에 쓴다.
 
     Returns:
         문자열·정수·실수 또는 None.
     """
     if value is None:
         return None
+    if col in INT_OVERRIDE.get(table, set()):
+        return int(value)
     if col in MONTH_COLS:
         return str(value)[:7]
     if col in STRING_COLS:
@@ -205,11 +221,12 @@ def main() -> None:
 
     out: dict[str, list[dict]] = {}
     for table, (cols, order) in TABLES.items():
-        select = ", ".join(f"CAST({c} AS STRING) AS {c}" if c in STRING_COLS else c for c in cols)
+        ints = INT_OVERRIDE.get(table, set())
+        select = ", ".join(f"CAST({c} AS STRING) AS {c}" if c in STRING_COLS and c not in ints else c for c in cols)
         sql = f"SELECT {select} FROM {DATASET}.{table} ORDER BY {', '.join(order)}"
         rows = query(sql)
-        out[table] = [{c: coerce(c, r.get(c)) for c in cols} for r in rows]
-        print(f"{table:16s} {len(out[table]):>8,d}")
+        out[table] = [{c: coerce(c, r.get(c), table) for c in cols} for r in rows]
+        print(f"{table:22s} {len(out[table]):>8,d}")
 
     dates = [r["kst_date"] for r in out["daily_metrics"]]
     if not dates:

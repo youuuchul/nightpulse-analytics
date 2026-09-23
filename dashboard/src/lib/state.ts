@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
-export type TabId = 'overview' | 'explore' | 'events' | 'members' | 'acquisition' | 'periodic'
+export type TabId = 'overview' | 'funnel' | 'events' | 'members' | 'acquisition' | 'periodic'
 export type Preset = '' | '1' | '7' | '28' | '90' | '365' | 'custom' | 'target'
 
 export interface State {
@@ -21,6 +21,8 @@ export interface State {
   wk: string
   mo: string
   mr: '6' | '12'
+  aud: string
+  page: '' | 'about'
 }
 
 export const DEFAULTS: State = {
@@ -41,6 +43,8 @@ export const DEFAULTS: State = {
   wk: '',
   mo: '',
   mr: '6',
+  aud: 'new,returning,paid_inflow',
+  page: '',
 }
 
 function read(): State {

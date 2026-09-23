@@ -1,7 +1,11 @@
--- staging.fct_order — 주문(신청) 원장 정리
--- 그레인: 신청 1건. 키: order_id
+-- 표: staging.fct_order — 주문(신청) 원장 정리
+-- 1행: 신청 1건
+-- 키: order_id
+-- 파티션·클러스터: applied_date / event_id
 -- 원천: raw.db_applications, raw.db_payments, raw.db_events
--- 소비: staging.dim_event, marts.daily_event·daily_venue·monthly_summary, checks/reconciliation.sql
+-- 소비: staging.dim_event, marts.daily_event·daily_venue·monthly_summary, ops.reconciliation
+-- 검사: R5·R6·I4
+--
 -- 결제·신청·취소의 건수와 금액은 이 표(원장)에서 센다. 로그는 흐름을 보는 데만 쓴다.
 
 CREATE OR REPLACE TABLE staging.fct_order (

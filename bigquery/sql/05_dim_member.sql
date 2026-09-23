@@ -1,7 +1,10 @@
--- staging.dim_member — 회원 차원
--- 그레인: 회원 1명. 키: member_id
+-- 표: staging.dim_member — 회원 차원
+-- 1행: 회원 1명
+-- 키: member_id
+-- 파티션·클러스터: 없음 / member_id
 -- 원천: raw.db_members (속성의 진실), staging.int_session (첫 유입·첫 방문을 로그에서 역산)
--- 소비: 회원 탭 분포, 애드혹 분석
+-- 소비: marts.weekly_cohort·monthly_cohort·weekly_activity·monthly_summary·weekly_audience_funnel·weekly_path (가입일),
+--       회원 탭 분포, 애드혹 분석
 
 CREATE OR REPLACE TABLE staging.dim_member (
   member_id STRING OPTIONS(description='회원 ID'),

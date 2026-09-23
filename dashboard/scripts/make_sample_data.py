@@ -35,6 +35,24 @@ NON_PAID = [
 PRICE = {"free": 0, "standard": 20000, "premium": 50000}
 FUNNEL_STEPS = ["landing", "detail", "signup", "apply_view", "payment"]
 HOUR_WEIGHTS = [6, 4, 2, 1, 1, 1, 1, 1, 1, 2, 2, 3, 4, 4, 4, 4, 5, 6, 8, 10, 12, 13, 12, 9]
+AUDIENCES = ["new", "returning", "paid_inflow", "past_payer", "apply_no_pay", "explorer_only"]
+EXIT = "(이탈)"
+OTHER = "(기타)"
+LANDING = [("home", 0.46), ("event_detail", 0.24), ("map_main", 0.1), ("venue_detail", 0.1), ("search_main", 0.1)]
+SCREEN_NEXT: dict[str, list[tuple[str, float]]] = {
+    "home": [("event_detail", 0.35), ("map_main", 0.14), ("search_main", 0.12), ("venue_detail", 0.12), (OTHER, 0.06), (EXIT, 0.21)],
+    "map_main": [("venue_detail", 0.35), ("event_detail", 0.2), ("home", 0.1), (EXIT, 0.35)],
+    "search_main": [("search_result", 0.6), ("home", 0.05), (EXIT, 0.35)],
+    "search_result": [("event_detail", 0.35), ("venue_detail", 0.3), (EXIT, 0.35)],
+    "event_detail": [("event_apply", 0.12), ("login", 0.1), ("venue_detail", 0.1), ("home", 0.15), ("event_detail", 0.1), (EXIT, 0.43)],
+    "venue_detail": [("event_detail", 0.3), ("venue_review", 0.2), ("home", 0.1), (EXIT, 0.4)],
+    "venue_review": [("venue_detail", 0.3), ("event_detail", 0.2), (EXIT, 0.5)],
+    "login": [("event_detail", 0.4), ("event_apply", 0.2), (OTHER, 0.1), (EXIT, 0.3)],
+    "event_apply": [("payment_confirm", 0.55), ("event_detail", 0.1), (EXIT, 0.35)],
+    "payment_confirm": [("payment_success", 0.6), ("event_apply", 0.05), (EXIT, 0.35)],
+    "payment_success": [("home", 0.3), (EXIT, 0.7)],
+    OTHER: [("home", 0.4), ("event_detail", 0.2), (EXIT, 0.4)],
+}
 
 
 def pick(rng: random.Random, pairs: list[tuple]) -> object:
@@ -200,7 +218,9 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
     ev: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
     vn: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
     month_channel: dict[str, dict] = defaultdict(lambda: defaultdict(int))
-
+    person_day: dict[tuple[int, date], tuple[list[bool], bool, bool]] = {}
+    wp: dict[tuple, int] = defaultdict(int)
+    prng = random.Random(seed + 1)
 
     for p in people:
         for d in p.visits:
@@ -283,6 +303,19 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
                 else:
                     c2, c3 = pick(rng, NON_PAID)
                     chans.append(("non_paid", c2, c3))
+            hits = [True, detail, gate, apply_view, pay_count > 0]
+            person_day[(p.pid, d)] = (hits, any(c[0] == "paid" for c in chans), applies > 0)
+            wk_seg = p.seg(monday(d))
+            for _ in range(n_sess):
+                land = pick(prng, LANDING)
+                path = [land]
+                while len(path) < 5 and path[-1] != EXIT:
+                    path.append(pick(prng, SCREEN_NEXT[path[-1]]))
+                for i in range(min(len(path) - 1, 4)):
+                    wp[(monday(d), p.channel1, p.platform, wk_seg, i + 1, path[i], path[i + 1])] += 1
+                if len(path) == 1:
+                    wp[(monday(d), p.channel1, p.platform, wk_seg, 1, land, EXIT)] += 1
+
             for s, (c1, c2, c3) in enumerate(chans):
                 crow = dc[(d, c1, c2, c3, p.platform, seg)]
                 crow["sessions"] += 1
@@ -490,6 +523,59 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
     out["weekly_activity"] = [
         {"week_start": ds(k[0]), "channel1": k[1], "device_platform": k[2], "member_seg": k[3], **v}
         for k, v in sorted(wa.items())
+    ]
+
+    wf: dict[tuple, int] = defaultdict(int)
+    for p in people:
+        paid_before = False
+        applied_before = False
+        weeks_order = sorted({monday(d) for d in p.visits})
+        for wk in weeks_order:
+            wdays = [d for d in p.visits if monday(d) == wk]
+            recs = [person_day[(p.pid, d)] for d in wdays]
+            reach = [any(r[0][i] for r in recs) for i in range(5)]
+            weekly_paid = any(r[1] for r in recs)
+            member = p.seg(wk)
+            auds = ["new" if wk == monday(p.first_day) else "returning"]
+            if weekly_paid:
+                auds.append("paid_inflow")
+            if paid_before:
+                auds.append("past_payer")
+            if applied_before and not paid_before:
+                auds.append("apply_no_pay")
+            if reach[1] and not reach[3]:
+                auds.append("explorer_only")
+            for a in auds:
+                for i, step in enumerate(FUNNEL_STEPS):
+                    if all(reach[: i + 1]):
+                        wf[(wk, a, step, p.channel1, p.platform, member)] += 1
+            paid_before = paid_before or reach[4]
+            applied_before = applied_before or any(r[2] for r in recs)
+
+    out["weekly_audience_funnel"] = [
+        {
+            "week_start": ds(k[0]),
+            "audience_id": k[1],
+            "step": k[2],
+            "channel1": k[3],
+            "device_platform": k[4],
+            "member_seg": k[5],
+            "persons": n,
+        }
+        for k, n in sorted(wf.items(), key=lambda kv: (kv[0][0], AUDIENCES.index(kv[0][1]), FUNNEL_STEPS.index(kv[0][2]), kv[0][3:]))
+    ]
+    out["weekly_path"] = [
+        {
+            "week_start": ds(k[0]),
+            "channel1": k[1],
+            "device_platform": k[2],
+            "member_seg": k[3],
+            "step": k[4],
+            "from_screen": k[5],
+            "to_screen": k[6],
+            "sessions": n,
+        }
+        for k, n in sorted(wp.items())
     ]
 
     months = sorted({d.strftime("%Y-%m") for d in days})

@@ -1,7 +1,12 @@
--- marts.weekly_cohort — 주간 리텐션 코호트
--- 그레인: 코호트 주 × 경과 주 × channel1 × device_platform × member_seg. 키: 이 다섯 열
+-- 표: marts.weekly_cohort — 주간 리텐션 코호트
+-- 1행: 코호트 주 × 경과 주 × channel1 × device_platform × member_seg
+-- 키: 이 다섯 열
+-- 파티션·클러스터: cohort_week / week_offset, channel1, device_platform, member_seg
 -- 원천: staging.int_person_day (방문·첫 방문), staging.dim_member (가입일)
--- 소비: 회원 탭 리텐션 곡선, 주간 탭 코호트 히트맵 W1~W12. 리텐션 = retained / cohort_size (화면에서 나눈다)
+-- 소비: 회원 탭 리텐션 곡선, 주간 탭 코호트 히트맵 W1~W12. 리텐션 = retained / cohort_size (화면에서 나눈다).
+--       marts.monthly_summary (W1), ops.reconciliation
+-- 검사: C4·R1·R2
+--
 -- 코호트 주 = 첫 방문일이 속한 주(월요일 시작). 경과 주 N 에 방문(자동 로드 제외)이 1일 이상 있으면 retained.
 -- cohort_size 는 경과 주와 무관하게 같은 값을 반복한다. week_offset = 0 행은 retained = cohort_size. 경과 주는 0~12.
 -- member_seg = 코호트 주 말일(일요일) 기준 회원 여부 member / guest. 코호트 안에서 사람마다 고정.

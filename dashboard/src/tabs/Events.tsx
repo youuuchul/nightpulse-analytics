@@ -6,6 +6,7 @@ import { Funnel, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
 import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
+import Venues from './Venues'
 
 function Flow({ data, s, range }: TabProps) {
   const seg = segFilter(s)
@@ -174,5 +175,7 @@ function EventList({ data, s, range }: TabProps) {
 }
 
 export default function Events(p: TabProps) {
-  return p.s.view === 'event' ? <EventList {...p} /> : <Flow {...p} />
+  if (p.s.view === 'event') return <EventList {...p} />
+  if (p.s.view === 'venue') return <Venues {...p} />
+  return <Flow {...p} />
 }

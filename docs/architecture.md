@@ -66,6 +66,8 @@
 | `monthly_cohort` | 코호트 월 × 경과 월 | 회원 여부 | 월 리텐션 |
 | `weekly_activity` | 주 × 세그먼트 | 위와 같음 | WAU·신규·재방문·2일+ |
 | `monthly_summary` | 월 | 없음 | 월간 브리핑 표 (방문·가입·신청·결제·매출·리텐션·상위 채널) |
+| `weekly_audience_funnel` | 주 × 오디언스 × 단계 × 세그먼트 | 위와 같음 (`member_seg` 는 주 시작 기준) | 퍼널 탭 오디언스별 퍼널. 오디언스 6개(신규·재방문·광고 유입·결제 경험·신청 후 미결제·탐색만)는 서로 겹친다 |
+| `weekly_path` | 주 × 세그먼트 × 단계(1~4) × from 화면 × to 화면 | 위와 같음 (`member_seg` 는 주 시작 기준) | 퍼널 탭 경로 탐색 생키. 세션당 앞 5개 화면 전이, 자동 로드 제외, 상위 12개 밖 `(기타)`, 끝나면 `(이탈)` |
 
 세그먼트 속성은 사람당 1개이므로 조합의 합이 전체다. 마트는 가장 잘게 저장하고 합산은 화면에서 한다.
 
@@ -87,7 +89,7 @@
 4. `staging.int_session`
 5. `staging.int_person_day`
 6. `staging.dim_member` · `dim_event`
-7. `marts.*` 11개
+7. `marts.*` 13개
 8. `ops.reconciliation`(`bigquery/checks/reconciliation.sql`) — 어긋나면 종료 코드 1
 9. `ops.build_log` · `ops.freshness`
 
@@ -102,6 +104,8 @@
 | 일 방문 사람 | `daily_metrics` 합 vs `int_person_day` 재집계 | 정확히 일치 |
 | 주간 코호트 크기 | `weekly_cohort` 0주차 vs `int_person_day` 첫 방문 | 정확히 일치 |
 | 채널 합 | `daily_channel` 세션 합 vs `int_session` | 정확히 일치 |
+| 오디언스 합 | `weekly_audience_funnel` 신규+재방문 랜딩 vs `weekly_activity.wau` | 정확히 일치 |
+| 경로 1단계 | `weekly_path` step 1 세션 합 vs 주간 방문 세션 | 정확히 일치 |
 
 ## 5. 명명·타입 규칙
 

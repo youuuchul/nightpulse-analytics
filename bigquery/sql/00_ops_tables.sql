@@ -1,8 +1,11 @@
--- ops 층 표 준비 (없을 때만 만든다. 기록은 누적된다)
--- ops.build_log      1행 = 실행 1회 × 단계(SQL 파일 1개). 키 (run_id, step, step_name)
--- ops.reconciliation 1행 = 실행 1회 × 검사 항목. 키 (run_id, check_id)
--- ops.freshness      1행 = 표 1개. 키 (dataset_name, table_name). 매 실행 전체 교체
--- 소비: 파이프라인 상태 확인, 대시보드 데이터 탭의 기준일 표시
+-- 표: ops.build_log — 파이프라인 실행 기록 (없을 때만 만든다. 기록은 누적된다)
+-- 1행: 실행 1회 × 단계(SQL 파일 1개)
+-- 키: (run_id, step, step_name)
+-- 파티션·클러스터: DATE(started_at) / 없음
+-- 원천: load_all.sh 가 단계마다 1행 추가
+-- 소비: 파이프라인 상태 확인, bigquery/README.md 마지막 실행 요약
+--
+-- ops.reconciliation(checks/reconciliation.sql)·ops.freshness(09_freshness.sql) 의 빈 표도 여기서 만든다. 1행·키는 각 파일 머리 주석에 있다.
 
 CREATE TABLE IF NOT EXISTS ops.build_log (
   run_id STRING NOT NULL OPTIONS(description='실행 ID (UTC 시각 기반)'),

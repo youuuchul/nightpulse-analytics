@@ -1,8 +1,12 @@
--- 대조·범위·무결성 검사 → ops.reconciliation
--- 그레인: 실행 1회 × 검사 항목. 키: (run_id, check_id)
+-- 표: ops.reconciliation — 대조·범위·무결성 검사 결과 (행 추가)
+-- 1행: 실행 1회 × 검사 항목
+-- 키: (run_id, check_id)
+-- 파티션·클러스터: DATE(checked_at) / 없음
 -- 원천: raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
---       marts.daily_metrics·weekly_cohort·daily_channel
+--       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path
 -- 소비: load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1
+--
+-- 표 정의는 sql/00_ops_tables.sql.
 -- 판정
 --   reconcile (C)  observed = |왼쪽 - 오른쪽| + 날짜별 불일치 키 수. 0 이어야 통과
 --   range     (R)  observed = 분자 / 분모. docs/architecture.md §6 범위 안이어야 통과
@@ -85,6 +89,44 @@ c5 AS (
     WHERE session_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
     GROUP BY 1
   ) AS p USING (kst_date)
+),
+-- C6 오디언스 퍼널: new + returning 랜딩 사람 합 vs weekly_activity wau, 주 × 세그먼트별
+c6 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(w.v, 0)) AS ref_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(w.v, -1)) AS bad_keys
+  FROM (
+    SELECT week_start, channel1, device_platform, member_seg, SUM(persons) AS v
+    FROM marts.weekly_audience_funnel
+    WHERE step = 'landing' AND audience_id IN ('new', 'returning')
+    GROUP BY 1, 2, 3, 4
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT week_start, channel1, device_platform, member_seg, SUM(wau) AS v
+    FROM marts.weekly_activity
+    WHERE wau > 0
+    GROUP BY 1, 2, 3, 4
+  ) AS w USING (week_start, channel1, device_platform, member_seg)
+),
+-- C7 경로: step 1 세션 합 vs weekly_activity 방문 세션 합, 주 × 세그먼트별
+c7 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(w.v, 0)) AS ref_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(w.v, -1)) AS bad_keys
+  FROM (
+    SELECT week_start, channel1, device_platform, member_seg, SUM(sessions) AS v
+    FROM marts.weekly_path
+    WHERE step = 1
+    GROUP BY 1, 2, 3, 4
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT week_start, channel1, device_platform, member_seg, SUM(valid_sessions) AS v
+    FROM marts.weekly_activity
+    WHERE valid_sessions > 0
+    GROUP BY 1, 2, 3, 4
+  ) AS w USING (week_start, channel1, device_platform, member_seg)
 ),
 cohort_ret AS (
   SELECT
@@ -178,6 +220,16 @@ checks AS (
          'marts.daily_channel sessions + auto_load_sessions 합', mart_v, 'int_session 행', stg_v,
          ABS(mart_v - stg_v) + bad_days, 0, 0, FORMAT('불일치 날짜 %d', bad_days)
   FROM c5
+  UNION ALL
+  SELECT 'C6', 'reconcile', '오디언스 퍼널: 신규 + 재방문 vs WAU',
+         'weekly_audience_funnel landing new+returning 합', mart_v, 'weekly_activity wau 합', ref_v,
+         ABS(mart_v - ref_v) + bad_keys, 0, 0, FORMAT('불일치 주 × 세그먼트 %d', bad_keys)
+  FROM c6
+  UNION ALL
+  SELECT 'C7', 'reconcile', '경로 1단계 세션 vs 주간 방문 세션',
+         'weekly_path step 1 sessions 합', mart_v, 'weekly_activity valid_sessions 합', ref_v,
+         ABS(mart_v - ref_v) + bad_keys, 0, 0, FORMAT('불일치 주 × 세그먼트 %d', bad_keys)
+  FROM c7
   UNION ALL
   SELECT 'R1', 'range', '신규 방문자 W1 리텐션',
          'W1 retained', w1_num, 'cohort_size (W1 관측 완료 코호트)', w1_den,

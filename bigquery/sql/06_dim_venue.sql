@@ -1,5 +1,7 @@
--- staging.dim_venue — 공간 차원
--- 그레인: 공간 1곳. 키: venue_id
+-- 표: staging.dim_venue — 공간 차원
+-- 1행: 공간 1곳
+-- 키: venue_id
+-- 파티션·클러스터: 없음 / 없음
 -- 원천: raw.db_venues, raw.db_events
 -- 소비: marts.daily_venue (공간 속성)
 

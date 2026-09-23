@@ -67,10 +67,14 @@
 | `weekly_cohort` | `cohort_week, week_offset(0..12), channel1, device_platform, member_seg, cohort_size, retained` |
 | `monthly_cohort` | `cohort_month, month_offset(0..6), member_seg, cohort_size, retained` |
 | `weekly_activity` | `week_start, channel1, device_platform, member_seg, wau, new_persons, returning_persons, two_plus_days` |
+| `weekly_audience_funnel` | `week_start, audience_id(new/returning/paid_inflow/past_payer/apply_no_pay/explorer_only), step(landing/detail/signup/apply_view/payment), channel1, device_platform, member_seg, persons` |
+| `weekly_path` | `week_start, channel1, device_platform, member_seg, step(1..4, 정수), from_screen, to_screen, sessions` |
 | `monthly_summary` | `month, persons, new_persons, signups, applies, pay_count, pay_amount, cancels, w1_retention, top_channel` |
 
 세그먼트 값: `channel1` ∈ {paid, non_paid}, `device_platform` ∈ {ios, android, web}, `member_seg` ∈ {member, guest}. 세그먼트 속성은 행마다 1개라 조합의 합이 전체다. `channel2` 는 `staging.map_channel` 의 2단계 값(direct·organic_search·organic_social·influencer·paid_social·referral·ai_referral·other), `top_channel` 도 같은 값을 쓴다. `price_tier` ∈ {free, standard, premium}.
 
 **`docs/architecture.md` 와 다른 점**: `hourly_metrics` 에 세그먼트 축 3개가 있다. 시간대 히트맵과 1일 시간별 차트가 세그먼트 필터를 받아야 하므로 마트에 축을 추가한다.
+
+`weekly_audience_funnel` 의 오디언스는 서로 겹치므로 오디언스끼리 더하지 않는다(`new` + `returning` 만 그 주 방문 사람 전체). `weekly_path` 의 `step = n` 은 n번째 화면 → n+1번째 화면 전이이고, `to_screen` 은 화면 이름 12개와 `(이탈)`·`(기타)` 중 하나다. 같은 주·세그먼트에서 `step = 1` 의 세션 합이 방문 세션 수다.
 
 `weekly_cohort.cohort_size` 는 경과 주와 무관하게 같은 값이 반복되며, 화면은 `week_offset = 0` 행의 값을 코호트 크기로 쓴다(월 코호트도 같다).

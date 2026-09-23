@@ -161,7 +161,8 @@ fi
 if want 7; then
   # weekly_cohort 는 monthly_summary 보다 먼저
   for m in daily_metrics hourly_metrics daily_channel daily_ad daily_event daily_venue \
-           funnel_daily weekly_cohort monthly_cohort weekly_activity monthly_summary; do
+           funnel_daily weekly_cohort monthly_cohort weekly_activity monthly_summary \
+           weekly_audience_funnel weekly_path; do
     run_sql 7 "marts.$m" "$SQL/marts/$m.sql" "marts.$m"
   done
 fi

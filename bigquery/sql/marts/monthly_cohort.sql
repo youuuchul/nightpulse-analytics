@@ -1,7 +1,10 @@
--- marts.monthly_cohort — 월간 리텐션 코호트
--- 그레인: 코호트 월 × 경과 월 × member_seg. 키: 이 세 열
+-- 표: marts.monthly_cohort — 월간 리텐션 코호트
+-- 1행: 코호트 월 × 경과 월 × member_seg
+-- 키: 이 세 열
+-- 파티션·클러스터: DATE_TRUNC(cohort_month, MONTH) / month_offset, member_seg
 -- 원천: staging.int_person_day, staging.dim_member
 -- 소비: 월 리텐션 표. 리텐션 = retained / cohort_size (화면에서 나눈다)
+--
 -- 코호트 월 = 첫 방문일이 속한 달. member_seg = 코호트 월 말일 기준 회원 여부 member / guest.
 -- 관측 가능한 칸을 0 포함으로 채운다. 경과 월은 0~6. cohort_size 는 경과 월과 무관하게 반복된다.
 

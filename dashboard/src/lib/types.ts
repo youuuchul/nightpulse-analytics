@@ -132,6 +132,23 @@ export interface MonthlySummary {
   top_channel: string | null
 }
 
+export type AudienceId = 'new' | 'returning' | 'paid_inflow' | 'past_payer' | 'apply_no_pay' | 'explorer_only'
+
+export interface WeeklyAudienceFunnel extends Seg {
+  week_start: string
+  audience_id: AudienceId
+  step: FunnelStep
+  persons: number
+}
+
+export interface WeeklyPath extends Seg {
+  week_start: string
+  step: number
+  from_screen: string
+  to_screen: string
+  sessions: number
+}
+
 export interface Meta {
   to_date: string
   from_date: string
@@ -153,4 +170,6 @@ export interface Data {
   monthly_cohort: MonthlyCohort[]
   weekly_activity: WeeklyActivity[]
   monthly_summary: MonthlySummary[]
+  weekly_audience_funnel?: WeeklyAudienceFunnel[]
+  weekly_path?: WeeklyPath[]
 }

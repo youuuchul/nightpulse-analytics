@@ -1,7 +1,10 @@
--- marts.daily_event — 행사별 일 마트 (리스트 집계)
--- 그레인: 일(KST) × 행사. 키: (kst_date, event_id)
--- 원천: staging.events_clean + int_session (조회 흐름, 세션 시작일·사람 단위), staging.fct_order (원장, 신청일 기준), staging.dim_event (속성)
+-- 표: marts.daily_event — 행사별 일 마트 (리스트 집계)
+-- 1행: 일(KST) × 행사
+-- 키: (kst_date, event_id)
+-- 파티션·클러스터: kst_date / event_id
+-- 원천: staging.events_clean·int_session (조회 흐름, 세션 시작일·사람 단위), staging.fct_order (원장, 신청일 기준), staging.dim_event (속성)
 -- 소비: 행사 리스트, 행사 결제 퍼널 (상세 조회 → 신청 화면 → 신청 → 결제). 세그먼트 축 없음
+--
 -- 원장 열(applies·pay_count·pay_amount·cancels 등)은 신청일 기준이다. 그날 신청분이 나중에 취소돼도 신청일 행에 남는다.
 
 CREATE OR REPLACE TABLE marts.daily_event (

@@ -1,7 +1,10 @@
--- staging.map_channel — 채널 3단계 매핑
--- 그레인: (source, medium) 1쌍. 키: (source, medium)
+-- 표: staging.map_channel — 채널 3단계 매핑
+-- 1행: (source, medium) 1쌍
+-- 키: (source, medium)
+-- 파티션·클러스터: 없음 / 없음
 -- 원천: raw.ga4_events.traffic_source (관측된 쌍 전부)
--- 소비: staging.int_session (세션 라스트클릭 채널), marts.daily_channel·daily_ad
+-- 소비: staging.int_session (세션 라스트클릭 채널 — 채널·광고 마트는 이 열을 쓴다)
+--
 -- 채널 분류 규칙의 유일한 원본. 규칙을 바꾸면 이 파일만 고치고 3단계부터 다시 돌린다.
 --   channel1  paid / non_paid           광고비가 드는 유입인가
 --   channel2  유입 유형                  paid_social·paid_search·organic_search·organic_social·influencer·ai_referral·referral·direct·other

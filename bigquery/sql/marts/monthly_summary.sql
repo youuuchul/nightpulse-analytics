@@ -1,9 +1,12 @@
--- marts.monthly_summary — 월간 브리핑 표
--- 그레인: 월(KST). 키: month
+-- 표: marts.monthly_summary — 월간 브리핑 표
+-- 1행: 월(KST)
+-- 키: month
+-- 파티션·클러스터: DATE_TRUNC(month, MONTH) / 없음
 -- 원천: staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장),
 --       marts.weekly_cohort (W1 리텐션 — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다)
 -- 소비: 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다.
 --       예외: w1_retention 은 화면 계약상 비율(0~1)로도 둔다. 분자·분모는 w1_retained·w1_cohort_size
+--
 -- 원장 열(applies·pay_count·pay_amount·cancels)은 신청일이 속한 달 기준. W1 은 첫 방문 주(월요일)가 그 달에 속한 코호트의 합.
 -- top_channel = 방문 세션이 가장 많은 세션 채널 2단계 값.
 

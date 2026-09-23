@@ -1,6 +1,8 @@
--- marts.daily_venue — 공간별 일 마트 (리스트 집계)
--- 그레인: 일(KST) × 공간. 키: (kst_date, venue_id)
--- 원천: staging.events_clean + int_session (공간 상세·리뷰 조회, 세션 시작일·사람 단위), staging.fct_order (그 공간 행사의 신청, 신청일 기준), staging.dim_venue
+-- 표: marts.daily_venue — 공간별 일 마트 (리스트 집계)
+-- 1행: 일(KST) × 공간
+-- 키: (kst_date, venue_id)
+-- 파티션·클러스터: kst_date / venue_id
+-- 원천: staging.events_clean·int_session (공간 상세·리뷰 조회, 세션 시작일·사람 단위), staging.fct_order (그 공간 행사의 신청, 신청일 기준), staging.dim_venue
 -- 소비: 공간 상위 N 표. 단위가 공간이므로 사람 세그먼트 축이 없다
 
 CREATE OR REPLACE TABLE marts.daily_venue (
