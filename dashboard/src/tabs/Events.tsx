@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { bucketed, groupSum, inRange, segFilter, sum } from '../lib/agg'
+import { bucketed, groupSum, inRange, segFilter, sum, uniqueByMasks } from '../lib/agg'
 import { num, pct, ratio, won } from '../lib/format'
 import { PRICE_TIER, S } from '../lib/labels'
+import { F } from '../lib/persons'
 import { Funnel, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
@@ -14,7 +15,17 @@ function Flow({ data, s, range }: TabProps) {
   const keys = ['detail_viewers', 'apply_viewers', 'applies', 'payers', 'pay_count', 'pay_amount', 'cancels'] as const
   const cur = sum(inRange(m, range.from, range.to), [...keys])
   const prev = sum(inRange(m, range.prevFrom, range.prevTo), [...keys])
-  const arppu = ratio(cur.pay_amount, cur.payers)
+  const pd = data.person_day
+  const people = (from: string, to: string, t: typeof cur) => {
+    if (!pd) return { detail: t.detail_viewers, apply_view: t.apply_viewers, paid: t.payers, payers: t.payers }
+    const d = F.event_detail
+    const masks = [d, d | F.apply_view, d | F.apply_view | F.paid, F.paid]
+    const u = uniqueByMasks(pd, from, to, masks, { ch: s.ch, pf: s.pf, ms: s.ms }).get('')
+    return { detail: u?.[0] ?? 0, apply_view: u?.[1] ?? 0, paid: u?.[2] ?? 0, payers: u?.[3] ?? 0 }
+  }
+  const pCur = useMemo(() => people(range.from, range.to, cur), [data, m, range.from, range.to])
+  const pPrev = useMemo(() => people(range.prevFrom, range.prevTo, prev), [data, m, range.prevFrom, range.prevTo])
+  const arppu = ratio(cur.pay_amount, pCur.payers)
   const cancel = ratio(cur.cancels, cur.applies)
 
   const trend = bucketed(inRange(m, range.from, range.to), ['applies', 'pay_count'], range)
@@ -43,8 +54,8 @@ function Flow({ data, s, range }: TabProps) {
           label="결제자당 금액"
           value={won(arppu)}
           unit="원"
-          sub={`결제자 ${num(cur.payers)}명`}
-          delta={delta(data, range, arppu, ratio(prev.pay_amount, prev.payers))}
+          sub={`결제자 ${num(pCur.payers)}명`}
+          delta={delta(data, range, arppu, ratio(prev.pay_amount, pPrev.payers))}
         />
         <Tile
           label="취소율"
@@ -66,12 +77,12 @@ function Flow({ data, s, range }: TabProps) {
             <TimeChart data={trend.rows} kind="line" tipTitle={weekTip(trend.weekly)} series={series} height={240} />
           )}
         </Card>
-        <Card title="결제 퍼널" meta="사람·일">
+        <Card title="결제 퍼널">
           <Funnel
             steps={[
-              { label: '행사 상세', value: cur.detail_viewers },
-              { label: '신청 화면', value: cur.apply_viewers },
-              { label: '결제', value: cur.payers },
+              { label: '행사 상세', value: pCur.detail },
+              { label: '신청 화면', value: pCur.apply_view },
+              { label: '결제', value: pCur.paid },
             ]}
           />
         </Card>
@@ -132,7 +143,7 @@ function EventList({ data, s, range }: TabProps) {
     },
     { key: 'event_type', label: '유형', value: (r) => r.event_type },
     { key: 'price_tier', label: '가격대', value: (r) => PRICE_TIER[r.price_tier] ?? r.price_tier },
-    { key: 'detail_viewers', label: '상세 조회', value: (r) => r.detail_viewers, render: (r) => num(r.detail_viewers), num: true },
+    { key: 'detail_viewers', label: '조회 사람(일 합)', value: (r) => r.detail_viewers, render: (r) => num(r.detail_viewers), num: true },
     { key: 'applies', label: '신청', value: (r) => r.applies, render: (r) => num(r.applies), num: true },
     {
       key: 'rate',
@@ -148,10 +159,9 @@ function EventList({ data, s, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-5">
+      <TileRow cols="lg:grid-cols-4">
         <Tile label="조회된 행사" value={num(list.length)} unit="건" />
-        <Tile label="상세 조회" value={num(tot.detail_viewers)} unit="명·일" />
-        <Tile label="신청" value={num(tot.applies)} unit="건" sub={`조회 대비 ${pct(ratio(tot.applies, tot.detail_viewers))}`} />
+        <Tile label="신청" value={num(tot.applies)} unit="건" />
         <Tile label="결제 금액" value={won(tot.pay_amount)} unit="원" sub={`결제 ${num(tot.pay_count)}건`} />
         <Tile label="취소율" value={pct(ratio(tot.cancels, tot.applies))} sub={`신청 ${num(tot.applies)}건 중`} />
       </TileRow>

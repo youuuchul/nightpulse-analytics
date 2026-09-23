@@ -3,6 +3,7 @@ import { bucketed, inRange, segFilter, sum } from '../lib/agg'
 import { addDays, md, mondayOf } from '../lib/date'
 import { num, pct, ratio } from '../lib/format'
 import { S } from '../lib/labels'
+import { F, uniquePersons } from '../lib/persons'
 import { TimeChart } from '../components/charts'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
 import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
@@ -10,12 +11,24 @@ import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from '.
 export default function Members({ data, s, range }: TabProps) {
   const seg = segFilter(s)
   const m = useMemo(() => data.daily_metrics.filter(seg), [data, s.ch, s.pf, s.ms])
-  const cur = sum(inRange(m, range.from, range.to), ['persons', 'new_persons', 'signups'])
-  const prev = sum(inRange(m, range.prevFrom, range.prevTo), ['persons', 'new_persons', 'signups'])
-  const memberRows = (from: string, to: string) =>
-    sum(inRange(m, from, to).filter((r) => r.member_seg === 'member'), ['persons']).persons
-  const memCur = memberRows(range.from, range.to)
-  const memPrev = memberRows(range.prevFrom, range.prevTo)
+  const cur = sum(inRange(m, range.from, range.to), ['new_persons', 'signups'])
+  const prev = sum(inRange(m, range.prevFrom, range.prevTo), ['new_persons', 'signups'])
+  const pd = data.person_day
+  const visitors = (from: string, to: string) => {
+    if (!pd) {
+      const rows = inRange(m, from, to)
+      return {
+        all: sum(rows, ['persons']).persons,
+        member: sum(rows.filter((r) => r.member_seg === 'member'), ['persons']).persons,
+      }
+    }
+    const u = uniquePersons(pd, from, to, F.visited, { ch: s.ch, pf: s.pf, ms: s.ms }, (r) => ['', r.member_seg])
+    return { all: u.get('') ?? 0, member: u.get('member') ?? 0 }
+  }
+  const vCur = useMemo(() => visitors(range.from, range.to), [data, m, range.from, range.to])
+  const vPrev = useMemo(() => visitors(range.prevFrom, range.prevTo), [data, m, range.prevFrom, range.prevTo])
+  const memCur = vCur.member
+  const memPrev = vPrev.member
   const conv = ratio(cur.signups, cur.new_persons)
 
   const split = useMemo(() => {
@@ -24,8 +37,16 @@ export default function Members({ data, s, range }: TabProps) {
       member: r.member_seg === 'member' ? r.persons : 0,
       guest: r.member_seg === 'guest' ? r.persons : 0,
     }))
-    return bucketed(rows, ['member', 'guest'], range)
-  }, [m, range])
+    const b = bucketed(rows, ['member', 'guest'], range)
+    if (!b.weekly || !pd) return b
+    const u = uniquePersons(pd, range.from, range.to, F.visited, { ch: s.ch, pf: s.pf, ms: s.ms }, (r) => [
+      `${mondayOf(addDays(range.from, r.off))}|${r.member_seg}`,
+    ])
+    return {
+      weekly: true,
+      rows: b.rows.map((r) => ({ ...r, member: u.get(`${r.date}|member`) ?? 0, guest: u.get(`${r.date}|guest`) ?? 0 })),
+    }
+  }, [data, m, range])
 
   const hourly = useMemo(() => {
     const out = Array.from({ length: 24 }, (_, h) => ({ hour: h, member: 0, guest: 0 }))
@@ -85,16 +106,16 @@ export default function Members({ data, s, range }: TabProps) {
           delta={ptDelta(data, range, conv, ratio(prev.signups, prev.new_persons))}
         />
         <Tile
-          label={range.oneDay ? '회원 방문자' : '회원 방문자 · 일평균'}
-          value={num(memCur / range.days)}
+          label="회원 방문자"
+          value={num(memCur)}
           unit="명"
           delta={delta(data, range, memCur, memPrev)}
         />
         <Tile
           label="방문자 중 회원 비중"
-          value={pct(ratio(memCur, cur.persons))}
-          sub={`방문자 ${num(cur.persons)}명·일 중`}
-          delta={ptDelta(data, range, ratio(memCur, cur.persons), ratio(memPrev, prev.persons))}
+          value={pct(ratio(memCur, vCur.all))}
+          sub={`방문자 ${num(vCur.all)}명 중`}
+          delta={ptDelta(data, range, ratio(memCur, vCur.all), ratio(memPrev, vPrev.all))}
         />
         <Tile
           label={cohort.span ? `W1 리텐션 · ${cohort.span}` : 'W1 리텐션'}
@@ -111,7 +132,7 @@ export default function Members({ data, s, range }: TabProps) {
       <div className="grid gap-4 xl:grid-cols-[7fr_5fr]">
         <Card
           title={range.oneDay ? '시간별 세션 · 회원 구분' : '방문자 · 회원 구분'}
-          meta={range.oneDay ? range.from : `${grain(split.weekly)} · 사람`}
+          meta={range.oneDay ? range.from : `${grain(split.weekly)} · 명`}
           right={<Legend items={series} />}
         >
           {range.oneDay ? (

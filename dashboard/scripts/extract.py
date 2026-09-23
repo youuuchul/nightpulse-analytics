@@ -74,6 +74,7 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
             "clicks",
             "sessions",
             "persons",
+            "new_persons",
             "active_persons",
             "signups",
             "applies",

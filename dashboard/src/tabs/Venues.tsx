@@ -39,7 +39,7 @@ export default function Venues({ data, s, range }: TabProps) {
     { key: 'venue_name', label: '공간', value: (r) => r.venue_name, render: (r) => <span className="text-ink">{r.venue_name}</span> },
     { key: 'region', label: '지역', value: (r) => r.region },
     { key: 'genre', label: '장르', value: (r) => r.genre },
-    { key: 'detail_viewers', label: '상세 조회', value: (r) => r.detail_viewers, render: (r) => num(r.detail_viewers), num: true },
+    { key: 'detail_viewers', label: '조회 사람(일 합)', value: (r) => r.detail_viewers, render: (r) => num(r.detail_viewers), num: true },
     { key: 'applies', label: '신청', value: (r) => r.applies, render: (r) => num(r.applies), num: true },
     { key: 'pay_count', label: '결제', value: (r) => r.pay_count, render: (r) => num(r.pay_count), num: true },
     {
@@ -53,19 +53,18 @@ export default function Venues({ data, s, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-4">
+      <TileRow cols="lg:grid-cols-3">
         <Tile label="조회된 공간" value={num(list.length)} unit="곳" />
-        <Tile label="상세 조회" value={num(tot.detail_viewers)} unit="명·일" />
-        <Tile label="신청" value={num(tot.applies)} unit="건" sub={`조회 대비 ${pct(ratio(tot.applies, tot.detail_viewers))}`} />
+        <Tile label="신청" value={num(tot.applies)} unit="건" />
         <Tile label="결제" value={num(tot.pay_count)} unit="건" />
       </TileRow>
       {!range.oneDay && (
-        <Card title="공간 상세 조회 추이" meta={`${grain(trend.weekly)} · 사람·일`}>
+        <Card title="공간 상세 조회 추이" meta={`${grain(trend.weekly)} · 공간별 조회 사람의 합`}>
           <TimeChart
             data={trend.rows}
             kind="bar"
             tipTitle={weekTip(trend.weekly)}
-            series={[{ key: 'detail_viewers', label: '상세 조회', color: S(1) }]}
+            series={[{ key: 'detail_viewers', label: '조회 사람', color: S(1) }]}
             height={220}
           />
         </Card>

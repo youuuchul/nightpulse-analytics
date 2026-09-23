@@ -133,8 +133,6 @@ interface CampRow {
   impressions: number
   clicks: number
   sessions: number
-  persons: number
-  active_persons: number
   signups: number
   applies: number
   payers: number
@@ -146,8 +144,6 @@ const AD_KEYS = [
   'impressions',
   'clicks',
   'sessions',
-  'persons',
-  'active_persons',
   'signups',
   'applies',
   'payers',
@@ -160,6 +156,8 @@ function Campaigns({ data, s, set, range }: TabProps) {
   const sel = s.camp && spans.has(s.camp) ? s.camp : ''
   const rows = sel ? inR.filter((r) => r.campaign_id === sel) : inR
   const t = sum(rows, [...AD_KEYS])
+  const hasNew = rows.some((r) => r.new_persons != null)
+  const newPersons = rows.reduce((a, r) => a + (r.new_persons ?? 0), 0)
   const trend = bucketed(rows, ['spend', 'sessions'], range)
 
   const g = groupSum(inR, (r) => r.campaign_id, [...AD_KEYS])
@@ -220,8 +218,7 @@ function Campaigns({ data, s, set, range }: TabProps) {
         </Stage>
         <Stage title="유입">
           <Tile label="세션" value={num(t.sessions)} sub={`클릭 대비 ${pct(ratio(t.sessions, t.clicks), 0)}`} />
-          <Tile label="방문자" value={num(t.persons)} unit="명·일" />
-          <Tile label="활성 방문자" value={num(t.active_persons)} unit="명·일" sub={`방문자 대비 ${pct(ratio(t.active_persons, t.persons), 0)}`} />
+          {hasNew && <Tile label="신규 방문자" value={num(newPersons)} unit="명" />}
         </Stage>
         <Stage title="행동">
           <Tile label="가입" value={num(t.signups)} unit="명" sub={`CAC ${won(ratio(t.spend, t.signups))}원`} />

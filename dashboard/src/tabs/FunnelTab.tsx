@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { type Range, inRange, segFilter, sum } from '../lib/agg'
+import { type Range, inRange, segFilter, uniqueByMasks } from '../lib/agg'
 import { addDays, eachDay, md, mondayOf, weekday, WEEKDAYS } from '../lib/date'
 import { dec, num, pct, ratio } from '../lib/format'
 import {
@@ -10,8 +10,9 @@ import {
   S,
   SCREEN_GROUPS,
 } from '../lib/labels'
+import { F, type PersonRow } from '../lib/persons'
 import type { State } from '../lib/state'
-import type { FunnelStep, Seg } from '../lib/types'
+import type { FunnelStep, PersonDay, Seg } from '../lib/types'
 import { Funnel, Heatmap, TimeChart } from '../components/charts'
 import { PathSankey, type PathLink } from '../components/PathSankey'
 import { ReachTable, type ReachRow } from '../components/ReachTable'
@@ -30,6 +31,30 @@ function stepSums<T extends { step: FunnelStep; persons: number }>(rows: T[], ke
   const t = zero()
   for (const r of rows) if (keep(r)) t[r.step] += r.persons
   return t
+}
+
+const STEP_MASKS = (() => {
+  const bits = [F.visited, F.event_detail, F.logged_in, F.apply_view, F.paid]
+  return bits.map((_, i) => bits.slice(0, i + 1).reduce((a, b) => a | b, 0))
+})()
+
+function toSums(v: number[] | undefined): StepSums {
+  const t = zero()
+  STEPS.forEach((k, i) => (t[k] = v?.[i] ?? 0))
+  return t
+}
+
+function personSteps(
+  pd: PersonDay,
+  from: string,
+  to: string,
+  s: State,
+  groups?: (r: PersonRow) => string[],
+): Map<string, StepSums> {
+  const u = uniqueByMasks(pd, from, to, STEP_MASKS, { ch: s.ch, pf: s.pf, ms: s.ms }, groups)
+  const out = new Map<string, StepSums>()
+  for (const [k, v] of u) out.set(k, toSums(v))
+  return out
 }
 
 function weeksIn(range: Range, weeks: string[]): string[] {
@@ -232,8 +257,11 @@ export default function FunnelTab(p: TabProps) {
   const { data, s, range } = p
   const seg = segFilter(s)
   const f = useMemo(() => data.funnel_daily.filter(seg), [data, s.ch, s.pf, s.ms])
-  const cur = stepSums(inRange(f, range.from, range.to), () => true)
-  const prev = stepSums(inRange(f, range.prevFrom, range.prevTo), () => true)
+  const pd = data.person_day
+  const steps = (from: string, to: string) =>
+    pd ? (personSteps(pd, from, to, s).get('') ?? zero()) : stepSums(inRange(f, from, to), () => true)
+  const cur = useMemo(() => steps(range.from, range.to), [data, f, range.from, range.to])
+  const prev = useMemo(() => steps(range.prevFrom, range.prevTo), [data, f, range.prevFrom, range.prevTo])
   const hasPrev = range.prevFrom >= data.meta.from_date
 
   const conv = ratio(cur.payment, cur.landing)
@@ -256,33 +284,54 @@ export default function FunnelTab(p: TabProps) {
     }
 
   const m = useMemo(() => data.daily_metrics.filter(seg), [data, s.ch, s.pf, s.ms])
-  const dm = sum(inRange(m, range.from, range.to), ['persons', 'explorers'])
-  const dmPrev = sum(inRange(m, range.prevFrom, range.prevTo), ['persons', 'explorers'])
+  const explore = (from: string, to: string) => {
+    if (!pd) {
+      let persons = 0
+      let explorers = 0
+      for (const r of inRange(m, from, to)) {
+        persons += r.persons
+        explorers += r.explorers
+      }
+      return { persons, explorers }
+    }
+    const u = uniqueByMasks(pd, from, to, [F.visited, F.visited | F.explored], { ch: s.ch, pf: s.pf, ms: s.ms }).get('')
+    return { persons: u?.[0] ?? 0, explorers: u?.[1] ?? 0 }
+  }
+  const dm = useMemo(() => explore(range.from, range.to), [data, m, range.from, range.to])
+  const dmPrev = useMemo(() => explore(range.prevFrom, range.prevTo), [data, m, range.prevFrom, range.prevTo])
 
   const weekly = range.days >= 28
   const trend = useMemo(() => {
     const b = new Map<string, StepSums>()
-    for (const d of eachDay(range.from, range.to)) {
-      const k = weekly ? mondayOf(d) : d
-      if (!b.has(k)) b.set(k, zero())
-    }
-    for (const r of f) {
-      if (r.kst_date < range.from || r.kst_date > range.to) continue
-      b.get(weekly ? mondayOf(r.kst_date) : r.kst_date)![r.step] += r.persons
-    }
+    const key = (d: string) => (weekly ? mondayOf(d) : d)
+    for (const d of eachDay(range.from, range.to)) if (!b.has(key(d))) b.set(key(d), zero())
+    if (pd) {
+      const u = personSteps(pd, range.from, range.to, s, (r) => [key(addDays(range.from, r.off))])
+      for (const [k, t] of u) b.set(k, t)
+    } else
+      for (const r of f) {
+        if (r.kst_date < range.from || r.kst_date > range.to) continue
+        b.get(key(r.kst_date))![r.step] += r.persons
+      }
     return [...b.entries()].map(([date, t]) => ({
       date,
       a: ratio(t.apply_view, t.detail),
       b: ratio(t.payment, t.apply_view),
     }))
-  }, [f, range.from, range.to, weekly])
+  }, [data, f, range.from, range.to, weekly])
   const series = [
     { key: 'a', label: '행사 상세 → 신청 화면', color: S(1) },
     { key: 'b', label: '신청 화면 → 결제', color: S(2) },
   ]
 
-  const segTable: ReachRow[] = SEG_ROWS.filter((r) => !r.hide(s)).map((r) => {
-    const t = stepSums(inRange(f, range.from, range.to), r.test)
+  const segRows = SEG_ROWS.filter((r) => !r.hide(s))
+  const segSteps = useMemo(
+    () =>
+      pd ? personSteps(pd, range.from, range.to, s, (p) => segRows.filter((x) => x.test(p as unknown as Seg)).map((x) => x.key)) : null,
+    [data, range.from, range.to, s.ch, s.pf, s.ms],
+  )
+  const segTable: ReachRow[] = segRows.map((r) => {
+    const t = segSteps ? (segSteps.get(r.key) ?? zero()) : stepSums(inRange(f, range.from, range.to), r.test)
     return { key: r.key, label: r.label, group: r.group, base: t.landing, counts: STEPS.slice(1).map((k) => t[k]) }
   })
 
@@ -306,7 +355,7 @@ export default function FunnelTab(p: TabProps) {
         <Tile
           label="전체 전환율 · 랜딩 → 결제"
           value={pct(conv, 2)}
-          sub={`랜딩 ${num(cur.landing)}명·일 중 ${num(cur.payment)}`}
+          sub={`랜딩 ${num(cur.landing)}명 중 ${num(cur.payment)}명`}
           delta={ptDelta(data, range, conv, ratio(prev.payment, prev.landing))}
         />
         <Tile
@@ -330,14 +379,14 @@ export default function FunnelTab(p: TabProps) {
         <Tile
           label="탐색 도달률"
           value={pct(ratio(dm.explorers, dm.persons))}
-          sub={`방문자 ${num(dm.persons)}명·일 중`}
+          sub={`방문자 ${num(dm.persons)}명 중`}
           delta={ptDelta(data, range, ratio(dm.explorers, dm.persons), ratio(dmPrev.explorers, dmPrev.persons))}
         />
       </TileRow>
 
       <div className="grid gap-4 xl:grid-cols-[6fr_6fr]">
         {range.oneDay ? (
-          <Card title="단계 전환" meta={`${range.from} · 사람`}>
+          <Card title="단계 전환" meta={`${range.from} · 명`}>
             <Funnel steps={STEPS.map((k) => ({ label: FUNNEL_LABEL[k], value: cur[k] }))} />
           </Card>
         ) : (
@@ -358,8 +407,8 @@ export default function FunnelTab(p: TabProps) {
             />
           </Card>
         )}
-        <Card title="세그먼트별 퍼널" meta="랜딩 대비 도달률 · 사람·일">
-          <ReachTable rows={segTable} steps={REACH_STEPS} baseLabel="랜딩" unit="명·일" />
+        <Card title="세그먼트별 퍼널" meta="랜딩 대비 도달률 · 명">
+          <ReachTable rows={segTable} steps={REACH_STEPS} baseLabel="랜딩" unit="명" />
         </Card>
       </div>
 

@@ -61,6 +61,7 @@ export interface DailyAd {
   applies: number
   payers: number
   pay_amount: number
+  new_persons?: number
 }
 
 export interface DailyEvent {

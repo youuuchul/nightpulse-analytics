@@ -14,6 +14,7 @@ interface CatalogColumn {
 interface CatalogTable {
   layer: string
   name: string
+  description?: string
   grain: string
   keys: string[]
   partition: string | null
@@ -122,7 +123,7 @@ function TableList({
                         className={`flex w-full flex-col gap-0.5 py-1.5 pl-9 pr-4 text-left ${on ? 'bg-[var(--bar-wash)]' : 'hover:bg-wash'}`}
                       >
                         <span className={`truncate font-mono text-[13px] ${on ? 'font-semibold text-ink' : 'text-ink'}`}>{t.name}</span>
-                        <span className="truncate text-xs text-muted">{t.grain}</span>
+                        <span className="truncate text-xs text-muted">{t.description || t.grain}</span>
                       </button>
                     </li>
                   )
@@ -209,7 +210,7 @@ function Detail({ t, data }: { t: CatalogTable; data: Data | null }) {
           </a>
         </div>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Meta label="1행" wide>
+          <Meta label="1행 = " wide>
             {t.grain || '—'}
           </Meta>
           <Meta label="키">

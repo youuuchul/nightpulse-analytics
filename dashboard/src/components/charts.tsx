@@ -253,7 +253,7 @@ export function Funnel({ steps }: { steps: { label: string; value: number }[] })
       <div className="grid grid-cols-[88px_1fr_64px_56px] gap-3 text-[11px] text-muted sm:grid-cols-[112px_1fr_80px_64px]">
         <span />
         <span>이전 단계 대비</span>
-        <span className="text-right">사람·일</span>
+        <span className="text-right">명</span>
         <span className="text-right">첫 단계 대비</span>
       </div>
       {steps.map((s, i) => {
