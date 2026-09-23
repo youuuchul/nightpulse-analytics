@@ -1,0 +1,38 @@
+[
+  {
+    "name": "order_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "주문 ID (= purchase.order_id)"
+  },
+  {
+    "name": "amount",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "결제 금액 (원) = purchase.value"
+  },
+  {
+    "name": "paid_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "결제 시각 (UTC). purchase 시각과 같다"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "paid / refunded(신청 취소)"
+  },
+  {
+    "name": "method",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "결제 수단"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

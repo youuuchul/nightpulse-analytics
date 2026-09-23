@@ -1,0 +1,13 @@
+event_name,event_share,session_reach,per_session_when_present
+screen_view,0.430894,0.972603,3.592
+session_start,0.122901,0.995551,1.0009
+view_promotion,0.112917,0.690479,1.3259
+user_engagement,0.103801,0.570098,1.4762
+select_promotion,0.097165,0.589173,1.3371
+first_visit,0.093664,0.758991,1.0005
+page_view,0.016494,0.095415,1.4016
+(other_event),0.010629,0.0593346,1.45252
+sign_up,0.006966,0.054175,1.0426
+apply_event,0.00251,0.019157,1.0624
+share,0.001768,0.010835,1.3232
+cancel_apply,0.00029,0.001648,1.425

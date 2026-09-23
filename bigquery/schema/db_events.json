@@ -1,0 +1,50 @@
+[
+  {
+    "name": "event_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "행사 ID (= event_params.event_id)"
+  },
+  {
+    "name": "venue_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "공간 ID"
+  },
+  {
+    "name": "name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "행사명 (가상)"
+  },
+  {
+    "name": "event_type",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "행사 유형"
+  },
+  {
+    "name": "starts_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "시작 시각 (UTC)"
+  },
+  {
+    "name": "price_tier",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "free / standard / premium"
+  },
+  {
+    "name": "price",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "가격 (원)"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

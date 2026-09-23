@@ -1,0 +1,50 @@
+[
+  {
+    "name": "order_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "주문 ID (= apply_event.order_id)"
+  },
+  {
+    "name": "event_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "행사 ID"
+  },
+  {
+    "name": "member_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "회원 ID"
+  },
+  {
+    "name": "applied_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "신청 시각 (UTC). apply_event 시각과 같다"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "applied(무료) / paid / payment_pending(결제 미완료) / canceled"
+  },
+  {
+    "name": "cancel_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "취소 시각 (UTC). cancel_apply 시각과 같다"
+  },
+  {
+    "name": "cancel_amount",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "취소 금액 (원, 유료 결제분 환불액)"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

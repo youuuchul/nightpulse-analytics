@@ -1,0 +1,7 @@
+step_no,step_key,definition,rate_of_landing,rate_of_prev
+0,raw_sessions,세션 ID 가 있는 모든 세션 (자동 로드 포함),1.077245,
+1,landing,자동 로드가 아닌 세션 (분모),1.0,
+2,detail_view,"screen_name IN (venue_detail, venue_review, event_detail)",0.90687,0.90687
+3,identified,user_id 관측 또는 sign_up,0.179051,0.197439
+4,apply_form,"screen_name IN (event_apply, payment_confirm)",0.082629,0.461481
+5,applied,apply_event 또는 screen_name = payment_success,0.027676,0.334949

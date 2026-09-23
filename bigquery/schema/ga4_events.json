@@ -1,0 +1,158 @@
+[
+  {
+    "name": "event_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "이벤트 날짜 (KST 기준). 일 파티션 컬럼"
+  },
+  {
+    "name": "event_timestamp",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "이벤트 시각, UTC 기준 unix 마이크로초"
+  },
+  {
+    "name": "event_name",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "이벤트명 (GA4 관례)"
+  },
+  {
+    "name": "user_pseudo_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "기기 식별자 (client_id)"
+  },
+  {
+    "name": "user_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "회원 ID. 로그인·가입 이후 이벤트에만 존재"
+  },
+  {
+    "name": "ga_session_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "세션 ID = 세션 시작 unix 초. (user_pseudo_id, ga_session_id) 가 세션 키"
+  },
+  {
+    "name": "ga_session_number",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "기기 기준 세션 순번"
+  },
+  {
+    "name": "engagement_time_msec",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "직전 이벤트 이후 체류(ms). 세션 합 = 세션 체류"
+  },
+  {
+    "name": "page_location",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "화면 URL"
+  },
+  {
+    "name": "page_title",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "화면 제목"
+  },
+  {
+    "name": "session_engaged",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "세션 engaged 여부 '1'/'0' (체류 10초 이상 또는 화면 2개 이상 또는 핵심 행동)"
+  },
+  {
+    "name": "device_category",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "mobile / desktop"
+  },
+  {
+    "name": "operating_system",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "iOS / Android / Windows / Macintosh"
+  },
+  {
+    "name": "traffic_source",
+    "type": "RECORD",
+    "mode": "NULLABLE",
+    "description": "세션 유입 경로 (합성 단순화: 세션 단위 라스트클릭)",
+    "fields": [
+      {
+        "name": "source",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "유입 소스"
+      },
+      {
+        "name": "medium",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "유입 매체 (광고 = paid_social)"
+      },
+      {
+        "name": "campaign",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "캠페인 ID (광고) 또는 (direct)/(organic)/(referral)/(not set)"
+      },
+      {
+        "name": "content",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "광고 소재"
+      }
+    ]
+  },
+  {
+    "name": "user_properties",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "description": "사용자 속성 (first_channel, device_platform)",
+    "fields": [
+      {
+        "name": "key",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "속성 키"
+      },
+      {
+        "name": "string_value",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "속성 값"
+      }
+    ]
+  },
+  {
+    "name": "event_params",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "description": "이벤트 파라미터",
+    "fields": [
+      {
+        "name": "key",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "파라미터 키"
+      },
+      {
+        "name": "string_value",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "문자열 값"
+      },
+      {
+        "name": "int_value",
+        "type": "INTEGER",
+        "mode": "NULLABLE",
+        "description": "정수 값"
+      }
+    ]
+  }
+]

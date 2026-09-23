@@ -1,0 +1,38 @@
+[
+  {
+    "name": "date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "집행일 (KST)"
+  },
+  {
+    "name": "campaign_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "캠페인 ID (= traffic_source.campaign)"
+  },
+  {
+    "name": "campaign_name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "캠페인명 (가상)"
+  },
+  {
+    "name": "spend",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "광고비 (원)"
+  },
+  {
+    "name": "impressions",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "노출"
+  },
+  {
+    "name": "clicks",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "전체 클릭"
+  }
+]

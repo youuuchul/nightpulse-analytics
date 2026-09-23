@@ -1,0 +1,5 @@
+{
+  "env": {
+    "CLOUDSDK_CONFIG": "/Users/youuchul/.config/gcloud-personal"
+  }
+}

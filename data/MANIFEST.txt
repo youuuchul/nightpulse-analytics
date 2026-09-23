@@ -1,0 +1,14 @@
+# NightPulse 합성 데이터 MANIFEST (실제 서비스 데이터 아님)
+seed: 20260923
+args: weeks=52 persons=8000 end_date=2026-09-20
+generated_at_utc: 2026-09-23 07:39:45
+elapsed_sec: 36.7
+
+file	rows	sha256
+raw/ads_spend.csv	133	070378ce163b861b26b63f0d8ec8298f4d4a2dd29780dfe770213865621a88fc
+raw/db_applications.csv	3692	ef2fe426ac7eaaf1fb53acdca9477c7f53ad209e46e799ee02050607c4b2d5f1
+raw/db_events.csv	250	35b63246558fabef9e4bd6791de46a4cdd79cc5e2d386137e3adc110c2ee0820
+raw/db_members.csv	712	053cabb61c98bfb7a5500a0c3e4cf6241bc4cb166c6c4b302dfb4bf6448bcbaa
+raw/db_payments.csv	1831	a3f921361ea41779f1ebdf38247d515a30e768f8020958bfb6721a1ac9fda898
+raw/db_venues.csv	60	6cdf23d27d7d85412f613ca1fdc21b532e33b5bf04c373235ee26f779365d1c3
+raw/ga4_events.ndjson.gz	856072	916688c938d21bd59cc3b91272cf7d2441754dad8b66f15a9340c0baa6fea113

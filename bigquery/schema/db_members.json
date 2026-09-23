@@ -1,0 +1,38 @@
+[
+  {
+    "name": "member_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "회원 ID (= ga4_events.user_id)"
+  },
+  {
+    "name": "signed_up_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "가입 시각 (UTC). sign_up 이벤트 시각과 같다"
+  },
+  {
+    "name": "region",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "관심 지역"
+  },
+  {
+    "name": "genre_tags",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "취향 장르, '|' 구분"
+  },
+  {
+    "name": "marketing_opt_in",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "마케팅 수신 동의"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

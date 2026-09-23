@@ -1,0 +1,45 @@
+{
+  "_note": "전부 가상 조합. 실존 지명·상호·행사·캠페인과 무관하다.",
+  "service": {"name": "NightPulse", "host": "nightpulse.app"},
+  "regions": ["달빛지구", "등대항", "유리언덕", "붉은다리", "은하로", "모래섬", "종탑거리", "안개강변"],
+  "genres": ["하우스", "테크노", "힙합", "알앤비", "재즈", "디스코"],
+  "event_types": ["클럽 나이트", "라이브 공연", "루프탑 파티", "쇼케이스", "리스닝 세션"],
+  "event_type_weights": [0.42, 0.22, 0.12, 0.14, 0.10],
+  "capacity_bands": ["S", "M", "L"],
+  "capacity_band_weights": [0.45, 0.4, 0.15],
+  "venues": [
+    "청동고래 홀", "유리여우 라운지", "자정정원 룸", "녹슨등대 스테이지", "보라안개 룸",
+    "은빛수조 클럽", "새벽철로 하우스", "느린파도 라운지", "구름계단 홀", "검은모래 스테이지",
+    "달팽이극장 홀", "붉은우체통 룸", "소금창고 홀", "여름유령 클럽", "겨울정류장 라운지",
+    "초록전구 라운지", "푸른굴뚝 하우스", "종이달 스테이지", "둥근시계 룸", "낡은승강기 홀",
+    "은하세탁소 룸", "네온고양이 클럽", "조용한번개 라운지", "모퉁이온실 하우스", "파란다락 홀",
+    "호박등 스테이지", "비밀정거장 룸", "오후사막 라운지", "한밤서고 홀", "기울어진탑 클럽",
+    "물고기자리 홀", "두번째계단 라운지", "창문없는방 룸", "벽돌바다 스테이지", "자두나무 하우스",
+    "반쯤열린문 룸", "오렌지터널 클럽", "흰고래창고 홀", "별먼지 라운지", "느티지하 홀",
+    "금요공장 스테이지", "새벽세시 룸", "회색앵무 스테이지", "뒷골목라디오 클럽", "바람개비 홀",
+    "무지개배관 클럽", "은색트럭 라운지", "서쪽부두 하우스", "거울미로 룸", "달리는섬 스테이지",
+    "겹친그림자 홀", "차가운촛불 라운지", "작은행성 클럽", "녹색신호 하우스", "느린엔진 룸",
+    "빈수영장 홀", "모래시계탑 스테이지", "안개숲 라운지", "타원광장 홀", "낮은천장 클럽"
+  ],
+  "event_name_templates": [
+    "{venue} {genre} 나이트 Vol.{n}",
+    "{season} {genre} {etype}",
+    "{region} {etype} #{n}",
+    "{genre} 셀렉터스 at {venue}",
+    "{venue} {season} 스페셜"
+  ],
+  "seasons": {"3": "봄", "4": "봄", "5": "봄", "6": "여름", "7": "여름", "8": "여름", "9": "가을", "10": "가을", "11": "가을", "12": "겨울", "1": "겨울", "2": "겨울"},
+  "campaigns": [
+    {"campaign_id": "np_c01_launch", "name": "런칭 인지도 1차", "start_week": 5, "end_week": 7, "daily_budget": 9000, "source": "instagram"},
+    {"campaign_id": "np_c02_winter", "name": "겨울 시즌 첫 방문", "start_week": 11, "end_week": 13, "daily_budget": 22000, "source": "instagram"},
+    {"campaign_id": "np_c03_yearend", "name": "연말 파티 리마인드", "start_week": 16, "end_week": 18, "daily_budget": 26000, "source": "instagram"},
+    {"campaign_id": "np_c04_newterm", "name": "새 학기 가입 유도", "start_week": 21, "end_week": 23, "daily_budget": 20000, "source": "facebook"},
+    {"campaign_id": "np_c05_retarget", "name": "주말 재방문 리타겟", "start_week": 32, "end_week": 33, "daily_budget": 12000, "source": "instagram"},
+    {"campaign_id": "np_c06_summer", "name": "여름 페스티벌 시즌", "start_week": 43, "end_week": 47, "daily_budget": 24000, "source": "instagram"}
+  ],
+  "creatives": ["img_a", "img_b", "vid_a"],
+  "payment_methods": ["card", "easy_pay", "bank_transfer"],
+  "payment_method_weights": [0.6, 0.32, 0.08],
+  "signup_methods": ["email", "google", "apple"],
+  "signup_method_weights": [0.3, 0.35, 0.35]
+}

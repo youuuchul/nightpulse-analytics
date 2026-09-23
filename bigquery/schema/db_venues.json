@@ -1,0 +1,38 @@
+[
+  {
+    "name": "venue_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "공간 ID"
+  },
+  {
+    "name": "name",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "공간명 (가상)"
+  },
+  {
+    "name": "region",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "지역 (가상)"
+  },
+  {
+    "name": "genre",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "대표 장르"
+  },
+  {
+    "name": "capacity_band",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "수용 규모 S/M/L"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

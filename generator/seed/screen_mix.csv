@@ -1,0 +1,12 @@
+screen_name,path_pattern,screen_view_share
+event_detail,/event/{id},0.326993
+home,/,0.242666
+(other_screen),(other),0.164906
+venue_detail,/venue/{id},0.122335
+event_apply,/event/{id}/apply,0.040932
+search_result,/search/results,0.02941
+map_main,/map,0.024988
+venue_review,/venue/{id}/reviews,0.018962
+search_main,/search,0.016946
+payment_confirm,/event/{id}/payment,0.009752
+payment_success,/event/{id}/payment/success,0.002111
