@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
+import { DATA_NOTE_ID } from './components/Header'
 
 const REPO = 'https://github.com/youuuchul/nightpulse-analytics'
 
@@ -278,7 +279,9 @@ function FlowTall() {
   )
 }
 
-const DOCS: { label: string; sub: string; href: string }[] = [
+const DOCS: { label: string; sub: string; href: string; internal?: boolean }[] = [
+  { label: '데이터 페이지', sub: '층별 표·컬럼·마트 미리보기', href: '', internal: true },
+  { label: 'SQL 카탈로그', sub: '표 목록·계보·실행 순서', href: `${REPO}/blob/main/bigquery/README.md` },
   { label: '데이터 아키텍처', sub: '층·표·그레인·파이프라인', href: `${REPO}/blob/main/docs/architecture.md` },
   { label: '지표 정의', sub: '산식·단위·분모', href: `${REPO}/blob/main/docs/metrics.md` },
   { label: '대시보드 설계', sub: '탭·필터·데이터 계약', href: `${REPO}/blob/main/docs/dashboard.md` },
@@ -297,7 +300,12 @@ function Section({ n, title, children }: { n: number; title: string; children: R
   )
 }
 
-export default function About() {
+export default function About({ dataHref, onData }: { dataHref: string; onData: () => void }) {
+  const openData = (e: MouseEvent<HTMLAnchorElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+    e.preventDefault()
+    onData()
+  }
   return (
     <main className="mx-auto flex max-w-[1280px] flex-col gap-12 px-4 pb-20 pt-8 sm:px-6">
       <div className="flex flex-col gap-3">
@@ -309,9 +317,14 @@ export default function About() {
           가상 서비스 NightPulse의 행동 로그·서비스 DB·광고 리포트를 BigQuery 네 층으로 정리하고, 마트에서 뽑은 집계로 이
           대시보드를 만든 데이터 분석 포트폴리오입니다.
         </p>
-        <div>
-          <span className="rounded-md bg-wash px-2 py-1 text-xs font-medium text-ink2">모든 수치는 합성 데이터</span>
-        </div>
+        <p
+          id={DATA_NOTE_ID}
+          className="max-w-[640px] scroll-mt-6 border-l-2 border-line pl-3 text-[13px] leading-relaxed text-muted"
+        >
+          이 대시보드의 수치는 가상 서비스 NightPulse의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
+          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 방문자 8,000명·회원 약 700명·52주·이벤트
+          약 86만 건 규모입니다.
+        </p>
       </div>
 
       <Section n={1} title="가상 프로덕트">
@@ -354,19 +367,18 @@ export default function About() {
       </Section>
 
       <Section n={4} title="문서">
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {DOCS.map((d) => (
             <li key={d.label}>
               <a
-                href={d.href}
-                target="_blank"
-                rel="noreferrer"
+                href={d.internal ? dataHref : d.href}
+                {...(d.internal ? { onClick: openData } : { target: '_blank', rel: 'noreferrer' })}
                 className="card flex h-full flex-col gap-1 px-4 py-3 transition-shadow hover:shadow-[0_0_0_1px_var(--axis)]"
               >
                 <span className="flex items-center justify-between text-[14px] font-medium text-ink">
                   {d.label}
                   <span aria-hidden className="text-muted">
-                    ↗
+                    {d.internal ? '→' : '↗'}
                   </span>
                 </span>
                 <span className="text-xs text-muted">{d.sub}</span>

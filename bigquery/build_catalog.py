@@ -2,6 +2,8 @@
 
     python3 bigquery/build_catalog.py            머리 주석 검사 + BigQuery 실물 대조 + 마지막 실행 요약
     python3 bigquery/build_catalog.py --offline  BigQuery 조회 없이 (실물 대조·실행 요약 생략)
+    python3 bigquery/build_catalog.py --export dashboard/public/catalog.json
+                                                 위에 더해 데이터 페이지용 표·컬럼 카탈로그 JSON 을 쓴다
 
 머리 주석이 틀에 맞지 않거나 SQL 본문·실물과 어긋나면 README 를 쓰지 않고 exit 1.
 BigQuery 조회는 scripts/bq.sh 래퍼로 SELECT 만 한다.
@@ -15,6 +17,7 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +39,7 @@ FIELDS = ["표", "1행", "키", "파티션·클러스터", "원천", "소비", "
 REQUIRED = FIELDS[:6]
 TOKEN = re.compile(r"\b(raw|staging|marts|ops)\.([a-z][a-z0-9_]*(?:·[a-z][a-z0-9_]*)*)")
 CHECK_ID = re.compile(r"^[CRI]\d+[a-z]?$")
+KEY_COUNT = {"두": 2, "세": 3, "네": 4, "다섯": 5, "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9}
 
 
 @dataclass
@@ -322,6 +326,117 @@ def live(tables: dict[str, Table], errors: list[str]) -> tuple[list[dict], list[
     return build, recon
 
 
+def wrapper_setting(name: str) -> str:
+    """scripts/bq.sh 에 고정된 PROJECT·LOCATION 값을 읽는다."""
+    m = re.search(rf'^{name}="([^"]+)"', BQ.read_text(), re.M)
+    if not m:
+        raise RuntimeError(f"scripts/bq.sh 에 {name} 없음")
+    return m.group(1)
+
+
+def split_keys(t: Table, cols: list[str], errors: list[str]) -> list[str]:
+    """키 주석을 열 이름 배열로. '이 네 열' 은 컬럼 순서 앞 N개."""
+    text = t.fields["키"].strip()
+    m = re.match(r"^이 (\S+) 열$", text)
+    if m:
+        n = KEY_COUNT.get(m.group(1))
+        if n is None or n > len(cols):
+            errors.append(f"{t.rel}: {t.name} 키 {text!r} 를 열 이름으로 풀 수 없음")
+            return []
+        return cols[:n]
+    names = [k.strip() for k in text.strip("()").split(",")]
+    if not all(re.fullmatch(r"[a-z][a-z0-9_]*", k) for k in names):
+        errors.append(f"{t.rel}: {t.name} 키 {text!r} 를 열 이름으로 풀 수 없음")
+        return []
+    missing = [k for k in names if k not in cols]
+    if missing:
+        errors.append(f"{t.rel}: {t.name} 키 {missing} 가 실물 열에 없음")
+    return names
+
+
+def consumer_list(text: str) -> list[str]:
+    """소비 주석을 표·화면 목록으로. 첫 문장은 ' — ' 앞까지 쉼표로 나누고, 뒤 문장은 표 이름만 줍는다."""
+    prev = None
+    while prev != text:
+        prev, text = text, re.sub(r"\s*\([^()]*\)", "", text)
+    out: list[str] = []
+    for i, sentence in enumerate(re.split(r"\.\s+", text.strip().rstrip("."))):
+        head = sentence.split(" — ")[0] if i == 0 else sentence
+        for piece in (p.strip() for p in head.split(",")):
+            found = sorted(tokens(piece))
+            if found:
+                out.extend(found)
+            elif i == 0 and piece:
+                out.append(piece)
+    return list(dict.fromkeys(out))
+
+
+def export_catalog(tables: dict[str, Table], errors: list[str]) -> dict | None:
+    """데이터 페이지 계약(docs/backlog.md §6)대로 표·컬럼 카탈로그를 만든다."""
+    cols = bq_select(
+        " UNION ALL ".join(
+            "SELECT c.table_schema, c.table_name, c.column_name, c.ordinal_position, c.data_type, "
+            "c.is_partitioning_column, c.clustering_ordinal_position, IFNULL(f.description, '') AS description "
+            f"FROM {d}.INFORMATION_SCHEMA.COLUMNS c "
+            f"LEFT JOIN {d}.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS f "
+            "ON f.table_name = c.table_name AND f.field_path = c.column_name"
+            for d in LAYERS
+        )
+    )
+    stats = bq_select(
+        " UNION ALL ".join(f"SELECT dataset_id, table_id, row_count, size_bytes FROM {d}.__TABLES__" for d in LAYERS)
+    )
+    by_table: dict[str, list[dict]] = {}
+    for c in sorted(cols, key=lambda c: int(c["ordinal_position"])):
+        by_table.setdefault(f"{c['table_schema']}.{c['table_name']}", []).append(c)
+    size = {f"{s['dataset_id']}.{s['table_id']}": s for s in stats}
+    if set(by_table) != set(tables) or set(size) != set(tables):
+        errors.append(
+            f"export: 실물 표 {len(by_table)}개(COLUMNS)·{len(size)}개(__TABLES__) ≠ 카탈로그 {len(tables)}개"
+        )
+        return None
+    out_tables = []
+    for t in tables.values():
+        tc = by_table[t.name]
+        names = [c["column_name"] for c in tc]
+        part = next((c["column_name"] for c in tc if c["is_partitioning_column"] == "YES"), None)
+        clus = [
+            c["column_name"]
+            for c in sorted(
+                (c for c in tc if c.get("clustering_ordinal_position")),
+                key=lambda c: int(c["clustering_ordinal_position"]),
+            )
+        ]
+        src = sorted(tokens(t.fields["원천"])) or re.findall(r"data/raw/[\w.]+", t.fields["원천"])
+        checks = [c for c in re.split(r"[·,\s]+", t.fields.get("검사", "").strip()) if c]
+        out_tables.append(
+            {
+                "layer": t.layer,
+                "name": t.short,
+                "grain": t.fields["1행"],
+                "keys": split_keys(t, names, errors),
+                "partition": part,
+                "cluster": clus,
+                "rows": int(size[t.name]["row_count"]),
+                "size_mb": round(int(size[t.name]["size_bytes"]) / 1024 / 1024, 1),
+                "sources": src,
+                "consumers": consumer_list(t.fields["소비"]),
+                "checks": checks,
+                "sql": t.file.relative_to(ROOT).as_posix(),
+                "columns": [
+                    {"name": c["column_name"], "type": c["data_type"], "description": c["description"]} for c in tc
+                ],
+            }
+        )
+    return {
+        "built_at": datetime.now(timezone(timedelta(hours=9))).isoformat(timespec="seconds"),
+        "project": wrapper_setting("PROJECT"),
+        "location": wrapper_setting("LOCATION"),
+        "layers": LAYERS,
+        "tables": out_tables,
+    }
+
+
 def cell(s: str) -> str:
     return s.replace("|", "\\|")
 
@@ -454,6 +569,7 @@ def render(tables: dict[str, Table], checks, steps, build, recon, offline: bool)
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--offline", action="store_true", help="BigQuery 조회 생략")
+    ap.add_argument("--export", type=Path, metavar="경로", help="데이터 페이지용 catalog.json 경로")
     args = ap.parse_args()
 
     errors: list[str] = []
@@ -479,9 +595,12 @@ def main() -> int:
 
     build: list[dict] = []
     recon: list[dict] = []
+    catalog: dict | None = None
     if not args.offline and not errors:
         try:
             build, recon = live(tables, errors)
+            if args.export and not errors:
+                catalog = export_catalog(tables, errors)
         except RuntimeError as e:
             errors.append(f"BigQuery 조회 실패: {e}")
 
@@ -495,6 +614,13 @@ def main() -> int:
         f"{README.relative_to(ROOT)} — 표 {len(tables)}개, 검사 {len(checks)}개, 단계 행 {len(steps)}개"
         + (" (오프라인)" if args.offline else "")
     )
+    if args.export and args.offline:
+        print("--offline 이라 catalog.json 은 쓰지 않았다 (행 수·컬럼은 실물 조회가 필요)")
+    elif catalog:
+        args.export.parent.mkdir(parents=True, exist_ok=True)
+        args.export.write_text(json.dumps(catalog, ensure_ascii=False, separators=(",", ":")) + "\n")
+        ncol = sum(len(t["columns"]) for t in catalog["tables"])
+        print(f"{args.export} — 표 {len(catalog['tables'])}개, 컬럼 {ncol}개, {args.export.stat().st_size:,} bytes")
     return 0
 
 

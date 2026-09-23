@@ -2,10 +2,10 @@
 
 가상 나이트라이프 플랫폼 NightPulse의 GA4형 행동 로그·서비스 DB 스냅샷·광고 리포트를 BigQuery 네 층(raw → staging → marts → ops)으로 정리하고, 마트에서 뽑은 집계로 퍼널·코호트·광고 KPI 대시보드(정적 웹)를 만든 데이터 분석 포트폴리오.
 
-**이 저장소의 데이터는 전부 생성기가 만든 합성 데이터다.** 실제 서비스·회사의 데이터, 코드, 식별자는 들어 있지 않다. 설계는 업무 경험에서 온 일반적인 패턴을 새로 작성한 것이다.
+**이 저장소의 수치는 전부 가상 서비스 시나리오와 분포 규칙으로 생성한 데이터다.** 실제 서비스·회사의 데이터, 코드, 식별자는 들어 있지 않다. 설계는 업무 경험에서 온 일반적인 패턴을 새로 작성한 것이다.
 
 - 대시보드: `<Vercel URL>`
-- 소개 페이지: `<Vercel URL>/?page=about`
+- 프로젝트 개요: `<Vercel URL>/?page=about` · 데이터 페이지(스키마·미리보기): `<Vercel URL>/?page=data`
 
 ## 화면
 
@@ -13,9 +13,10 @@
 |---|---|
 | ![개요 탭 — 방문자·세션·가입·결제 스코어보드와 방문자 추이](docs/img/overview.png) | ![퍼널 탭 — 단계 전환율 추이, 세그먼트별 퍼널, 오디언스별 퍼널, 경로 생키](docs/img/funnel.png) |
 | **주간 코호트** | **소개** |
-| ![주간 탭 — WAU·재방문 비중, 주간 방문자, 코호트 리텐션 히트맵](docs/img/weekly_cohort.png) | ![소개 페이지 — 가상 프로덕트, 핵심 퍼널 5화면, 데이터 흐름](docs/img/about.png) |
+| ![주간 탭 — WAU·재방문 비중, 주간 방문자, 코호트 리텐션 히트맵](docs/img/weekly_cohort.png) | ![프로젝트 개요 — 가상 프로덕트, 핵심 퍼널 5화면, 데이터 흐름](docs/img/about.png) |
+| ![데이터 페이지 — 층별 표 32개, 스키마·컬럼 설명, 마트 미리보기](docs/img/data.png) | |
 
-탭 6개(개요 / 퍼널 / 행사·결제 / 회원 / 유입·광고 / 주간·월간)와 소개 페이지. 필터(기간·채널·플랫폼·회원)는 마트에 그 축이 있는 카드에만 붙이고, 상태는 전부 URL에 남는다. 탭별 구성과 산식은 [docs/dashboard.md](docs/dashboard.md).
+탭 6개(개요 / 퍼널 / 행사·결제 / 회원 / 유입·광고 / 주간·월간)와 프로젝트 개요·데이터 페이지. 필터(기간·채널·플랫폼·회원)는 마트에 그 축이 있는 카드에만 붙이고, 상태는 전부 URL에 남는다. 탭별 구성과 산식은 [docs/dashboard.md](docs/dashboard.md).
 
 ## 무엇을 보여주는가
 
@@ -67,7 +68,7 @@ BigQuery 없이 화면만 보려면 1~3 대신 `uv run dashboard/scripts/make_sa
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | 원천·층·표·그레인·신원 규칙 |
 | [docs/metrics.md](docs/metrics.md) | 지표 정의 — 단위·분자·분모·제외 규칙, 마트 열 기준 |
-| [docs/dashboard.md](docs/dashboard.md) | 탭·필터 원칙, 화면 산식, `data.json` 데이터 계약, 소개 페이지 |
+| [docs/dashboard.md](docs/dashboard.md) | 탭·필터 원칙, 화면 산식, `data.json` 데이터 계약, 개요·데이터 페이지 |
 | [docs/pipeline.md](docs/pipeline.md) | 실행·재실행·실패 조치 |
 | [docs/backlog.md](docs/backlog.md) | 결정된 작업 순서와 이후 후보 |
 | [bigquery/README.md](bigquery/README.md) | 표 카탈로그·계보 도식·검사 목록 (SQL 머리 주석에서 생성) |

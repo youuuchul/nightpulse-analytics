@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState, type ComponentType } from 'react'
 import { campaignSpans, resolveRange } from './lib/agg'
 import { md } from './lib/date'
-import { type State, type TabId, useUrlState } from './lib/state'
+import { type State, type TabId, toHref, useUrlState } from './lib/state'
 import type { Data } from './lib/types'
 import { MonthLine, PeriodLine, SegmentControls, SegmentLine, WeekLine } from './components/FilterBar'
 import { Segmented, Select } from './components/ui'
 import Overview from './tabs/Overview'
 import FunnelTab from './tabs/FunnelTab'
 import About from './About'
+import DataPage from './DataPage'
+import Header, { goPage } from './components/Header'
 import Events from './tabs/Events'
 import Members from './tabs/Members'
 import Acquisition from './tabs/Acquisition'
@@ -117,70 +119,21 @@ export default function App() {
     set(patch)
   }
 
-  const openAbout = () => {
-    window.history.pushState(null, '', window.location.href)
-    set({ page: 'about' })
-    window.scrollTo(0, 0)
-  }
-  const header = (
-    <header className="mx-auto flex max-w-[1280px] items-center gap-3 px-4 pb-2 pt-5 sm:px-6">
-      <svg width="22" height="22" viewBox="0 0 16 16" aria-hidden className="shrink-0">
-        <path
-          d="M1 9h3l2-6 3 10 2-6h4"
-          fill="none"
-          stroke="var(--accent)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-      <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight">
-        NightPulse <span className="font-normal text-ink2">KPI</span>
-      </h1>
-      <span className="shrink-0 whitespace-nowrap rounded-md bg-wash px-1.5 py-0.5 text-[11px] font-medium text-ink2">합성 데이터</span>
-      <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-3">
-        {data && s.page !== 'about' && (
-          <>
-            <span className="tnum hidden text-xs text-muted sm:inline">기준일 {data.meta.to_date}</span>
-            <span className="tnum text-xs text-muted sm:hidden">{md(data.meta.to_date)}</span>
-          </>
-        )}
-        {s.page === 'about' ? (
-          <button
-            type="button"
-            onClick={() => {
-              set({ page: '' })
-              window.scrollTo(0, 0)
-            }}
-            className="h-8 shrink-0 whitespace-nowrap rounded-lg bg-wash px-2.5 text-[13px] text-ink2 hover:text-ink"
-          >
-            대시보드
-          </button>
-        ) : (
-          <button type="button" onClick={openAbout} className="h-8 shrink-0 whitespace-nowrap rounded-lg bg-wash px-2.5 text-[13px] text-ink2 hover:text-ink">
-            소개
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label="테마 전환"
-          className="flex h-8 w-8 items-center justify-center rounded-lg bg-wash text-ink2 hover:text-ink"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" />
-          </svg>
-        </button>
-      </div>
-    </header>
-  )
+  const header = <Header s={s} set={set} toDate={data?.meta.to_date} onTheme={toggleTheme} />
 
   if (s.page === 'about')
     return (
       <div className="min-h-screen">
         {header}
-        <About />
+        <About dataHref={toHref({ ...s, page: 'data' })} onData={() => goPage(s, set, 'data')} />
+      </div>
+    )
+
+  if (s.page === 'data')
+    return (
+      <div className="min-h-screen">
+        {header}
+        <DataPage data={data} table={s.table} onTable={(table) => set({ table })} />
       </div>
     )
 

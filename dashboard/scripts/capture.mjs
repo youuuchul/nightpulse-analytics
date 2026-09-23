@@ -1,14 +1,17 @@
 // 헤드리스 캡처: 빌드 결과(dist)를 vite preview 로 띄우고 탭별 화면을 captures/ 에 저장한다.
 //   npm run build && npm run capture            탭 6개 × 라이트
-//   npm run capture -- --all                    + 보기 전환·1일·다크·폰 폭
+//   npm run capture -- --all                    + 보기 전환·1일·다크·폰 폭·데이터 페이지
+//   NP_CATALOG=/tmp/catalog.json npm run capture -- --all   catalog.json 을 이 파일로 대체해 찍는다
 import { spawn } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
 
 const PORT = 4173
 const BASE = `http://localhost:${PORT}/`
 const OUT = new URL('../captures/', import.meta.url).pathname
 const all = process.argv.includes('--all')
+const catalogFile = process.env.NP_CATALOG
+if (catalogFile && !existsSync(catalogFile)) throw new Error(`NP_CATALOG 파일 없음: ${catalogFile}`)
 
 const tabs = [
   ['01_overview', 'tab=overview'],
@@ -56,6 +59,9 @@ try {
     const errors = []
     page.on('pageerror', (e) => errors.push(e.message))
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
+    if (opts.noCatalog) await page.route('**/catalog.json', (route) => route.fulfill({ status: 404, body: '' }))
+    else if (catalogFile)
+      await page.route('**/catalog.json', (route) => route.fulfill({ json: JSON.parse(readFileSync(catalogFile, 'utf8')) }))
     if (opts.strip)
       await page.route('**/data.json', async (route) => {
         const body = await (await route.fetch()).json()
@@ -63,7 +69,7 @@ try {
         await route.fulfill({ json: body })
       })
     await page.goto(`${BASE}?${q}`, { waitUntil: 'networkidle' })
-    await page.waitForSelector('main section, main .card', { timeout: 10000 })
+    await page.waitForSelector(opts.wait ?? 'main section, main .card', { timeout: 10000 })
     await page.waitForTimeout(400)
     const file = `${OUT}${name}.png`
     if (opts.section) {
@@ -73,7 +79,7 @@ try {
         await page.waitForTimeout(200)
       }
       await card.screenshot({ path: file })
-    } else await page.screenshot({ path: file, fullPage: true })
+    } else await page.screenshot({ path: file, fullPage: !opts.clip })
     console.log(`${file}${errors.length ? `  오류 ${errors.length}: ${errors[0]}` : ''}`)
     await ctx.close()
   }
@@ -91,7 +97,15 @@ try {
     await shoot('25_funnel_phone', 'tab=funnel', { viewport: { width: 390, height: 844 }, scale: 2 })
     await shoot('31_about_dark', 'page=about', { scheme: 'dark' })
     await shoot('32_about_phone', 'page=about', { viewport: { width: 390, height: 844 }, scale: 2 })
-    await shoot('33_about_phone_dark', 'page=about', { viewport: { width: 390, height: 844 }, scale: 2, scheme: 'dark' })
+    await shoot('33_about_phone_dark', 'page=about', { viewport: { width: 390, height: 844 }, scale: 2, scheme: 'dark', wait: 'main section' })
+    await shoot('40_data_light', 'page=data')
+    await shoot('41_data_raw_light', 'page=data&table=raw.ga4_events')
+    await shoot('42_data_dark', 'page=data&table=marts.weekly_path', { scheme: 'dark' })
+    await shoot('43_data_phone', 'page=data', { viewport: { width: 390, height: 844 }, scale: 2, wait: 'main section' })
+    await shoot('44_data_phone_dark', 'page=data&table=staging.int_session', { viewport: { width: 390, height: 844 }, scale: 2, scheme: 'dark', wait: 'main section' })
+    await shoot('45_data_nocatalog', 'page=data', { noCatalog: true, wait: 'main' })
+    await shoot('46_header_phone_about', 'page=about', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
+    await shoot('47_header_tablet', 'tab=funnel', { viewport: { width: 768, height: 400 }, clip: true })
   }
   await browser.close()
 } finally {

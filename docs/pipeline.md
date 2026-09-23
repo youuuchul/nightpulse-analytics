@@ -21,6 +21,7 @@ bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 
 ```bash
 python3 bigquery/build_catalog.py      # 카탈로그 재생성 (어긋나면 exit 1)
+python3 bigquery/build_catalog.py --export dashboard/public/catalog.json   # + 데이터 페이지용 표·컬럼 JSON
 ```
 
 모든 단계가 멱등이다. 같은 입력이면 같은 표가 나오고, `ops.build_log`·`ops.reconciliation` 만 실행마다 누적된다. 0단계(`ops` 표 준비)는 매 실행 앞에 없을 때만 만든다.

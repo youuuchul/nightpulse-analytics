@@ -60,7 +60,30 @@
 - **어디에**: `bigquery/build_catalog.py`(표준 라이브러리만), `bigquery/README.md`(생성물, 수동 편집 금지), `docs/pipeline.md` 는 절차만 남기고 표 목록은 카탈로그로 링크.
 - **완료 기준**: 머리 주석이 틀에 안 맞는 파일이 있으면 생성기가 exit 1. README 의 표 목록 = BigQuery `INFORMATION_SCHEMA.TABLES` 실물(표 이름 집합 일치, 생성기가 대조).
 
-## 6. 이후 후보 (미결정)
+## 6. 헤더 정리·데이터 페이지 (결정 2026-09-23 저녁)
+
+- **무엇을**: ① 헤더 왼쪽에 페이지 이동 `프로젝트 개요`·`데이터`, 오른쪽에 기준일·저톤 데이터 설명 문장·테마. '합성 데이터' 뱃지 제거. ② 개요 페이지 상단 뱃지도 문장으로. ③ `데이터` 페이지 신설 — 층별 표 목록과 스키마·미리보기.
+- **왜**: 대시보드의 맥락(목적·배경·시나리오·파이프라인)이 뱃지보다 중요하다. "합성 데이터"는 용어가 낯설어 문장으로 풀어야 한다. 마트 스키마와 실제 행을 포트폴리오 안에서 바로 볼 수 있어야 파이프라인 설계가 증명된다.
+- **데이터 페이지 계약** — `dashboard/public/catalog.json`(생성기 `bigquery/build_catalog.py --export`가 SQL 머리 주석 + BigQuery INFORMATION_SCHEMA에서 생성):
+
+```json
+{
+  "built_at": "…", "project": "…", "location": "…",
+  "layers": ["raw", "staging", "marts", "ops"],
+  "tables": [{
+    "layer": "marts", "name": "daily_metrics", "grain": "일 × 세그먼트", "keys": ["kst_date", "channel1", …],
+    "partition": "kst_date", "cluster": ["channel1"], "rows": 3988, "size_mb": 0.4,
+    "sources": ["staging.int_person_day"], "consumers": ["개요 탭", "회원 탭"], "checks": ["C3"],
+    "sql": "bigquery/sql/marts/daily_metrics.sql",
+    "columns": [{"name": "kst_date", "type": "DATE", "description": "…"}, …]
+  }]
+}
+```
+
+- **화면**: 왼쪽 층·표 목록(층별 접기), 오른쪽 선택 표의 헤더(그레인·키·파티션·원천·소비·검사·행 수·SQL 링크) → 컬럼 표 → 미리보기(마트만, `data.json` 첫 20행, 열 이름 = 컬럼 순서). raw·staging은 미리보기 없음(추출 대상 아님).
+- **완료 기준**: catalog.json 표 수 = BigQuery 실물 32개. 페이지 왕복이 대시보드 URL 상태를 보존. 폰 폭에서 목록이 상단 선택기로 접힌다.
+
+## 7. 이후 후보 (미결정)
 
 - `data.json` 분할 로딩(현재 18MB, gzip 614KB — 탭별 파일로 나눠 첫 화면 시간 단축)
 - 월간 브리핑 자동 문장(월간 요약 표의 수치를 3줄 요약으로 — 규칙 기반, LLM 없이)

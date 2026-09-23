@@ -22,7 +22,8 @@ export interface State {
   mo: string
   mr: '6' | '12'
   aud: string
-  page: '' | 'about'
+  page: '' | 'about' | 'data'
+  table: string
 }
 
 export const DEFAULTS: State = {
@@ -45,6 +46,7 @@ export const DEFAULTS: State = {
   mr: '6',
   aud: 'new,returning,past_payer',
   page: '',
+  table: '',
 }
 
 function read(): State {
@@ -57,13 +59,17 @@ function read(): State {
   return s
 }
 
-function write(s: State) {
+export function toHref(s: State): string {
   const q = new URLSearchParams()
   for (const k of Object.keys(DEFAULTS) as (keyof State)[]) {
     if (s[k] !== DEFAULTS[k]) q.set(k, String(s[k]))
   }
   const qs = q.toString()
-  window.history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname)
+  return qs ? `?${qs}` : window.location.pathname
+}
+
+function write(s: State) {
+  window.history.replaceState(null, '', toHref(s) + window.location.hash)
 }
 
 export function useUrlState(): [State, (patch: Partial<State>) => void] {
