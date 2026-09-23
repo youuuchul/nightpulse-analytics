@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type TabId = 'overview' | 'funnel' | 'events' | 'members' | 'acquisition' | 'periodic'
 export type Preset = '' | '1' | '7' | '28' | '90' | '365' | 'custom' | 'target'
@@ -68,18 +68,27 @@ export function toHref(s: State): string {
   return qs ? `?${qs}` : window.location.pathname
 }
 
-function write(s: State) {
-  window.history.replaceState(null, '', toHref(s) + window.location.hash)
+function write(s: State, push: boolean) {
+  const url = toHref(s) + window.location.hash
+  if (push) window.history.pushState(null, '', url)
+  else window.history.replaceState(null, '', url)
 }
 
-export function useUrlState(): [State, (patch: Partial<State>) => void] {
+export function useUrlState(): [State, (patch: Partial<State>, push?: boolean) => void] {
   const [state, setState] = useState<State>(read)
-  useEffect(() => write(state), [state])
+  const pushNext = useRef(false)
+  useEffect(() => {
+    write(state, pushNext.current)
+    pushNext.current = false
+  }, [state])
   useEffect(() => {
     const onPop = () => setState(read())
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
-  const update = useCallback((patch: Partial<State>) => setState((s) => ({ ...s, ...patch })), [])
+  const update = useCallback((patch: Partial<State>, push = false) => {
+    if (push) pushNext.current = true
+    setState((s) => ({ ...s, ...patch }))
+  }, [])
   return [state, update]
 }

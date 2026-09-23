@@ -413,6 +413,7 @@ def export_catalog(tables: dict[str, Table], errors: list[str]) -> dict | None:
             {
                 "layer": t.layer,
                 "name": t.short,
+                "description": t.desc,
                 "grain": t.fields["1행"],
                 "keys": split_keys(t, names, errors),
                 "partition": part,

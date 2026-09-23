@@ -26,7 +26,7 @@ KST = timezone(timedelta(hours=9))
 KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply"}
 DETAIL_SCREENS = {"venue_detail", "venue_review", "event_detail"}
 APPLY_SCREENS = {"event_apply", "payment_confirm"}
-ROW_RANGE = (700_000, 1_200_000)
+ROW_RANGE = (7_000_000, 15_000_000)
 AD_SESSION_PER_CLICK = (0.55, 0.95)
 RET_OFFSETS = (1, 2, 4, 8, 12)
 # 지표 일반 범위 (docs/architecture.md §6). 벗어나면 실패

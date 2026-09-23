@@ -4,7 +4,7 @@
 -- 파티션·클러스터: kst_date / channel1, device_platform, member_seg
 -- 원천: staging.int_session, raw.db_members (가입일)
 -- 소비: marts.daily_metrics·funnel_daily·weekly_cohort·monthly_cohort·weekly_activity·monthly_summary,
---       marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path, ops.reconciliation
+--       marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path·person_day, ops.reconciliation
 -- 검사: R3
 --
 -- 행동 플래그의 정의 원본(architecture 12종 + 행사 상세·로그인 상태 2종, '찜'은 원천 이벤트가 없어 홈 배너 선택으로 대체). 플래그는 자동 로드 세션을 뺀 세션에서만 켠다.

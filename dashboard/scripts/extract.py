@@ -1,6 +1,6 @@
 """BigQuery 마트 → dashboard/public/data.json 추출기.
 
-marts 데이터셋의 표 13개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 data.json 계약 모양으로 쓴다.
+marts 데이터셋의 표 14개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 data.json 계약 모양으로 쓴다.
 조회는 SELECT 뿐이며 표를 만들거나 바꾸지 않는다. 마트가 적재된 뒤에 실행한다.
 
     uv run dashboard/scripts/extract.py --out dashboard/public/data.json
@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -213,13 +213,48 @@ def coerce(col: str, value: str | None, table: str = "") -> object:
     return int(value)
 
 
+def person_day() -> dict:
+    """marts.person_day 를 열 배열 형식으로 압축한다.
+
+    d 는 base_date 로부터의 일수, c·p·m 은 codes 의 인덱스, f 는 플래그 비트 정수다.
+
+    Returns:
+        {"base_date", "cols", "codes", "rows"} 사전.
+    """
+    rows = query(
+        "SELECT CAST(kst_date AS STRING) AS kst_date, person_key, channel1, device_platform, member_seg, flags "
+        f"FROM {DATASET}.person_day ORDER BY kst_date, person_key"
+    )
+    if not rows:
+        raise SystemExit("person_day 가 비어 있다 — 마트 적재를 먼저 확인")
+    codes = {
+        "c": sorted({r["channel1"] for r in rows}),
+        "p": sorted({r["device_platform"] for r in rows}),
+        "m": sorted({r["member_seg"] for r in rows}),
+    }
+    idx = {k: {v: i for i, v in enumerate(vs)} for k, vs in codes.items()}
+    base = date.fromisoformat(rows[0]["kst_date"])
+    packed = [
+        [
+            int(r["person_key"]),
+            (date.fromisoformat(r["kst_date"]) - base).days,
+            idx["c"][r["channel1"]],
+            idx["p"][r["device_platform"]],
+            idx["m"][r["member_seg"]],
+            int(r["flags"]),
+        ]
+        for r in rows
+    ]
+    return {"base_date": base.isoformat(), "cols": ["pk", "d", "c", "p", "m", "f"], "codes": codes, "rows": packed}
+
+
 def main() -> None:
     """마트를 읽어 data.json 을 쓴다."""
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=str(ROOT / "dashboard" / "public" / "data.json"))
     a = ap.parse_args()
 
-    out: dict[str, list[dict]] = {}
+    out: dict[str, object] = {}
     for table, (cols, order) in TABLES.items():
         ints = INT_OVERRIDE.get(table, set())
         select = ", ".join(f"CAST({c} AS STRING) AS {c}" if c in STRING_COLS and c not in ints else c for c in cols)
@@ -227,6 +262,10 @@ def main() -> None:
         rows = query(sql)
         out[table] = [{c: coerce(c, r.get(c), table) for c in cols} for r in rows]
         print(f"{table:22s} {len(out[table]):>8,d}")
+
+    out["person_day"] = person_day()
+    pd_bytes = len(json.dumps(out["person_day"], separators=(",", ":")))
+    print(f"{'person_day':22s} {len(out['person_day']['rows']):>8,d}  {pd_bytes / 1e6:.2f}MB")
 
     dates = [r["kst_date"] for r in out["daily_metrics"]]
     if not dates:
@@ -236,7 +275,7 @@ def main() -> None:
         "from_date": min(dates),
         "built_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": "bigquery",
-        "tables": {k: len(v) for k, v in out.items()},
+        "tables": {k: len(v["rows"]) if isinstance(v, dict) else len(v) for k, v in out.items()},
     }
     path = Path(a.out)
     path.parent.mkdir(parents=True, exist_ok=True)

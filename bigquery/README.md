@@ -1,7 +1,7 @@
 <!-- 생성물: python3 bigquery/build_catalog.py 가 SQL 머리 주석에서 만든다. 직접 고치지 않는다. -->
 # bigquery — 표 카탈로그
 
-합성 이벤트 로그와 서비스 원장을 raw → staging → marts → ops 네 층으로 쌓는 SQL 모음. 표 32개, 층마다 BigQuery 데이터셋 하나. 이 문서의 모든 표 정보는 각 SQL 파일 머리 주석에서 온다.
+합성 이벤트 로그와 서비스 원장을 raw → staging → marts → ops 네 층으로 쌓는 SQL 모음. 표 33개, 층마다 BigQuery 데이터셋 하나. 이 문서의 모든 표 정보는 각 SQL 파일 머리 주석에서 온다.
 
 ```bash
 bigquery/load_all.sh                     # 적재 → 정제 → 마트 → 검사 → 신선도 (0~9단계)
@@ -46,7 +46,7 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 | **map_channel**<br>채널 3단계 매핑 | (source, medium) 1쌍 | (source, medium) | 없음 / 없음 | raw.ga4_events.traffic_source (관측된 쌍 전부) | staging.int_session (세션 라스트클릭 채널 — 채널·광고 마트는 이 열을 쓴다) |  | [01_map_channel.sql](sql/01_map_channel.sql) |
 | **events_clean**<br>정제 이벤트 | 이벤트 1건 | (client_id, session_id, event_at, event_name) | kst_date / event_name, client_id | raw.ga4_events | staging.int_session, marts.daily_event·daily_venue·weekly_path, ops.reconciliation | C1a·C1b·C2·I3 | [02_events_clean.sql](sql/02_events_clean.sql) |
 | **int_session**<br>세션 판정 단일 원본 | 세션 1건 | (client_id, session_id) | session_date / person_id | staging.events_clean, staging.map_channel | staging.int_person_day·dim_member, marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path, ops.reconciliation | I1·I2·R7·R8 | [03_int_session.sql](sql/03_int_session.sql) |
-| **int_person_day**<br>사람 × 일 중간 표 | 사람 × 일(KST, 세션 시작일) | (person_id, kst_date) | kst_date / channel1, device_platform, member_seg | staging.int_session, raw.db_members (가입일) | marts.daily_metrics·funnel_daily·weekly_cohort·monthly_cohort·weekly_activity·monthly_summary, marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path, ops.reconciliation | R3 | [04_int_person_day.sql](sql/04_int_person_day.sql) |
+| **int_person_day**<br>사람 × 일 중간 표 | 사람 × 일(KST, 세션 시작일) | (person_id, kst_date) | kst_date / channel1, device_platform, member_seg | staging.int_session, raw.db_members (가입일) | marts.daily_metrics·funnel_daily·weekly_cohort·monthly_cohort·weekly_activity·monthly_summary, marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path·person_day, ops.reconciliation | R3 | [04_int_person_day.sql](sql/04_int_person_day.sql) |
 | **dim_member**<br>회원 차원 | 회원 1명 | member_id | 없음 / member_id | raw.db_members (속성의 진실), staging.int_session (첫 유입·첫 방문을 로그에서 역산) | marts.weekly_cohort·monthly_cohort·weekly_activity·monthly_summary·weekly_audience_funnel·weekly_path (가입일), 회원 탭 분포, 애드혹 분석 |  | [05_dim_member.sql](sql/05_dim_member.sql) |
 | **ad_spend**<br>광고 집행 정리 | 캠페인 × 일(KST) | (campaign_id, kst_date) | kst_date / campaign_id | raw.ads_spend | marts.daily_ad, ops.reconciliation (집행일) |  | [06_ad_spend.sql](sql/06_ad_spend.sql) |
 | **dim_event**<br>행사 차원 | 행사 1건 | event_id | 없음 / event_id | raw.db_events, raw.db_venues, staging.fct_order | marts.daily_event (행사 속성), 행사 리스트 |  | [06_dim_event.sql](sql/06_dim_event.sql) |
@@ -66,6 +66,7 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 | **hourly_metrics**<br>시간대 마트 | 일(KST) × 시(KST, 세션 시작 시) × channel1 × device_platform × member_seg | 이 다섯 열 | kst_date / channel1, device_platform, member_seg | staging.int_session (세션), staging.int_person_day (세그먼트: 사람 × 일) | 요일 × 시간대 세션 히트맵, 1일 선택 시 시간별 차트. 세그먼트 필터를 받아야 해서 축을 둔다 |  | [hourly_metrics.sql](sql/marts/hourly_metrics.sql) |
 | **monthly_cohort**<br>월간 리텐션 코호트 | 코호트 월 × 경과 월 × member_seg | 이 세 열 | DATE_TRUNC(cohort_month, MONTH) / month_offset, member_seg | staging.int_person_day, staging.dim_member | 월 리텐션 표. 리텐션 = retained / cohort_size (화면에서 나눈다) |  | [monthly_cohort.sql](sql/marts/monthly_cohort.sql) |
 | **monthly_summary**<br>월간 브리핑 표 | 월(KST) | month | DATE_TRUNC(month, MONTH) / 없음 | staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장), marts.weekly_cohort (W1 리텐션 — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다) | 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다. 예외: w1_retention 은 화면 계약상 비율(0~1)로도 둔다. 분자·분모는 w1_retained·w1_cohort_size |  | [monthly_summary.sql](sql/marts/monthly_summary.sql) |
+| **person_day**<br>사람 × 일 행동 플래그 마트 (기간 고유 사람 수 계산용) | 사람 × 일(KST). 플래그가 하나도 없는 날(자동 로드만 있는 날)은 뺀다 | (person_key, kst_date) | kst_date / person_key | staging.int_person_day | 대시보드 사람 지표 타일·분해·전기 대비(기간 고유 사람 수). ops.reconciliation | C8 | [person_day.sql](sql/marts/person_day.sql) |
 | **weekly_activity**<br>주간 활동 마트 | 주(월요일 시작) × channel1 × device_platform × member_seg | 이 네 열 | week_start / channel1, device_platform, member_seg | staging.int_person_day, staging.dim_member (가입일) | 주간 탭 — WAU·신규·재방문·주 2일+ 방문. 기간 필터 대신 주차 선택기로 본다. ops.reconciliation (C6·C7 기준값) |  | [weekly_activity.sql](sql/marts/weekly_activity.sql) |
 | **weekly_audience_funnel**<br>오디언스별 주간 퍼널 마트 | 주(월요일 시작) × 오디언스 × 단계 × channel1 × device_platform × member_seg | 이 여섯 열 | week_start / audience_id, step_order, channel1, device_platform | staging.int_person_day, staging.int_session (광고 유입 판정), staging.dim_member (가입일) | 퍼널 탭 드릴다운 '오디언스별 퍼널' — 오디언스 × 단계 도달률 표, 선택 오디언스의 주별 전환율 추이. ops.reconciliation | C6 | [weekly_audience_funnel.sql](sql/marts/weekly_audience_funnel.sql) |
 | **weekly_cohort**<br>주간 리텐션 코호트 | 코호트 주 × 경과 주 × channel1 × device_platform × member_seg | 이 다섯 열 | cohort_week / week_offset, channel1, device_platform, member_seg | staging.int_person_day (방문·첫 방문), staging.dim_member (가입일) | 회원 탭 리텐션 곡선, 주간 탭 코호트 히트맵 W1~W12. 리텐션 = retained / cohort_size (화면에서 나눈다). marts.monthly_summary (W1), ops.reconciliation | C4·R1·R2 | [weekly_cohort.sql](sql/marts/weekly_cohort.sql) |
@@ -77,7 +78,7 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 |---|---|---|---|---|---|---|---|
 | **build_log**<br>파이프라인 실행 기록 (없을 때만 만든다. 기록은 누적된다) | 실행 1회 × 단계(SQL 파일 1개) | (run_id, step, step_name) | DATE(started_at) / 없음 | load_all.sh 가 단계마다 1행 추가 | 파이프라인 상태 확인, bigquery/README.md 마지막 실행 요약 |  | [00_ops_tables.sql](sql/00_ops_tables.sql) |
 | **freshness**<br>표별 신선도 (전체 교체) | 표 1개 | (dataset_name, table_name) | 없음 / 없음 | 각 데이터셋 __TABLES__ (행 수·변경 시각), INFORMATION_SCHEMA.PARTITIONS (마지막 파티션) | 대시보드 데이터 탭 기준일, 파이프라인 상태 확인 |  | [09_freshness.sql](sql/09_freshness.sql) |
-| **reconciliation**<br>대조·범위·무결성 검사 결과 (행 추가) | 실행 1회 × 검사 항목 | (run_id, check_id) | DATE(checked_at) / 없음 | raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend, marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path | load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1 |  | [reconciliation.sql](checks/reconciliation.sql) |
+| **reconciliation**<br>대조·범위·무결성 검사 결과 (행 추가) | 실행 1회 × 검사 항목 | (run_id, check_id) | DATE(checked_at) / 없음 | raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend, marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day | load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1 |  | [reconciliation.sql](checks/reconciliation.sql) |
 
 ## 계보
 
@@ -115,6 +116,7 @@ flowchart LR
     marts_hourly_metrics["hourly_metrics"]
     marts_monthly_cohort["monthly_cohort"]
     marts_monthly_summary["monthly_summary"]
+    marts_person_day["person_day"]
     marts_weekly_activity["weekly_activity"]
     marts_weekly_audience_funnel["weekly_audience_funnel"]
     marts_weekly_cohort["weekly_cohort"]
@@ -165,6 +167,7 @@ flowchart LR
   staging_fct_order --> marts_monthly_summary
   staging_int_person_day --> marts_monthly_summary
   staging_int_session --> marts_monthly_summary
+  staging_int_person_day --> marts_person_day
   staging_dim_member --> marts_weekly_activity
   staging_int_person_day --> marts_weekly_activity
   staging_dim_member --> marts_weekly_audience_funnel
@@ -217,6 +220,7 @@ flowchart LR
 | 7 | marts.monthly_summary | [sql/marts/monthly_summary.sql](sql/marts/monthly_summary.sql) |
 | 7 | marts.weekly_audience_funnel | [sql/marts/weekly_audience_funnel.sql](sql/marts/weekly_audience_funnel.sql) |
 | 7 | marts.weekly_path | [sql/marts/weekly_path.sql](sql/marts/weekly_path.sql) |
+| 7 | marts.person_day | [sql/marts/person_day.sql](sql/marts/person_day.sql) |
 | 8 | ops.reconciliation | [checks/reconciliation.sql](checks/reconciliation.sql) |
 | 9 | ops.freshness | [sql/09_freshness.sql](sql/09_freshness.sql) |
 
@@ -234,6 +238,7 @@ flowchart LR
 | C5 | 대조 | 채널 합: 세션 채널 마트 vs 세션 표 | 0 | daily_channel | 0.0 | 통과 |
 | C6 | 대조 | 오디언스 퍼널: 신규 + 재방문 vs WAU | 0 | weekly_audience_funnel | 0.0 | 통과 |
 | C7 | 대조 | 경로 1단계 세션 vs 주간 방문 세션 | 0 | weekly_path | 0.0 | 통과 |
+| C8 | 대조 | 사람 마트 방문 고유 vs 일 마트 방문 사람 | 0 | person_day | 0.0 | 통과 |
 | R1 | 범위 | 신규 방문자 W1 리텐션 | 0.15 ~ 0.30 | weekly_cohort | 0.2147 | 통과 |
 | R2 | 범위 | W4 리텐션 | 0.08 ~ 0.18 | weekly_cohort | 0.0985 | 통과 |
 | R3 | 범위 | 방문 → 가입 전환 (기간 누적 사람) | 0.06 ~ 0.12 | int_person_day | 0.0892 | 통과 |
@@ -249,7 +254,7 @@ flowchart LR
 
 ## 마지막 실행
 
-검사 run `20260923T103223Z` (2026-09-23 19:32 KST): 20/20 통과
+검사 run `20260923T130059Z` (2026-09-23 22:01 KST): 21/21 통과
 
 단계별 마지막 기록 (`ops.build_log`, 시각 KST):
 
@@ -265,19 +270,20 @@ flowchart LR
 | 6 | staging.dim_event | 20260923T074121Z | 2026-09-23 16:43 | 5 | 250 | 182,560 | ok |
 | 6 | staging.dim_venue | 20260923T074121Z | 2026-09-23 16:43 | 6 | 60 | 5,378 | ok |
 | 6 | staging.ad_spend | 20260923T074121Z | 2026-09-23 16:43 | 7 | 133 | 9,856 | ok |
-| 7 | marts.daily_metrics | 20260923T081504Z | 2026-09-23 17:15 | 9 | 3,988 | 7,618,333 | ok |
-| 7 | marts.hourly_metrics | 20260923T081504Z | 2026-09-23 17:15 | 8 | 48,709 | 11,484,017 | ok |
-| 7 | marts.daily_channel | 20260923T081504Z | 2026-09-23 17:15 | 9 | 11,853 | 14,987,190 | ok |
-| 7 | marts.daily_ad | 20260923T081504Z | 2026-09-23 17:15 | 7 | 133 | 3,990,248 | ok |
-| 7 | marts.daily_event | 20260923T081504Z | 2026-09-23 17:15 | 10 | 4,290 | 61,630,738 | ok |
-| 7 | marts.daily_venue | 20260923T081504Z | 2026-09-23 17:16 | 15 | 14,050 | 58,681,696 | ok |
-| 7 | marts.funnel_daily | 20260923T081504Z | 2026-09-23 17:16 | 13 | 19,940 | 2,494,543 | ok |
-| 7 | marts.weekly_cohort | 20260923T081504Z | 2026-09-23 17:16 | 10 | 4,183 | 3,004,028 | ok |
-| 7 | marts.monthly_cohort | 20260923T081504Z | 2026-09-23 17:17 | 10 | 140 | 2,002,593 | ok |
-| 7 | marts.weekly_activity | 20260923T081504Z | 2026-09-23 17:17 | 9 | 584 | 3,809,195 | ok |
-| 7 | marts.monthly_summary | 20260923T081504Z | 2026-09-23 17:17 | 7 | 13 | 4,918,105 | ok |
-| 7 | marts.weekly_audience_funnel | 20260923T081504Z | 2026-09-23 17:17 | 6 | 10,035 | 7,030,151 | ok |
-| 7 | marts.weekly_path | 20260923T081504Z | 2026-09-23 17:17 | 9 | 42,095 | 67,835,419 | ok |
-| 8 | ops.reconciliation | 20260923T103223Z | 2026-09-23 19:32 | 6 | 0 | 57,023,199 | ok |
+| 7 | marts.daily_metrics | 20260923T125830Z | 2026-09-23 21:58 | 9 | 3,988 | 7,618,333 | ok |
+| 7 | marts.hourly_metrics | 20260923T125830Z | 2026-09-23 21:58 | 8 | 48,709 | 11,484,017 | ok |
+| 7 | marts.daily_channel | 20260923T125830Z | 2026-09-23 21:59 | 8 | 11,853 | 14,987,190 | ok |
+| 7 | marts.daily_ad | 20260923T125830Z | 2026-09-23 21:59 | 8 | 133 | 3,990,248 | ok |
+| 7 | marts.daily_event | 20260923T125830Z | 2026-09-23 21:59 | 9 | 4,290 | 61,630,738 | ok |
+| 7 | marts.daily_venue | 20260923T125830Z | 2026-09-23 21:59 | 9 | 14,050 | 58,681,696 | ok |
+| 7 | marts.funnel_daily | 20260923T125830Z | 2026-09-23 21:59 | 8 | 19,940 | 2,494,543 | ok |
+| 7 | marts.weekly_cohort | 20260923T125830Z | 2026-09-23 21:59 | 7 | 4,183 | 3,004,028 | ok |
+| 7 | marts.monthly_cohort | 20260923T125830Z | 2026-09-23 22:00 | 7 | 140 | 2,002,593 | ok |
+| 7 | marts.weekly_activity | 20260923T125830Z | 2026-09-23 22:00 | 7 | 584 | 3,809,195 | ok |
+| 7 | marts.monthly_summary | 20260923T125830Z | 2026-09-23 22:00 | 6 | 13 | 4,918,105 | ok |
+| 7 | marts.weekly_audience_funnel | 20260923T125830Z | 2026-09-23 22:00 | 6 | 10,035 | 7,030,151 | ok |
+| 7 | marts.weekly_path | 20260923T125830Z | 2026-09-23 22:00 | 6 | 42,095 | 67,835,419 | ok |
+| 7 | marts.person_day | 20260923T125830Z | 2026-09-23 22:00 | 9 | 68,538 | 4,485,032 | ok |
+| 8 | ops.reconciliation | 20260923T130059Z | 2026-09-23 22:01 | 8 | 0 | 60,200,197 | ok |
 | 9 | ops.freshness | 20260923T074121Z | 2026-09-23 16:46 | 8 | 27 | 31,458,894 | ok |
 

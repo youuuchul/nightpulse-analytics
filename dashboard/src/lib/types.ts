@@ -172,4 +172,12 @@ export interface Data {
   monthly_summary: MonthlySummary[]
   weekly_audience_funnel?: WeeklyAudienceFunnel[]
   weekly_path?: WeeklyPath[]
+  person_day?: PersonDay
+}
+
+export interface PersonDay {
+  cols: string[]
+  rows: number[][]
+  codes: { c: string[]; p: string[]; m: string[] }
+  base_date: string
 }

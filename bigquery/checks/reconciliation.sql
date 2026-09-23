@@ -3,7 +3,7 @@
 -- 키: (run_id, check_id)
 -- 파티션·클러스터: DATE(checked_at) / 없음
 -- 원천: raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
---       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path
+--       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day
 -- 소비: load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1
 --
 -- 표 정의는 sql/00_ops_tables.sql.
@@ -128,6 +128,27 @@ c7 AS (
     GROUP BY 1, 2, 3, 4
   ) AS w USING (week_start, channel1, device_platform, member_seg)
 ),
+-- C8 기간 고유용 사람 마트: visited 고유 사람 vs 일 마트 persons, 일 × 세그먼트별
+c8 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(d.v, 0)) AS ref_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(d.v, -1)) AS bad_keys
+  FROM (
+    SELECT kst_date, channel1, device_platform, member_seg, COUNT(DISTINCT person_key) AS v
+    FROM marts.person_day
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND flags & 1 = 1
+    GROUP BY 1, 2, 3, 4
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT kst_date, channel1, device_platform, member_seg, SUM(persons) AS v
+    FROM marts.daily_metrics
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND persons > 0
+    GROUP BY 1, 2, 3, 4
+  ) AS d USING (kst_date, channel1, device_platform, member_seg)
+),
 cohort_ret AS (
   SELECT
     SUM(IF(week_offset = 1, retained, 0)) AS w1_num,
@@ -230,6 +251,11 @@ checks AS (
          'weekly_path step 1 sessions 합', mart_v, 'weekly_activity valid_sessions 합', ref_v,
          ABS(mart_v - ref_v) + bad_keys, 0, 0, FORMAT('불일치 주 × 세그먼트 %d', bad_keys)
   FROM c7
+  UNION ALL
+  SELECT 'C8', 'reconcile', '사람 마트 방문 고유 vs 일 마트 방문 사람',
+         'person_day visited 고유 사람 합', mart_v, 'daily_metrics persons 합', ref_v,
+         ABS(mart_v - ref_v) + bad_keys, 0, 0, FORMAT('불일치 일 × 세그먼트 %d', bad_keys)
+  FROM c8
   UNION ALL
   SELECT 'R1', 'range', '신규 방문자 W1 리텐션',
          'W1 retained', w1_num, 'cohort_size (W1 관측 완료 코호트)', w1_den,

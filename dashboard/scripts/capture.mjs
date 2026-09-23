@@ -32,6 +32,9 @@ const extras = [
   ['15_funnel_7_member', 'tab=funnel&p=7&ms=member&aud=new,returning,past_payer,apply_no_pay'],
   ['30_about', 'page=about'],
   ['13_members_90', 'tab=members&p=90'],
+  ['50_overview_90', 'tab=overview&p=90'],
+  ['51_overview_1year', 'tab=overview&p=365'],
+  ['52_overview_7_member_ios', 'tab=overview&p=7&ms=member&pf=ios'],
 ]
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' })
@@ -71,11 +74,26 @@ try {
     await page.goto(`${BASE}?${q}`, { waitUntil: 'networkidle' })
     await page.waitForSelector(opts.wait ?? 'main section, main .card', { timeout: 10000 })
     await page.waitForTimeout(400)
+    if (opts.drill) {
+      const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.drill}")`) })
+      const box = await card.locator('.recharts-wrapper').boundingBox()
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+      await page.waitForTimeout(150)
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5)
+      await page.waitForTimeout(400)
+      console.log(`  드릴다운 → ${new URL(page.url()).search}`)
+    }
     const file = `${OUT}${name}.png`
     if (opts.section) {
       const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.section}")`) })
       if (opts.click != null) {
         await card.locator('svg path').nth(opts.click).dispatchEvent('click')
+        await page.waitForTimeout(200)
+      }
+      if (opts.hover != null) {
+        await card.scrollIntoViewIfNeeded()
+        const box = await card.locator('.recharts-wrapper').boundingBox()
+        await page.mouse.move(box.x + box.width * opts.hover, box.y + box.height * 0.5)
         await page.waitForTimeout(200)
       }
       await card.screenshot({ path: file })
@@ -105,6 +123,14 @@ try {
     await shoot('44_data_phone_dark', 'page=data&table=staging.int_session', { viewport: { width: 390, height: 844 }, scale: 2, scheme: 'dark', wait: 'main section' })
     await shoot('45_data_nocatalog', 'page=data', { noCatalog: true, wait: 'main' })
     await shoot('46_header_phone_about', 'page=about', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
+    await shoot('53_overview_hover_left', 'tab=overview&p=90', { section: '방문자', hover: 0.08 })
+    await shoot('54_overview_hover_right', 'tab=overview&p=90', { section: '신청 · 결제', hover: 0.97 })
+    await shoot('55_overview_hover_day', 'tab=overview&p=7', { section: '결제 금액', hover: 0.5 })
+    await shoot('56_overview_hover_hour', 'tab=overview&p=1', { section: '신청 · 결제', hover: 0.6 })
+    await shoot('57_overview_hover_dark', 'tab=overview&p=365', { section: '방문자', hover: 0.9, scheme: 'dark' })
+    await shoot('58_overview_hover_phone', 'tab=overview', { section: '방문자', hover: 0.9, viewport: { width: 390, height: 844 }, scale: 2 })
+    await shoot('59_overview_drill_week', 'tab=overview&p=90', { drill: '방문자' })
+    await shoot('60_overview_1day_dark', 'tab=overview&p=1', { scheme: 'dark' })
     await shoot('47_header_tablet', 'tab=funnel', { viewport: { width: 768, height: 400 }, clip: true })
   }
   await browser.close()

@@ -9,7 +9,7 @@
 3. **탭 구조는 스코어보드 → 메인 추이 → (대상 탭만) 표.** 설명 문장은 화면에 쓰지 않고 라벨·단위·창·분모 한 줄로 푼다(`방문자 1,793명·일 중`, `W1 리텐션 · 9/7 코호트`).
 4. **비율은 화면에서 계산한다.** 마트는 분자·분모 열만 두고, 화면은 필터 적용 후 분자·분모를 각각 합산한 뒤 나눈다. 비율의 증감은 %p, 건수·금액의 증감은 %.
 5. **단위를 섞지 않는다.** 일별 마트의 사람 수를 기간으로 합하면 `사람·일`이다. 기간 고유 사람 수가 필요한 지표(WAU·월 방문자·리텐션)는 주간·월간 마트에서만 읽는다.
-6. **기간 길이에 따라 입자가 바뀐다.** 1일 = 시간별 차트, 120일 이하 = 일별, 그 이상 = 주별(월요일 시작).
+6. **기간 길이에 따라 입자가 바뀐다.** 1일 = 시간별 차트, 120일 이하 = 일별, 그 이상 = 주별(월요일 시작). 개요 탭 추이 카드는 별도 규칙(§3b).
 7. **대상을 고르면 기간이 따라간다.** 캠페인 보기의 기본 기간은 `캠페인 기간`(선택한 캠페인의 관측 범위, 전체 선택 시 모든 캠페인 범위). 선택기 옵션에 관측 기간을 병기한다.
 8. 필터 상태는 전부 URL 쿼리에 있어 링크로 같은 화면을 공유할 수 있다.
 
@@ -17,7 +17,7 @@
 
 | 탭 | 보기 | 세그먼트 줄 | 스코어보드 | 메인 차트 | 표 | 마트 |
 |---|---|---|---|---|---|---|
-| 개요 | — | 채널·플랫폼·회원 | 방문자(일평균)·신규 방문자·세션·활성 세션 비율·가입·결제 금액 | 방문자·신규 추이 (1일: 시간별 세션) | — | daily_metrics, hourly_metrics |
+| 개요 | — | 채널·플랫폼·회원 | 기준일 현황(누적 회원·공간, 필터 미적용) + 방문자·세션·활성 세션 비율·신규 방문자·가입·신청·결제·결제 금액 | 추이 카드 5개: 방문자 → 활성 세션 → 신규 방문자·가입 → 신청·결제 → 결제 금액 (§3b) | — | daily_metrics, hourly_metrics, person_day, daily_venue |
 | 퍼널 | — | 채널·플랫폼·회원 | 전체 전환율(랜딩→결제)·최대 이탈 단계·가장 크게 변한 단계·탐색 도달률 | 단계 전환율 추이(상세→신청 화면, 신청 화면→결제. 28일 이상 주별, 미만 일별, 1일은 단계 막대) + 세그먼트별 퍼널 히트맵 표 | 드릴다운 ① 오디언스별 퍼널(오디언스 칩 → 도달률 표 + 주별 전환율) ② 경로 탐색 생키 · 보조 요일×시간대 (1일: 시간별 세션) | funnel_daily, daily_metrics, hourly_metrics, weekly_audience_funnel, weekly_path |
 | 행사·결제 | 흐름 | 채널·플랫폼·회원 | 신청·결제·결제 금액·결제자당 금액·취소율 | 신청·결제 추이 + 결제 퍼널(행사 상세 → 신청 화면 → 결제) | — | daily_metrics, hourly_metrics |
 | 행사·결제 | 행사별 | 유형·가격대 | 조회된 행사·상세 조회·신청·결제 금액·취소율 | 결제 금액 추이 | 행사별 성과 | daily_event |
@@ -34,7 +34,8 @@
 
 | 지표 | 산식 | 단위 |
 |---|---|---|
-| 방문자 · 일평균 | Σ persons ÷ 기간 일수 | 사람 |
+| 방문자 (개요 탭) | 기간·세그먼트 안 `visited` 비트를 가진 고유 `pk` 수(`person_day`). 키가 없으면 Σ persons 로 폴백 | 명 |
+| 기준일 현황 (개요 탭) | 누적 회원 = `meta.to_date` 까지 Σ signups(전체, 필터 미적용) · 공간 = `daily_venue` 고유 venue_id | 명 · 곳 |
 | 활성 세션 비율 | Σ engaged_sessions ÷ Σ sessions | 세션 |
 | 탐색 도달률 (퍼널 탭) | Σ explorers ÷ Σ persons (daily_metrics) | 사람·일 |
 | 단계 막대 (퍼널 탭 1일 · 행사·결제 결제 퍼널) | 단계별 Σ persons, 막대 = 이전 단계 대비, 오른쪽 열 = 첫 단계 대비 | 사람·일 |
@@ -47,6 +48,20 @@
 | CTR · CAC · ROAS | clicks ÷ impressions · spend ÷ signups · pay_amount ÷ spend | — |
 | 재방문 비중 · 주 2일+ 방문 | returning_persons ÷ wau · two_plus_days ÷ wau | 사람 |
 | 증감 | 직전 동일 길이 기간 대비(1일은 전일). 직전 기간이 데이터 범위 밖이면 표시하지 않는다 | % / %p |
+
+### 3b. 개요 탭 추이 카드 (`TrendCard`)
+
+카드 한 장 = 주 지표 1개(+ 같은 단위 보조 지표 1개, 실선만) · 왼쪽 차트 · 오른쪽 분해 타일. 탭 상태에 의존하지 않고 행·기간·세그먼트 상태만 받는다.
+
+| 항목 | 규칙 |
+|---|---|
+| 전기 | 직전 동일 길이 기간 `[from − n, from − 1]`(n = 기간 일수, 1일이면 전일). 버킷 i 의 전기 값은 버킷 i 의 날짜를 n 일 당긴 구간의 값이며 같은 x 위치에 점선으로 겹친다. 전기 시작이 데이터 시작(`meta.from_date`)보다 이르면 점선·전기 대비를 숨기고 머리에 `전기 없음` |
+| 그레인 | 토글 `자동·일·주·월`(카드별, URL 미저장). 자동 = 1일 → 시간, 14일 이하 → 일, 120일 이하 → 주, 그 이상 → 월. 버킷이 2개 미만이 되는 선택지는 비활성 |
+| 버킷 | 주 = 기간 시작일부터 7일씩(마지막은 짧을 수 있음, 툴팁에 실제 범위). 월 = 달력 월과 기간의 교집합(부분 월은 툴팁에 범위 병기) |
+| 버킷 값 | 건수·금액·신규·가입 = 버킷 합. 사람 지표(방문자) = 일 버킷은 일별 고유(마트 값), 주·월 버킷은 버킷 고유 사람(`person_day`, 없으면 합). 1일 시간별은 `hourly_metrics`(시간별 열이 없는 지표는 차트 없이 분해 타일만) |
+| 분해 타일 | `전체` + 선택 축 값(회원/비회원 · 유료/비유료 · iOS/Android/웹)의 기간 값과 전기 대비 %. 사람 지표는 기간 고유(한 사람이 두 값에 나타나면 양쪽에 센다), 그 외는 합. 필터가 고정한 축은 선택기에서 비활성, 기본 축이 막히면 다음 축 |
+| 툴팁 | 버킷(`9/21 (일)` · `9/15~9/21` · `2026-09`) / 지표 값 / 전기 대비 %(전기 0이면 `—`) / `전기 <범위>: 값` / 보조 지표 값과 전기 대비. 차트 영역 밖으로 나가지 않게 위치 보정 |
+| 드릴다운 | 차트 클릭 → 가리킨 버킷으로 기간 변경: 일 → 그날(1일, 시간별), 주 → 그 7일(직접 기간), 월 → 그 달 전체(데이터 범위로 자름). URL 에 push 되어 뒤로 가기로 복귀 |
 
 ### 3a. 퍼널 탭 산식
 
@@ -87,6 +102,7 @@
 | `weekly_audience_funnel` | `week_start, audience_id(new/returning/paid_inflow/past_payer/apply_no_pay/explorer_only), step(landing/detail/signup/apply_view/payment), channel1, device_platform, member_seg, persons` |
 | `weekly_path` | `week_start, channel1, device_platform, member_seg, step(1..4, 정수), from_screen, to_screen, sessions` |
 | `monthly_summary` | `month, persons, new_persons, signups, applies, pay_count, pay_amount, cancels, w1_retention, top_channel` |
+| `person_day` | 행 배열이 아니라 열 배열 객체 `{base_date, cols, codes, rows}`. `cols = [pk, d, c, p, m, f]`, `rows` 는 `[pk, d, c, p, m, f]` 정수 배열(날짜·사람 키 순). 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. `meta.tables.person_day` 는 행 수 |
 
 세그먼트 값: `channel1` ∈ {paid, non_paid}, `device_platform` ∈ {ios, android, web}, `member_seg` ∈ {member, guest}. 세그먼트 속성은 행마다 1개라 조합의 합이 전체다. `channel2` 는 `staging.map_channel` 의 2단계 값(direct·organic_search·organic_social·influencer·paid_social·referral·ai_referral·other), `top_channel` 도 같은 값을 쓴다. `price_tier` ∈ {free, standard, premium}.
 
@@ -121,4 +137,4 @@
 
 ## 6. 캡처
 
-`npm run build && npm run capture -- --all` 이 `dashboard/captures/` 에 탭별 라이트 화면과 보기 전환·1일·1년·세그먼트 조합·드릴다운 카드·데이터 없음·다크·폰 폭(390px)·개요 페이지·데이터 페이지(라이트·다크·폰·카탈로그 없음)·헤더(폰·태블릿 폭)를 저장한다. `catalog.json` 이 아직 없으면 `NP_CATALOG=<파일>` 로 다른 파일을 대신 물려 찍는다. README 대표 이미지는 `docs/img/` 에 최적화해 복사한다.
+`npm run build && npm run capture -- --all` 이 `dashboard/captures/` 에 탭별 라이트 화면과 보기 전환·1일·1년·세그먼트 조합·드릴다운 카드·데이터 없음·개요 추이 카드(90일·1년·7일+필터·툴팁 hover 좌/우/일/시간/다크/폰·주 버킷 클릭 드릴다운)·다크·폰 폭(390px)·개요 페이지·데이터 페이지(라이트·다크·폰·카탈로그 없음)·헤더(폰·태블릿 폭)를 저장한다. `catalog.json` 이 아직 없으면 `NP_CATALOG=<파일>` 로 다른 파일을 대신 물려 찍는다. README 대표 이미지는 `docs/img/` 에 최적화해 복사한다.

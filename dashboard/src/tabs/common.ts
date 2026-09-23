@@ -6,7 +6,7 @@ import type { Delta } from '../components/ui'
 export interface TabProps {
   data: Data
   s: State
-  set: (p: Partial<State>) => void
+  set: (p: Partial<State>, push?: boolean) => void
   range: Range
 }
 

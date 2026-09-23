@@ -322,7 +322,7 @@ export default function About({ dataHref, onData }: { dataHref: string; onData: 
           className="max-w-[640px] scroll-mt-6 border-l-2 border-line pl-3 text-[13px] leading-relaxed text-muted"
         >
           이 대시보드의 수치는 가상 서비스 NightPulse의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
-          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 방문자 8,000명·회원 약 700명·52주·이벤트
+          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 8,000명·회원 약 700명·이벤트
           약 86만 건 규모입니다.
         </p>
       </div>
