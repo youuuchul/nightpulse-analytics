@@ -116,7 +116,9 @@ load_raw() {
     "db_venues|db_venues.csv|venues.csv|서비스 RDB 공간 스냅샷. 1행 = 공간 1곳. 키 venue_id" \
     "db_events|db_events.csv|events_master.csv|서비스 RDB 행사 스냅샷. 1행 = 행사 1건. 키 event_id" \
     "db_applications|db_applications.csv|applications.csv|서비스 RDB 신청 원장 스냅샷. 1행 = 신청 1건. 키 order_id" \
-    "db_payments|db_payments.csv|payments.csv|서비스 RDB 결제 원장 스냅샷. 1행 = 결제 1건. 키 order_id"; do
+    "db_payments|db_payments.csv|payments.csv|서비스 RDB 결제 원장 스냅샷(티켓·구독). 1행 = 결제 1건. 키 order_id" \
+    "db_venue_contracts|db_venue_contracts.csv|venue_contracts.csv|서비스 RDB 파트너 계약 스냅샷. 1행 = 계약 1건. 키 contract_id" \
+    "db_subscriptions|db_subscriptions.csv|subscriptions.csv|서비스 RDB 소비자 구독 스냅샷. 1행 = 구독 1건. 키 subscription_id"; do
     IFS='|' read -r tbl new old desc <<<"$spec"
     f="$(pick "$new" "$old")"
     [ -n "$f" ] || fail 1 "raw.$tbl" "$started" "data/raw 에 $new 없음"
@@ -136,10 +138,11 @@ load_raw() {
   fi
   "$BQ" update --quiet --description "광고 플랫폼 일별 집행 리포트 (합성). 1행 = 캠페인 × 일. 키 (campaign_id, date). date(KST) 일 파티션" raw.ads_spend >/dev/null 2>&1
 
-  rows="$(table_rows raw.ga4_events raw.db_members raw.db_venues raw.db_events raw.db_applications raw.db_payments raw.ads_spend)"
+  rows="$(table_rows raw.ga4_events raw.db_members raw.db_venues raw.db_events raw.db_applications raw.db_payments \
+    raw.db_venue_contracts raw.db_subscriptions raw.ads_spend)"
   secs=$(( $(date +%s) - t0 ))
   log_row 1 raw "$started" "$(now)" "$rows" 0 ok ""
-  printf '[1] %-28s ok  rows=%-9s bytes=%-11s %ss\n' "raw (7 tables)" "$rows" 0 "$secs"
+  printf '[1] %-28s ok  rows=%-9s bytes=%-11s %ss\n' "raw (9 tables)" "$rows" 0 "$secs"
 }
 
 echo "run_id=$RUN_ID"
@@ -150,18 +153,23 @@ want 1 && load_raw
 want 2 && run_sql 2 staging.map_channel     "$SQL/01_map_channel.sql"     staging.map_channel
 want 3 && run_sql 3 staging.events_clean    "$SQL/02_events_clean.sql"    staging.events_clean
 want 4 && run_sql 4 staging.int_session     "$SQL/03_int_session.sql"     staging.int_session
-want 5 && run_sql 5 staging.int_person_day  "$SQL/04_int_person_day.sql"  staging.int_person_day
+if want 5; then
+  run_sql 5 staging.dim_subscription "$SQL/04_dim_subscription.sql" staging.dim_subscription
+  run_sql 5 staging.int_person_day   "$SQL/04_int_person_day.sql"   staging.int_person_day
+fi
 if want 6; then
   run_sql 6 staging.dim_member  "$SQL/05_dim_member.sql"  staging.dim_member
   run_sql 6 staging.fct_order   "$SQL/06_fct_order.sql"   staging.fct_order
-  run_sql 6 staging.dim_event   "$SQL/06_dim_event.sql"   staging.dim_event
-  run_sql 6 staging.dim_venue   "$SQL/06_dim_venue.sql"   staging.dim_venue
+  run_sql 6 staging.dim_event    "$SQL/06_dim_event.sql"    staging.dim_event
+  run_sql 6 staging.dim_contract "$SQL/06_dim_contract.sql" staging.dim_contract
+  run_sql 6 staging.dim_venue    "$SQL/06_dim_venue.sql"    staging.dim_venue
   run_sql 6 staging.ad_spend    "$SQL/06_ad_spend.sql"    staging.ad_spend
 fi
 if want 7; then
-  # weekly_cohort 는 monthly_summary 보다 먼저
+  # weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry 는 monthly_summary 보다 먼저
   for m in daily_metrics hourly_metrics daily_channel daily_ad daily_event daily_venue \
-           funnel_daily weekly_cohort monthly_cohort weekly_activity monthly_summary \
+           funnel_daily weekly_cohort monthly_cohort weekly_activity \
+           daily_revenue daily_subscription daily_venue_registry venue_registry monthly_summary \
            weekly_audience_funnel weekly_path person_day; do
     run_sql 7 "marts.$m" "$SQL/marts/$m.sql" "marts.$m"
   done

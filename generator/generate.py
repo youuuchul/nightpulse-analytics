@@ -17,7 +17,6 @@ import gzip
 import hashlib
 import json
 import logging
-import math
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -42,14 +41,14 @@ CHAIN_SCREENS = [
     "event_apply",
 ]
 END = "(end)"
-KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply"}
+KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply", "subscribe", "subscription_cancel"}
 
-# 시나리오 4구간: (시작 주, 끝 주, 신규 유입 가중, 재방문 배수, 신청 전환 배수, 주당 행사 수)
+# 시나리오 4구간: (이름, 시작 주, 끝 주, 신규 유입 가중, 재방문 배수, 신청 전환 배수, 주당 행사 수 (구간 시작, 끝))
 PHASES = [
-    ("launch", 1, 10, None, 0.85, 0.9, 3),
-    ("ads", 11, 24, 0.85, 0.8, 0.9, 4),
-    ("stable", 25, 40, 0.9, 1.15, 1.0, 5),
-    ("peak", 41, 52, 1.2, 1.25, 1.3, 7),
+    ("launch", 1, 10, None, 0.85, 0.9, (15, 25)),
+    ("ads", 11, 24, 0.85, 0.8, 0.9, (30, 45)),
+    ("stable", 25, 40, 0.9, 1.15, 1.0, (45, 55)),
+    ("peak", 41, 52, 1.2, 1.25, 1.3, (55, 65)),
 ]
 # 월별 계절 계수 (KST 월)
 SEASON = {1: 0.85, 2: 0.85, 3: 0.95, 4: 1.0, 5: 1.05, 6: 1.05, 7: 1.15, 8: 1.2, 9: 1.0, 10: 1.05, 11: 0.95, 12: 1.2}
@@ -70,10 +69,39 @@ SIGNUP_INTENT = (0.5, 0.09)  # 가입 의향 비중 (단골층, 일반층). 실�
 SECOND_DEVICE = 0.5  # 가입 의향자 중 2번째 기기 보유 비중 (실현 비중은 가입 후 재방문에 달림)
 DEVICE2_USE = 0.5  # 가입 이후 방문에서 2번째 기기를 쓸 확률
 CANCEL_PER_SESSION = 0.012  # 보유 신청 1건당 이후 세션에서 취소할 확률
-PAY_SUCCESS = 0.66  # 유료 행사 신청 후 결제 완료 비율
+PAY_SUCCESS = 0.71  # 유료 행사 신청 후 결제 완료 비율
+MEMBER_APPLY_NUDGE = 0.17  # 로그인 회원이 행사 상세에서 신청 화면으로 바로 가는 추가 확률 (연 티켓 매출 규모 보정)
 APPLY_MULT = 2.2  # 신청 화면 도달 후 신청 확률 = seed 단계 비율 x 구간 배수 x 이 값
 PROMO_SELECT = 0.3  # 배너 노출 대비 선택 비율
 SESSIONS_PER_DAY = ([1, 2, 3], [0.93, 0.05, 0.02])
+
+# 시나리오 2.0 — 공간 두 층·구독·B2B 계약 (docs/scenario_v2.md)
+EVENT_SCALE = 1.07  # 주당 행사 수 배수 (구간 곡선 합이 연 2,400건 근처가 되게)
+REGISTRY_ANCHORS = ((0, 300), (10, 600), (24, 1000), (40, 1400), (52, 1800))  # (주 끝, 등록 공간 누적)
+PARTNER_ANCHORS = ((0, 8), (10, 30), (24, 80), (40, 130), (52, 180))  # (주 끝, 진행 계약 수)
+SUB_ANCHORS = ((24, 500), (40, 1300), (52, 2000))  # (주 끝, 활성 구독자). 출시일에 0
+SUB_LAUNCH = date(2025, 12, 1)
+SUB_PRICE = 9900
+SUB_DISCOUNT = 0.15  # 구독자의 파트너 공간 티켓 할인율
+SUB_HAZARD = 0.06  # 구독 결제 회차당 해지 결심 확률. 해지는 다음 방문에서 일어나므로 실현 월 이탈은 이보다 낮다
+SUB_CORE_WEIGHT = 3.0  # 구독 후보 추첨 시 단골층 가중
+SUB_VIEW_P = (0.008, 0.04)  # 세션당 구독 안내 조회 확률 (비회원, 비구독 회원)
+CONTRACT_CHURN = (0.015, 0.025)  # 파트너 계약 월 해지율 범위 (월마다 추첨)
+PLAN_FEE = {"basic": 99000, "pro": 299000}
+PLAN_PRO_SHARE = 0.3
+VENUE_CLOSE_SHARE = 0.03  # 기간 안 폐업 공간 비중
+VENUE_PARETO = 1.3  # 공간 개별 인기 지수 파레토 모양
+PARTNER_VIEW_MULT = 2.5  # 파트너 공간 상세 조회 가중
+PARTNER_EVENT_SHARE = 0.75  # 파트너 공간 개최 비중
+HOST_POP_TEMPER = 0.5  # 개최 공간 추첨 시 인기 지수 완화 (파트너 선정에 이미 인기가 반영돼 이중 쏠림 방지)
+# 가격대: (이름, 비중, 가격 하한, 상한, 단위, 신청 확률 배수)
+PRICE_TIERS = (
+    ("free", 0.20, 0, 0, 1, 1.0),
+    ("standard", 0.45, 15000, 30000, 1000, 1.0),
+    ("premium", 0.30, 40000, 80000, 5000, 0.75),
+    ("package", 0.05, 100000, 180000, 10000, 0.55),
+)
+AD_SPEND_SCALE = 0.62  # 광고비만 조정하는 배수 (노출·클릭은 그대로, CPM 이 바뀐다). 연 광고비 ≈ 연 티켓 매출의 10%
 
 
 # ---------------------------------------------------------------- seed 로드
@@ -101,10 +129,8 @@ class Seed:
     screen_seed_share: dict[str, float]  # 출력 화면 -> seed 화면 비중 합
     funnel: dict[str, float]
     event_popularity: np.ndarray
-    venue_popularity: np.ndarray
     region_share: np.ndarray
     genre_share: np.ndarray
-    free_share: float
     chain: dict[str, tuple[list[str], np.ndarray]]
     names: dict[str, Any]
 
@@ -257,19 +283,14 @@ def load_seed() -> Seed:
     funnel = {r["step_key"]: float(r["rate_of_prev"] or r["rate_of_landing"]) for r in _read_csv("funnel_steps.csv")}
 
     pop_e = np.array([float(r["view_share"]) for r in _read_csv("popularity.csv") if r["entity"] == "event"])
-    pop_v = np.array([float(r["view_share"]) for r in _read_csv("popularity.csv") if r["entity"] == "venue"])
 
     nm = _read_csv("name_map.csv")
-    regions = sorted(
-        (float(r["share"]) for r in nm if r["kind"] == "venue_region" and r["value"] != "(기타)"), reverse=True
-    )
-    region_share = np.array(regions[: len(names["regions"])])
+    region_share = np.array([float(r["share"]) for r in names["regions"]])
     genres = sorted(
         (float(r["share"]) for r in nm if r["kind"] == "venue_genre_ga" and r["value"] not in ("MIX", "(unset)")),
         reverse=True,
     )
     genre_share = np.array(genres[: len(names["genres"])])
-    free_share = next(float(r["share"]) for r in nm if r["kind"] == "event_pay_type" and r["value"] == "free")
 
     return Seed(
         hour_cdf=hour_cdf,
@@ -285,10 +306,8 @@ def load_seed() -> Seed:
         screen_seed_share=screen_seed_share,
         funnel=funnel,
         event_popularity=pop_e**POPULARITY_TEMPER / (pop_e**POPULARITY_TEMPER).sum(),
-        venue_popularity=pop_v[:60] / pop_v[:60].sum(),
         region_share=region_share / region_share.sum(),
         genre_share=genre_share / genre_share.sum(),
-        free_share=free_share,
         chain=_collapse_chain(),
         names=names,
     )
@@ -304,9 +323,16 @@ class Venue:
     venue_id: int
     name: str
     region: int
+    district: str
+    lat: float
+    lng: float
     genre: int
+    venue_type: str
     capacity_band: str
-    weight: float
+    reg_day: int  # 등록일 (기간 시작 기준 일 번호). 초기 일괄 등록은 0
+    reg_ts: int  # 등록 시각 UTC epoch 초
+    close_day: int  # 폐업일. 폐업하지 않으면 큰 값
+    pop: float  # 개별 인기 지수 (파레토)
 
 
 @dataclass
@@ -323,6 +349,10 @@ class EventItem:
     price_tier: str
     price: int
     weight: float
+    capacity: int
+    is_partner: bool
+    apply_mult: float
+    seats: int = 0  # 신청(결제 대기 제외)으로 찬 자리
 
 
 @dataclass
@@ -354,6 +384,11 @@ class Person:
     marketing_opt_in: bool = False
     applied_events: set[int] = field(default_factory=set)
     open_apps: list[dict[str, Any]] = field(default_factory=list)
+    sub_plan: tuple[int, int | None] | None = None  # (구독 시작 예정일, 해지 예정일)
+    sub_id: str | None = None
+    sub_active: bool = False
+    sub_canceled: bool = False
+    genre_mask: np.ndarray | None = None
 
 
 # ---------------------------------------------------------------- 생성기
@@ -386,16 +421,30 @@ class Generator:
         self.host = seed.names["service"]["host"]
         self.phase_of_day = [self._phase(d // 7 + 1) for d in range(self.n_days)]
         self.ledger: dict[str, list[dict[str, Any]]] = {
-            k: [] for k in ("members", "venues", "events_master", "applications", "payments", "ad_spend")
+            k: []
+            for k in (
+                "members",
+                "venues",
+                "contracts",
+                "events_master",
+                "applications",
+                "payments",
+                "subscriptions",
+                "ad_spend",
+            )
         }
         self.order_seq = 0
         self.member_seq = 0
+        self.sub_seq = 0
+        self.end_cap = self.range_end
+        self.sub_recs: dict[str, dict[str, Any]] = {}
+        self.sub_launch_day = max((SUB_LAUNCH - self.start_date).days, 0)
         self.rows = 0
         self.venue_by_id: dict[int, Venue] = {}
 
     # ---- 공통 도우미
 
-    def _phase(self, week: int) -> tuple[str, float | None, float, float, int]:
+    def _phase(self, week: int) -> tuple[str, float | None, float, float, tuple[int, int]]:
         for name, a, b, arrive, ret, conv, per_week in PHASES:
             if a <= week <= b:
                 return name, arrive, ret, conv, per_week
@@ -417,45 +466,207 @@ class Generator:
         return float(np.interp(u, xp, fp))
 
     def _choice(self, weights: np.ndarray) -> int:
-        return int(self.rng.choice(len(weights), p=weights / weights.sum()))
+        c = np.cumsum(weights)
+        return min(int(np.searchsorted(c, self.rng.random() * c[-1], side="right")), len(c) - 1)
 
     # ---- 카탈로그
 
-    def build_catalog(self) -> None:
-        """공간 60곳과 행사 목록을 만든다."""
+    def _anchor(self, anchors: tuple[tuple[int, int], ...], d: float) -> float:
+        """(주 끝, 값) 기준점 사이를 선형 보간해 d 일의 값을 돌려준다."""
+        xs = [max(w * 7 - 1, 0) for w, _ in anchors]
+        return float(np.interp(d, xs, [v for _, v in anchors]))
+
+    def _visible(self, reg_day: np.ndarray, d: int) -> np.ndarray:
+        """d 일에 서비스에 보이는 공간 (초기 일괄 등록은 첫날부터, 나머지는 등록 다음 날부터)."""
+        return (reg_day == 0) | (reg_day < d)
+
+    def build_registry(self) -> None:
+        """등록 공간 목록(상권·좌표·장르·유형·규모·등록일·폐업)과 파트너 계약 이력을 만든다."""
         nm = self.s.names
         rng = self.rng
+        n_days = self.n_days
+        regions = nm["regions"]
+        init = REGISTRY_ANCHORS[0][1]
+        total = int(round(self._anchor(REGISTRY_ANCHORS, n_days - 1)))
+        # 등록일: 초기 일괄 + 누적 곡선의 일 증가분(평일 가중·일별 흔들림)
+        cum = np.array([self._anchor(REGISTRY_ANCHORS, d) for d in range(n_days)])
+        inc = np.diff(np.concatenate([[init], cum])) + 1e-9
+        inc *= np.array([1.2 if self._dow(d) < 5 else 0.5 for d in range(n_days)]) * rng.uniform(0.6, 1.4, n_days)
+        inc[0] = 0.0
+        reg_days = np.concatenate(
+            [np.zeros(init, dtype=int), np.sort(rng.choice(n_days, size=total - init, p=inc / inc.sum()))]
+        )
+        # 상권: 비중대로 정확히 나눈 뒤(최대 잔여법) 섞는다 — 상권 비중은 시간에 따라 고정
+        share = np.array([r["share"] for r in regions])
+        quota = share * total
+        counts = np.floor(quota).astype(int)
+        for i in np.argsort(-(quota - counts))[: total - counts.sum()]:
+            counts[i] += 1
+        region_of = rng.permutation(np.repeat(np.arange(len(regions)), counts))
+        # 상권별 부중심 (골목 단위 뭉침)
+        subs: list[list[tuple[float, float, str, float]]] = []
+        for r in regions:
+            if r.get("scatter"):
+                subs.append([(c[0], c[1], r["center_districts"][j], 500.0) for j, c in enumerate(r["centers"])])
+                continue
+            cw = np.array(r.get("center_weights", [1.0] * len(r["centers"])))
+            lst = []
+            for _ in range(int(rng.integers(2, 5))):
+                j = self._choice(cw)
+                c = r["centers"][j]
+                lat = c[0] + rng.normal(0, 250) / 111000
+                lng = c[1] + rng.normal(0, 250) / 88000
+                dist = r["center_districts"][j] if "center_districts" in r else r["district"]
+                lst.append((lat, lng, dist, float(rng.uniform(180, 300))))
+            subs.append(lst)
+        sub_w = [rng.dirichlet(np.ones(len(x)) * 2) for x in subs]
+        genres = nm["genres"]
+        types = nm["venue_types"]
+        used: set[str] = set()
         self.venues: list[Venue] = []
-        pop = rng.permutation(self.s.venue_popularity)
-        for i, name in enumerate(nm["venues"]):
-            v = Venue(
-                venue_id=101 + i,
-                name=name,
-                region=self._choice(self.s.region_share),
-                genre=self._choice(self.s.genre_share),
-                capacity_band=str(rng.choice(nm["capacity_bands"], p=nm["capacity_band_weights"])),
-                weight=float(pop[i]),
+        for i in range(total):
+            ri = int(region_of[i])
+            r = regions[ri]
+            sc = subs[ri][self._choice(sub_w[ri])]
+            lat = sc[0] + rng.normal(0, sc[3]) / 111000
+            lng = sc[1] + rng.normal(0, sc[3]) / 88000
+            district = sc[2]
+            if "split_lng" in r:
+                cut, west, east = r["split_lng"]
+                district = west if lng < cut else east
+            if "split_lat" in r:
+                cut, south, north = r["split_lat"]
+                district = south if lat < cut else north
+            vtype = types[self._choice(np.array(r["type_w"]))]
+            band = nm["capacity_bands"][self._choice(np.array(nm["type_capacity_weights"][vtype]))]
+            while True:
+                if rng.random() < nm["venue_name_en_share"]:
+                    base = f"{rng.choice(nm['venue_name_en_a'])} {rng.choice(nm['venue_name_en_b'])}"
+                    name = f"{base} {nm['venue_type_suffix'][vtype][1]}"
+                else:
+                    base = f"{rng.choice(nm['venue_name_ko_a'])}{rng.choice(nm['venue_name_ko_b'])}"
+                    name = f"{base} {nm['venue_type_suffix'][vtype][0]}"
+                if name not in used:
+                    used.add(name)
+                    break
+            rd = int(reg_days[i])
+            reg_ts = self.day0 + rd * 86400 + (0 if i < init else int(rng.integers(9 * 3600, 20 * 3600)))
+            self.venues.append(
+                Venue(
+                    venue_id=101 + i,
+                    name=name,
+                    region=ri,
+                    district=district,
+                    lat=round(lat, 6),
+                    lng=round(lng, 6),
+                    genre=self._choice(np.array(r["genre_w"])),
+                    venue_type=vtype,
+                    capacity_band=band,
+                    reg_day=rd,
+                    reg_ts=reg_ts,
+                    close_day=10**6,
+                    pop=float(min(rng.pareto(VENUE_PARETO) + 1.0, 60.0)),
+                )
             )
-            self.venues.append(v)
+        n = total
+        reg = np.array([v.reg_day for v in self.venues])
+        closable = np.nonzero(reg < n_days - 60)[0]
+        for i in rng.choice(closable, size=int(round(total * VENUE_CLOSE_SHARE)), replace=False):
+            v = self.venues[int(i)]
+            v.close_day = int(rng.integers(v.reg_day + 60, n_days))
+        close = np.array([v.close_day for v in self.venues])
+        pop = np.array([v.pop for v in self.venues])
+        for v in self.venues:
             self.venue_by_id[v.venue_id] = v
             self.ledger["venues"].append(
                 {
                     "venue_id": v.venue_id,
                     "name": v.name,
-                    "region": nm["regions"][v.region],
-                    "genre": nm["genres"][v.genre],
+                    "region": regions[v.region]["name"],
+                    "district": v.district,
+                    "lat": f"{v.lat:.6f}",
+                    "lng": f"{v.lng:.6f}",
+                    "genre": genres[v.genre],
+                    "venue_type": v.venue_type,
                     "capacity_band": v.capacity_band,
+                    "registered_at": _ts(v.reg_ts),
+                    "status": "closed" if v.close_day < n_days else "active",
                 }
             )
-        vw = np.array([v.weight for v in self.venues])
 
+        # 파트너 계약: 기준 곡선을 따라 신규, 월 해지율(월마다 추첨)로 해지, 폐업 시 종료. 재계약 없음
+        active = np.zeros(n, dtype=bool)
+        ever = np.zeros(n, dtype=bool)
+        open_contract: dict[int, dict[str, Any]] = {}
+        contracts: list[dict[str, Any]] = []
+        self.partner_day = np.zeros((n_days, n), dtype=bool)
+        hazard = 0.0
+        for d in range(n_days):
+            dd = self._day_date(d)
+            if d == 0 or dd.day == 1:
+                nxt = date(dd.year + dd.month // 12, dd.month % 12 + 1, 1)
+                hazard = float(rng.uniform(*CONTRACT_CHURN)) / (nxt - date(dd.year, dd.month, 1)).days
+            for i in np.nonzero(active)[0]:
+                if close[i] <= d or rng.random() < hazard:
+                    active[i] = False
+                    open_contract.pop(int(i))["end_day"] = d
+            need = int(round(self._anchor(PARTNER_ANCHORS, d))) - int(active.sum())
+            if need > 0:
+                elig = np.nonzero(self._visible(reg, d) & (close > d) & ~ever)[0]
+                if len(elig):
+                    w = pop[elig]
+                    pick = rng.choice(elig, size=min(need, len(elig)), replace=False, p=w / w.sum())
+                    for i in sorted(int(x) for x in pick):
+                        plan = "pro" if rng.random() < PLAN_PRO_SHARE else "basic"
+                        c = {"venue_idx": i, "plan": plan, "start_day": d, "end_day": None}
+                        contracts.append(c)
+                        open_contract[i] = c
+                        active[i] = True
+                        ever[i] = True
+            self.partner_day[d] = active
+        contracts.sort(key=lambda c: (c["start_day"], c["venue_idx"]))
+        for k, c in enumerate(contracts, start=1):
+            ended = c["end_day"] is not None
+            self.ledger["contracts"].append(
+                {
+                    "contract_id": f"c{k:05d}",
+                    "venue_id": self.venues[c["venue_idx"]].venue_id,
+                    "plan": c["plan"],
+                    "monthly_fee": PLAN_FEE[c["plan"]],
+                    "started_at": _ts(self.day0 + c["start_day"] * 86400),
+                    "ended_at": _ts(self.day0 + c["end_day"] * 86400) if ended else "",
+                    "status": "ended" if ended else "active",
+                }
+            )
+        # 상세 조회 가중 = 파트너 가중 x 개별 인기 지수, 보이는 공간만 (상권 비중은 공간 수에 이미 반영)
+        self.venue_pop = pop
+        base = pop
+        self.venue_cum = np.zeros((n_days, n))
+        for d in range(n_days):
+            w = base * np.where(self.partner_day[d], PARTNER_VIEW_MULT, 1.0) * (self._visible(reg, d) & (close > d))
+            self.venue_cum[d] = np.cumsum(w)
+        self._reg = reg
+        self._close = close
+
+    def _events_per_week(self, w: int) -> float:
+        for _, a, b, _, _, _, (lo, hi) in PHASES:
+            if a <= w <= b:
+                return (lo + (hi - lo) * (w - a) / max(b - a, 1)) * EVENT_SCALE
+        return PHASES[-1][6][1] * EVENT_SCALE
+
+    def build_catalog(self) -> None:
+        """행사 목록을 만든다. 개최 공간은 등록 공간 목록에서 파트너 75% / 비파트너 25% 로 고른다."""
+        nm = self.s.names
+        rng = self.rng
+        regions = nm["regions"]
+        reg, close = self._reg, self._close
+        tier_w = np.array([t[1] for t in PRICE_TIERS])
         dow_start = np.array([0.03, 0.03, 0.05, 0.12, 0.33, 0.37, 0.07])
         self.events: list[EventItem] = []
         venue_count: dict[int, int] = {}
         eid = 5001
         for w in range(1, self.weeks + 1):
-            per_week = self._phase(w)[4]
-            k = int(rng.integers(per_week - 1, per_week + 2))
+            k = max(1, int(rng.poisson(self._events_per_week(w))))
             for j in range(k):
                 if w == self.weeks and j == 0:
                     d = self.n_days - 1  # 관측 마지막 날에도 신청 가능한 행사를 보장한다
@@ -464,7 +675,16 @@ class Generator:
                 d_date = self._day_date(d)
                 hour = int(rng.choice([20, 21, 22, 23], p=[0.25, 0.3, 0.3, 0.15]))
                 starts = self.day0 + d * 86400 + hour * 3600
-                venue = self.venues[self._choice(vw)]
+                lead = int(rng.integers(10, 29))
+                dp = max(d - lead, 0)
+                elig = self._visible(reg, dp) & (close > d)
+                partner = elig & self.partner_day[d]
+                pool = partner if partner.any() and rng.random() < PARTNER_EVENT_SHARE else elig & ~self.partner_day[d]
+                if not pool.any():
+                    pool = elig
+                cand = np.nonzero(pool)[0]
+                vi = int(cand[self._choice(self.venue_pop[cand] ** HOST_POP_TEMPER)])
+                venue = self.venues[vi]
                 genre = venue.genre if rng.random() < 0.7 else self._choice(self.s.genre_share)
                 etype = str(rng.choice(nm["event_types"], p=nm["event_type_weights"]))
                 venue_count[venue.venue_id] = venue_count.get(venue.venue_id, 0) + 1
@@ -474,17 +694,12 @@ class Generator:
                     n=venue_count[venue.venue_id],
                     season=nm["seasons"][str(d_date.month)],
                     etype=etype,
-                    region=nm["regions"][venue.region],
+                    region=regions[venue.region]["name"],
                 )
-                r = rng.random()
-                paid_share = 1 - self.s.free_share
-                if r < self.s.free_share:
-                    tier, price = "free", 0
-                elif r < self.s.free_share + paid_share * 0.7:
-                    tier, price = "standard", int(rng.integers(15, 26)) * 1000
-                else:
-                    tier, price = "premium", int(rng.integers(8, 13)) * 5000
-                lead = int(rng.integers(10, 29))
+                tier, _, lo, hi, unit, mult = PRICE_TIERS[self._choice(tier_w)]
+                price = int(rng.integers(lo // unit, hi // unit + 1)) * unit if hi else 0
+                c_lo, c_hi = nm["capacity_range"][venue.capacity_band]
+                capacity = int(rng.integers(c_lo // 10, c_hi // 10 + 1)) * 10
                 ev = EventItem(
                     eid,
                     venue.venue_id,
@@ -496,6 +711,9 @@ class Generator:
                     tier,
                     price,
                     float(rng.choice(self.s.event_popularity)) * (1.6 if self._phase(w)[0] == "peak" else 1),
+                    capacity,
+                    bool(self.partner_day[d, vi]),
+                    mult,
                 )
                 self.events.append(ev)
                 self.ledger["events_master"].append(
@@ -507,20 +725,32 @@ class Generator:
                         "starts_at": _ts(ev.starts_at),
                         "price_tier": tier,
                         "price": price,
+                        "capacity": capacity,
+                        "is_partner_venue": str(ev.is_partner).lower(),
                     }
                 )
                 eid += 1
-        # 날짜별 노출 중인 행사 목록 (공개 ~ 시작 시각)
+        # 날짜별 노출 중인 행사 목록 (공개 ~ 시작 시각)과 선택용 배열
         self.listed: list[np.ndarray] = []
+        self.listed_w: list[np.ndarray] = []
+        self.listed_genre: list[np.ndarray] = []
+        self.listed_start: list[np.ndarray] = []
+        self.listed_venue: list[np.ndarray] = []
         starts_arr = np.array([e.starts_at for e in self.events])
         pub_arr = np.array([e.publish_at for e in self.events])
+        w_arr = np.array([e.weight for e in self.events])
+        g_arr = np.array([e.genre for e in self.events])
+        v_arr = np.array([e.venue_id for e in self.events])
         for d in range(self.n_days):
             t = self.day0 + d * 86400 + 43200
             ids = np.nonzero((pub_arr <= t) & (starts_arr > t - 43200))[0]
             if len(ids) == 0:
                 ids = np.argsort(np.abs(starts_arr - t))[:3]
             self.listed.append(ids)
-        self.venue_weights = vw / vw.sum()
+            self.listed_w.append(w_arr[ids])
+            self.listed_genre.append(g_arr[ids])
+            self.listed_start.append(starts_arr[ids])
+            self.listed_venue.append(v_arr[ids])
 
     # ---- 광고 계획
 
@@ -533,7 +763,12 @@ class Generator:
         for ci, c in enumerate(self.s.names["campaigns"]):
             cpm = float(rng.uniform(5500, 8500))
             session_ratio = float(np.clip(rng.normal(AD_SESSION_RATIO, 0.08), 0.6, 0.9))
-            for d in range((c["start_week"] - 1) * 7, min(c["end_week"] * 7, self.n_days)):
+            if "start_date" in c:
+                first = (date.fromisoformat(c["start_date"]) - self.start_date).days
+                last = (date.fromisoformat(c["end_date"]) - self.start_date).days + 1
+            else:
+                first, last = (c["start_week"] - 1) * 7, c["end_week"] * 7
+            for d in range(max(first, 0), min(last, self.n_days)):
                 dow_mult = 1.15 if self._dow(d) >= 4 else 0.95
                 budget = c["daily_budget"] * AD_BUDGET_SCALE * float(rng.uniform(0.85, 1.15)) * dow_mult
                 imp = int(budget / cpm * 1000)
@@ -541,7 +776,7 @@ class Generator:
                 other = int(
                     rng.binomial(imp, max(ar["ctr_clicks_per_impression"] - ar["link_click_rate_per_impression"], 0))
                 )
-                spend = int(round(budget))
+                spend = int(round(budget * AD_SPEND_SCALE))
                 exp_sessions = (link + other) * session_ratio
                 self.ad_sessions[d] += exp_sessions
                 self.ad_campaign_of_day[d].append((ci, exp_sessions))
@@ -662,6 +897,54 @@ class Generator:
         target = self.ad_sessions * (1 - PAID_NEW_SHARE)
         self.paid_return_p = np.minimum(0.5, target / np.maximum(returning, 1))
 
+    def plan_subscriptions(self) -> None:
+        """구독 시작·해지 예정일을 사람별로 정한다 (회원만, 출시일 이후 방문일에).
+
+        활성 구독자가 기준 곡선을 따르도록 날마다 부족분을 그날 방문하는 비구독 회원 중에서 뽑는다.
+        해지는 결제 회차마다 SUB_HAZARD 로 결심하고, 그 회차 구간 안의 첫 방문(없으면 이후 첫 방문)에서
+        일어난다. 이후 방문이 없으면 해지하지 않고 결제가 이어진다.
+        """
+        rng = self.rng
+        n_days = self.n_days
+        launch = self.sub_launch_day
+        if launch >= n_days:
+            return
+        member_day: dict[int, int] = {}
+        for p in self.people:
+            days = self.visit_days[p.pid]
+            if p.will_signup and len(days) >= p.signup_visit:
+                member_day[p.pid] = days[p.signup_visit - 1]
+        visitors: list[list[int]] = [[] for _ in range(n_days)]
+        for pid, md in member_day.items():
+            for d in self.visit_days[pid]:
+                if d > md and d >= launch:
+                    visitors[d].append(pid)
+        xs = [launch] + [w * 7 - 1 for w, _ in SUB_ANCHORS]
+        ys = [0] + [v for _, v in SUB_ANCHORS]
+        ends = np.zeros(n_days + 1, dtype=int)
+        taken: set[int] = set()
+        active = 0
+        for d in range(launch, n_days):
+            active -= int(ends[d])
+            gap = float(np.interp(d + 1, xs, ys)) - active
+            k = int(rng.poisson(gap)) if gap > 0 else 0
+            cand = [pid for pid in visitors[d] if pid not in taken]
+            if k == 0 or not cand:
+                continue
+            w = np.array([SUB_CORE_WEIGHT if self.core[pid] else 1.0 for pid in cand])
+            pick = rng.choice(len(cand), size=min(k, len(cand)), replace=False, p=w / w.sum())
+            for j in sorted(int(x) for x in pick):
+                pid = cand[j]
+                taken.add(pid)
+                active += 1
+                cycles = int(rng.geometric(SUB_HAZARD))
+                win = (_add_months(self._day_date(d), cycles - 1) - self.start_date).days
+                later = [v for v in self.visit_days[pid] if v > d and v >= win]
+                cancel = later[0] if later else None
+                if cancel is not None:
+                    ends[cancel] += 1
+                self.people[pid].sub_plan = (d, cancel)
+
     def _new_device(self, platform: str, d: int) -> Device:
         cat = "desktop" if platform == "desktop" else "mobile"
         os_name = {"ios": "iOS", "android": "Android"}.get(platform) or str(
@@ -684,7 +967,9 @@ class Generator:
         with open(out_events, "wb") as raw, gzip.GzipFile(filename="", mode="wb", fileobj=raw, mtime=0) as gz:
             for p in self.people:
                 sessions = self._plan_sessions(p, auto_share)
-                for kind, start, dev_i, channel in sessions:
+                for j, (kind, start, dev_i, channel) in enumerate(sessions):
+                    # 같은 사람의 다음 세션 시작 전에 끝나게 한다 (구독 상태 등 사람 상태가 시각 순서를 지키도록)
+                    self.end_cap = sessions[j + 1][1] - 1 if j + 1 < len(sessions) else self.range_end
                     rows = (
                         self._auto_session(p, dev_i, start)
                         if kind == "auto"
@@ -745,19 +1030,20 @@ class Generator:
 
     def _pick_event(self, t: int, p: Person) -> EventItem:
         d = min(max((t - self.day0) // 86400, 0), self.n_days - 1)
-        ids = self.listed[d]
-        w = np.array(
-            [
-                self.events[i].weight
-                * (2.0 if self.events[i].genre in p.genres else 1.0)
-                * (1.0 + 2.0 * math.exp(-max(self.events[i].starts_at - t, 0) / (5 * 86400)))
-                for i in ids
-            ]
+        if p.genre_mask is None:
+            p.genre_mask = np.ones(len(self.s.names["genres"]))
+            p.genre_mask[p.genres] = 2.0
+        w = (
+            self.listed_w[d]
+            * p.genre_mask[self.listed_genre[d]]
+            * (1.0 + 2.0 * np.exp(-np.maximum(self.listed_start[d] - t, 0) / (5 * 86400)))
         )
-        return self.events[int(ids[self._choice(w)])]
+        return self.events[int(self.listed[d][self._choice(w)])]
 
-    def _pick_venue(self) -> Venue:
-        return self.venues[self._choice(self.venue_weights)]
+    def _pick_venue(self, d: int) -> Venue:
+        c = self.venue_cum[min(max(d, 0), self.n_days - 1)]
+        i = min(int(np.searchsorted(c, self.rng.random() * c[-1], side="right")), len(c) - 1)
+        return self.venues[i]
 
     def _session(self, p: Person, dev_i: int, start: int, channel: tuple) -> list[dict[str, Any]]:
         """방문 세션 1개의 이벤트 행을 만든다. 신청·결제·취소·가입 원장도 여기서 함께 쓴다."""
@@ -772,6 +1058,7 @@ class Generator:
         dev = p.devices[dev_i]
         dev.session_number += 1
         start_user = dev.user_id
+        start_sub = p.sub_active
         first_session = dev.session_number == 1
         visit_no = len([x for x in self.visit_days[p.pid] if x <= d])
         signup_now = p.will_signup and p.member_id is None and visit_no >= p.signup_visit
@@ -800,7 +1087,7 @@ class Generator:
             if ev is not None and rng.random() < 0.7:
                 v = self.venue_by_id[ev.venue_id]
             else:
-                v = self._pick_venue()
+                v = self._pick_venue(d)
             ctx["venue"] = v
             screen("venue_detail", venue=v)
 
@@ -856,13 +1143,13 @@ class Generator:
         elif landing == "venue_detail":
             view_venue()
         elif landing == "search_result":
-            steps.append(("search", {"term": self._search_term()}))
+            steps.append(("search", {"term": self._search_term(d)}))
             screen("search_result")
         elif landing == "event_apply":
             ctx["event"] = self._pick_event(start, p)
             screen("event_apply", event=ctx["event"])
         elif landing == "venue_review":
-            ctx["venue"] = self._pick_venue()
+            ctx["venue"] = self._pick_venue(d)
             screen("venue_review", venue=ctx["venue"])
         else:
             screen(landing)
@@ -870,6 +1157,44 @@ class Generator:
             land_step = next(a for e, a in steps if e == "screen_view")
             do_login()
             steps.append(("screen_view", dict(land_step)))
+
+        # 구독: 예정일 이후 첫 로그인 세션에서 구독·해지, 그 밖에는 구독 안내 조회만
+        if d >= self.sub_launch_day:
+            plan = p.sub_plan
+            if plan and p.member_id and user_id and p.sub_id is None and d >= plan[0]:
+                screen("subscribe")
+                steps.append(("subscribe_view", {"screen": "subscribe"}))
+                self.sub_seq += 1
+                sid = f"sub{self.sub_seq:05d}"
+                rec = {"subscription_id": sid, "end_ts": None}
+                self.sub_recs[sid] = rec
+                p.sub_id, p.sub_active = sid, True
+                steps.append(
+                    (
+                        "subscribe",
+                        {"screen": "subscribe", "sub_id": sid, "order_id": f"{sid}-01", "sub_rec": rec, "sub_on": True},
+                    )
+                )
+                cur = "home"
+            elif plan and p.sub_active and plan[1] is not None and user_id and d >= plan[1]:
+                screen("subscribe")
+                p.sub_active, p.sub_canceled = False, True
+                steps.append(
+                    (
+                        "subscription_cancel",
+                        {
+                            "screen": "subscribe",
+                            "sub_id": p.sub_id,
+                            "sub_rec": self.sub_recs[p.sub_id],
+                            "sub_on": False,
+                        },
+                    )
+                )
+                cur = "home"
+            elif not p.sub_active and rng.random() < SUB_VIEW_P[1 if user_id else 0]:
+                screen("subscribe")
+                steps.append(("subscribe_view", {"screen": "subscribe"}))
+                cur = "home"
 
         def promotion(p_view: float) -> bool:
             if rng.random() >= p_view:
@@ -900,6 +1225,7 @@ class Generator:
                                 "event": app["ev"],
                                 "order_id": app["order_id"],
                                 "value": app["refund"],
+                                "ledger_app": app,
                             },
                         )
                     )
@@ -918,24 +1244,25 @@ class Generator:
             bounce = 0.0
             targets, probs = s.chain[cur]
             nxt = targets[self._choice(probs)]
+            if cur == "event_detail" and user_id is not None and rng.random() < MEMBER_APPLY_NUDGE:
+                nxt = "event_apply"
             if nxt == END:
                 break
             if nxt == "event_detail":
                 ev_keep = ctx["event"] if ctx["event"] is not None and rng.random() < 0.3 else None
                 if cur == "venue_detail" and ctx["venue"] is not None and rng.random() < 0.5:
-                    vid = ctx["venue"].venue_id
-                    at_venue = [e for e in (self.events[i] for i in self.listed[d]) if e.venue_id == vid]
-                    if at_venue:
-                        ev_keep = at_venue[int(rng.integers(len(at_venue)))]
+                    at_venue = self.listed[d][self.listed_venue[d] == ctx["venue"].venue_id]
+                    if len(at_venue):
+                        ev_keep = self.events[int(at_venue[int(rng.integers(len(at_venue)))])]
                 view_event(ev_keep)
             elif nxt == "venue_detail":
                 view_venue()
             elif nxt == "venue_review":
                 if ctx["venue"] is None:
-                    ctx["venue"] = self._pick_venue()
+                    ctx["venue"] = self._pick_venue(d)
                 screen("venue_review", venue=ctx["venue"])
             elif nxt == "search_result":
-                steps.append(("search", {"term": self._search_term()}))
+                steps.append(("search", {"term": self._search_term(d)}))
                 screen("search_result")
             elif nxt == "event_apply":
                 ev = ctx["event"] or self._pick_event(start, p)
@@ -959,7 +1286,8 @@ class Generator:
                     not applied_in_session
                     and ev.event_id not in p.applied_events
                     and ev.starts_at > start
-                    and rng.random() < min(0.95, s.funnel["applied"] * conv * APPLY_MULT)
+                    and ev.seats < ev.capacity
+                    and rng.random() < min(0.95, s.funnel["applied"] * conv * APPLY_MULT * ev.apply_mult)
                 ):
                     self._apply(p, ev, steps, start)
                     applied_in_session = True
@@ -977,18 +1305,18 @@ class Generator:
             do_signup()
             screen("home")
 
-        return self._emit(p, dev, start, channel, steps, is_paid, start_user)
+        return self._emit(p, dev, start, channel, steps, is_paid, start_user, start_sub)
 
-    def _search_term(self) -> str:
+    def _search_term(self, d: int) -> str:
         nm = self.s.names
         r = self.rng.random()
         if r < 0.4:
             return str(self.rng.choice(nm["genres"], p=self.s.genre_share))
         if r < 0.65:
-            return str(self.rng.choice(nm["regions"], p=self.s.region_share))
+            return str(nm["regions"][self._choice(self.s.region_share)]["name"])
         if r < 0.8:
             return str(self.rng.choice(nm["event_types"]))
-        return self._pick_venue().name.split(" ")[0]
+        return self._pick_venue(d).name.split(" ")[0]
 
     def _apply(self, p: Person, ev: EventItem, steps: list, start: int) -> None:
         """신청(+결제) 단계를 steps 에 넣는다. 원장 행은 _emit 에서 시각이 정해진 뒤 쓴다."""
@@ -1007,8 +1335,9 @@ class Generator:
             steps.append(("screen_view", {"screen": "payment_confirm", "event": ev}))
             if rng.random() < PAY_SUCCESS:
                 method = str(rng.choice(self.s.names["payment_methods"], p=self.s.names["payment_method_weights"]))
+                discount = int(round(ev.price * SUB_DISCOUNT)) if p.sub_active and ev.is_partner else 0
                 app["status"] = "paid"
-                app["refund"] = ev.price
+                app["refund"] = ev.price - discount
                 steps.append(
                     (
                         "purchase",
@@ -1016,7 +1345,8 @@ class Generator:
                             "screen": "payment_confirm",
                             "event": ev,
                             "order_id": oid,
-                            "value": ev.price,
+                            "value": ev.price - discount,
+                            "discount": discount,
                             "method": method,
                             "ledger_pay": app,
                         },
@@ -1027,6 +1357,7 @@ class Generator:
                 app["status"] = "payment_pending"
         if app["status"] != "payment_pending":
             p.open_apps.append(app)
+            ev.seats += 1
 
     def _cancel(self, app: dict[str, Any], t: int) -> None:
         app["cancel_pending"] = t
@@ -1036,7 +1367,15 @@ class Generator:
         dev.session_number += 1
         steps = [("session_start", {}), ("screen_view", {"screen": "home"})]
         return self._emit(
-            p, dev, start, ("(direct)", "(none)", "(direct)", "(not set)"), steps, False, dev.user_id, auto=True
+            p,
+            dev,
+            start,
+            ("(direct)", "(none)", "(direct)", "(not set)"),
+            steps,
+            False,
+            dev.user_id,
+            p.sub_active,
+            auto=True,
         )
 
     # ---- 행 직렬화
@@ -1051,6 +1390,7 @@ class Generator:
             "search_main": ("/search", "검색 | NightPulse"),
             "search_result": ("/search/results", "검색 결과 | NightPulse"),
             "login": ("/login", "로그인 | NightPulse"),
+            "subscribe": ("/subscribe", "구독 | NightPulse"),
             "taste_setup": ("/taste", "취향 설정 | NightPulse"),
         }
         if screen in paths:
@@ -1080,6 +1420,7 @@ class Generator:
         steps: list,
         is_paid: bool,
         start_user: str | None,
+        start_sub: bool,
         auto: bool = False,
     ) -> list[dict[str, Any]]:
         """steps 를 시각·체류·세션 속성이 붙은 이벤트 행으로 바꾸고 원장 행을 쓴다."""
@@ -1097,9 +1438,10 @@ class Generator:
             )
             if is_paid:
                 eng_ms = int(eng_ms * 0.6)
-        if start + span_s >= self.range_end:
-            # 세션 시작 시각(따라서 시(hour))은 유지하고 길이만 줄여 관측 마지막 날 경계 밖으로 새지 않게 한다
-            span_s = max(1.0, self.range_end - start - 2)
+        end_cap = min(self.range_end, self.end_cap)
+        if start + span_s >= end_cap:
+            # 시작 시각(따라서 시)은 유지하고 길이만 줄여 관측 끝이나 다음 세션 시작을 넘지 않게 한다
+            span_s = max(1.0, end_cap - start - 2)
             eng_ms = min(eng_ms, int(span_s * 1000))
         # 시각: 랜딩까지는 거의 동시, 이후는 구간 안 정렬 균등
         head = 0
@@ -1131,9 +1473,14 @@ class Generator:
         src, med, camp, content = channel
         first_ch = "paid" if p.first_channel[1] == "paid_social" else "non_paid"
         uprops = [
-            {"key": "first_channel", "string_value": first_ch},
-            {"key": "device_platform", "string_value": dev.platform},
+            [
+                {"key": "first_channel", "string_value": first_ch},
+                {"key": "device_platform", "string_value": dev.platform},
+                {"key": "subscriber", "string_value": flag},
+            ]
+            for flag in ("0", "1")
         ]
+        sub_on = start_sub
         rows: list[dict[str, Any]] = []
         user_id = start_user
         cur_screen = "home"
@@ -1141,6 +1488,8 @@ class Generator:
         for i, (e, a) in enumerate(steps):
             if "set_user" in a:
                 user_id = a["set_user"]
+            if "sub_on" in a:
+                sub_on = a["sub_on"]
             if e == "screen_view":
                 cur_screen = a["screen"]
                 cur_kw = a
@@ -1157,6 +1506,9 @@ class Generator:
             vn: Venue | None = a.get("venue")
             if vn is not None and e != "page_view":
                 params.append(_ip("venue_id", vn.venue_id))
+                if e == "screen_view" and cur_screen == "venue_detail":
+                    dv = min((ts[i] // 1_000_000 - self.day0) // 86400, self.n_days - 1)
+                    params.append(_sp("is_partner", "1" if self.partner_day[dv, vn.venue_id - 101] else "0"))
             if e == "search":
                 params.append(_sp("search_term", a["term"]))
             if e in ("view_promotion", "select_promotion"):
@@ -1173,6 +1525,13 @@ class Generator:
                 params.append(_sp("price_tier", ev.price_tier))
             if e == "purchase":
                 params.append(_sp("payment_method", a["method"]))
+            if e == "subscribe":
+                params.append(_sp("order_id", a["order_id"]))
+                params.append(_sp("subscription_id", a["sub_id"]))
+                params.append(_ip("value", SUB_PRICE))
+                params.append(_sp("currency", "KRW"))
+            if e == "subscription_cancel":
+                params.append(_sp("subscription_id", a["sub_id"]))
             t_us = ts[i]
             rows.append(
                 {
@@ -1190,7 +1549,7 @@ class Generator:
                     "device_category": dev.category,
                     "operating_system": dev.os,
                     "traffic_source": {"source": src, "medium": med, "campaign": camp, "content": content},
-                    "user_properties": uprops,
+                    "user_properties": uprops[1 if sub_on else 0],
                     "event_params": params,
                 }
             )
@@ -1204,7 +1563,12 @@ class Generator:
                 self.ledger["payments"].append(
                     {
                         "order_id": a["order_id"],
+                        "member_id": user_id,
+                        "kind": "ticket",
+                        "event_id": ev.event_id,
+                        "subscription_id": "",
                         "amount": int(a["value"]),
+                        "discount_amount": a["discount"],
                         "paid_at": _ts(t_us // 1_000_000),
                         "status": "paid",
                         "method": a["method"],
@@ -1212,14 +1576,20 @@ class Generator:
                     }
                 )
             elif e == "cancel_apply":
-                app = next(x for x in self.ledger["applications"] if x["order_id"] == a["order_id"])
-                app["canceled_ts"] = t_us // 1_000_000
+                a["ledger_app"]["canceled_ts"] = t_us // 1_000_000
+            elif e == "subscribe":
+                rec = a["sub_rec"]
+                rec.update(member_id=user_id, start_ts=t_us // 1_000_000)
+                rec["method"] = str(rng.choice(["card", "easy_pay"], p=[0.6, 0.4]))
+                self.ledger["subscriptions"].append(rec)
+            elif e == "subscription_cancel":
+                a["sub_rec"]["end_ts"] = t_us // 1_000_000
             elif e == "sign_up":
                 self.ledger["members"].append(
                     {
                         "member_id": user_id,
                         "signed_up_at": _ts(t_us // 1_000_000),
-                        "region": self.s.names["regions"][p.region],
+                        "region": self.s.names["regions"][p.region]["name"],
                         "genre_tags": "|".join(self.s.names["genres"][g] for g in p.genres),
                         "marketing_opt_in": str(p.marketing_opt_in).lower(),
                     }
@@ -1229,7 +1599,7 @@ class Generator:
     # ---- 원장 마감
 
     def finalize_ledgers(self) -> None:
-        """신청·결제 원장의 최종 상태(취소 반영)를 확정한다."""
+        """신청·결제·구독 원장의 최종 상태(취소·해지 반영, 구독 반복 결제)를 확정한다."""
         apps = []
         for app in self.ledger["applications"]:
             canceled = "canceled_ts" in app
@@ -1251,7 +1621,43 @@ class Generator:
             if "canceled_ts" in app:
                 pay["status"] = "refunded"
             pays.append(pay)
+        # 구독: 시작 시각 기준 매월 반복 결제, 해지 시각 이후·관측 끝 이후는 청구하지 않는다
+        subs = []
+        for rec in self.ledger["subscriptions"]:
+            start = datetime.fromtimestamp(rec["start_ts"], KST)
+            end_ts = rec["end_ts"]
+            k = 0
+            while True:
+                t = int(_add_months(start, k).timestamp())
+                if t >= self.range_end or (end_ts is not None and t >= end_ts):
+                    break
+                pays.append(
+                    {
+                        "order_id": f"{rec['subscription_id']}-{k + 1:02d}",
+                        "member_id": rec["member_id"],
+                        "kind": "subscription",
+                        "event_id": "",
+                        "subscription_id": rec["subscription_id"],
+                        "amount": SUB_PRICE,
+                        "discount_amount": 0,
+                        "paid_at": _ts(t),
+                        "status": "paid",
+                        "method": rec["method"],
+                    }
+                )
+                k += 1
+            subs.append(
+                {
+                    "subscription_id": rec["subscription_id"],
+                    "member_id": rec["member_id"],
+                    "started_at": _ts(rec["start_ts"]),
+                    "ended_at": _ts(end_ts) if end_ts is not None else "",
+                    "status": "canceled" if end_ts is not None else "active",
+                    "price": SUB_PRICE,
+                }
+            )
         self.ledger["payments"] = pays
+        self.ledger["subscriptions"] = subs
 
 
 # ---------------------------------------------------------------- 유틸
@@ -1259,6 +1665,15 @@ class Generator:
 
 def _ts(epoch: int) -> str:
     return datetime.fromtimestamp(epoch, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _add_months(t: Any, k: int) -> Any:
+    """date 또는 datetime 에 k 개월을 더한다. 말일을 넘는 날은 그 달 말일로 맞춘다."""
+    m = t.month - 1 + k
+    y, m = t.year + m // 12, m % 12 + 1
+    nxt = date(y + m // 12, m % 12 + 1, 1)
+    last = (nxt - date(y, m, 1)).days
+    return t.replace(year=y, month=m, day=min(t.day, last))
 
 
 def _sp(key: str, value: str) -> dict[str, Any]:
@@ -1279,25 +1694,62 @@ def _band(n: int, probs: np.ndarray, vals: np.ndarray) -> tuple[float, float]:
 OUTPUT_FILES = {
     "members": "db_members",
     "venues": "db_venues",
+    "contracts": "db_venue_contracts",
     "events_master": "db_events",
     "applications": "db_applications",
     "payments": "db_payments",
+    "subscriptions": "db_subscriptions",
     "ad_spend": "ads_spend",
 }
 EVENTS_FILE = "ga4_events.ndjson.gz"
 
 LEDGER_COLUMNS = {
     "members": ["member_id", "signed_up_at", "region", "genre_tags", "marketing_opt_in"],
-    "venues": ["venue_id", "name", "region", "genre", "capacity_band"],
-    "events_master": ["event_id", "venue_id", "name", "event_type", "starts_at", "price_tier", "price"],
+    "venues": [
+        "venue_id",
+        "name",
+        "region",
+        "district",
+        "lat",
+        "lng",
+        "genre",
+        "venue_type",
+        "capacity_band",
+        "registered_at",
+        "status",
+    ],
+    "contracts": ["contract_id", "venue_id", "plan", "monthly_fee", "started_at", "ended_at", "status"],
+    "events_master": [
+        "event_id",
+        "venue_id",
+        "name",
+        "event_type",
+        "starts_at",
+        "price_tier",
+        "price",
+        "capacity",
+        "is_partner_venue",
+    ],
     "applications": ["order_id", "event_id", "member_id", "applied_at", "status", "cancel_at", "cancel_amount"],
-    "payments": ["order_id", "amount", "paid_at", "status", "method"],
+    "payments": [
+        "order_id",
+        "member_id",
+        "kind",
+        "event_id",
+        "subscription_id",
+        "amount",
+        "discount_amount",
+        "paid_at",
+        "status",
+        "method",
+    ],
+    "subscriptions": ["subscription_id", "member_id", "started_at", "ended_at", "status", "price"],
     "ad_spend": ["date", "campaign_id", "campaign_name", "spend", "impressions", "clicks"],
 }
 
 
 def write_ledgers(g: Generator, raw_dir: Path) -> None:
-    """원장 6종을 CSV 로 쓴다. 서비스 RDB 스냅샷(db_*)에는 snapshot_date 열을 붙인다.
+    """원장 8종을 CSV 로 쓴다. 서비스 RDB 스냅샷(db_*)에는 snapshot_date 열을 붙인다.
 
     Args:
         g: 실행이 끝난 생성기.
@@ -1306,7 +1758,7 @@ def write_ledgers(g: Generator, raw_dir: Path) -> None:
     snapshot = g.end_date.isoformat()
     for name, cols in LEDGER_COLUMNS.items():
         rows = g.ledger[name]
-        if name in ("members", "applications", "payments"):
+        if name in ("members", "applications", "payments", "subscriptions"):
             rows = sorted(rows, key=lambda r: r[cols[0]])
         out_name = OUTPUT_FILES[name]
         is_db = out_name.startswith("db_")
@@ -1365,10 +1817,18 @@ def main() -> None:
     t0 = time.time()
     seed = load_seed()
     g = Generator(seed, args.seed, args.weeks, args.persons, args.end_date)
+    g.build_registry()
     g.build_catalog()
     g.build_ads()
     g.build_people()
-    logger.info("사람 %d명, 행사 %d건, 방문일 %d", len(g.people), len(g.events), sum(map(len, g.visit_days)))
+    g.plan_subscriptions()
+    logger.info(
+        "사람 %d명, 공간 %d곳, 행사 %d건, 방문일 %d",
+        len(g.people),
+        len(g.venues),
+        len(g.events),
+        sum(map(len, g.visit_days)),
+    )
     raw_dir = args.out / "raw"
     g.run(raw_dir / EVENTS_FILE)
     g.finalize_ledgers()

@@ -71,6 +71,7 @@ orders AS (
     SUM(net_amount) AS net_amount
   FROM staging.fct_order
   WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    AND kind = 'ticket'
   GROUP BY 1, 2
 )
 SELECT

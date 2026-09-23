@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-export type TabId = 'overview' | 'funnel' | 'events' | 'members' | 'acquisition' | 'periodic'
+export type TabId = 'overview' | 'funnel' | 'events' | 'members' | 'venues' | 'acquisition' | 'periodic'
 export type Preset = '' | '1' | '7' | '28' | '90' | '365' | 'custom' | 'target'
 
 export interface State {
@@ -22,7 +22,10 @@ export interface State {
   mo: string
   mr: '6' | '12'
   aud: string
-  page: '' | 'about' | 'data'
+  sr: string
+  sg: string
+  sp: 'all' | 'partner' | 'other'
+  page: '' | 'about' | 'data' | 'metrics'
   table: string
 }
 
@@ -45,6 +48,9 @@ export const DEFAULTS: State = {
   mo: '',
   mr: '6',
   aud: 'new,returning,past_payer',
+  sr: 'all',
+  sg: 'all',
+  sp: 'all',
   page: '',
   table: '',
 }

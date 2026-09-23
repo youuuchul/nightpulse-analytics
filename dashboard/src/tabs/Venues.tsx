@@ -58,12 +58,12 @@ export default function Venues({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-3">
-        <Tile label="조회된 공간" value={num(list.length)} unit="곳" wait={w} />
-        <Tile label="신청" value={num(tot.applies)} unit="건" wait={w} />
-        <Tile label="결제" value={num(tot.pay_count)} unit="건" wait={w} />
+        <Tile metricId="E08" label="조회된 공간" value={num(list.length)} unit="곳" wait={w} />
+        <Tile metricId="C11" label="신청" value={num(tot.applies)} unit="건" wait={w} />
+        <Tile metricId="C12" label="결제" value={num(tot.pay_count)} unit="건" wait={w} />
       </TileRow>
       {!range.oneDay && (
-        <Card title="공간 상세 조회 추이" meta={`${grain(trend.weekly)} · 공간별 조회 사람의 합`} wait={w} waitH={220}>
+        <Card title="공간 상세 조회 추이" metricId="E05" meta={`${grain(trend.weekly)} · 공간별 조회 사람의 합`} wait={w} waitH={220}>
           <TimeChart
             data={trend.rows}
             kind="bar"

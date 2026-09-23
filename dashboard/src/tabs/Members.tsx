@@ -8,8 +8,9 @@ import { ready, useTable, waitOf } from '../lib/source'
 import { TimeChart } from '../components/charts'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
 import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
+import Subscription from './Subscription'
 
-export default function Members({ data, s, range }: TabProps) {
+function MemberView({ data, s, range }: TabProps) {
   const seg = segFilter(s)
   const m = useMemo(() => data.daily_metrics.filter(seg), [data, s.ch, s.pf, s.ms])
   const cur = sum(inRange(m, range.from, range.to), ['new_persons', 'signups'])
@@ -102,14 +103,16 @@ export default function Members({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow>
-        <Tile label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} />
+        <Tile metricId="C10" label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} />
         <Tile
+          metricId="C01"
           label="신규 방문자 대비 가입"
           value={pct(conv)}
           sub={`신규 ${num(cur.new_persons)}명 중`}
           delta={ptDelta(data, range, conv, ratio(prev.signups, prev.new_persons))}
         />
         <Tile
+          metricId="V14"
           label="회원 방문자"
           value={num(memCur)}
           unit="명"
@@ -117,6 +120,7 @@ export default function Members({ data, s, range }: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="V15"
           label="방문자 중 회원 비중"
           value={pct(ratio(memCur, vCur.all))}
           sub={`방문자 ${num(vCur.all)}명 중`}
@@ -124,11 +128,13 @@ export default function Members({ data, s, range }: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="R01"
           label={cohort.span ? `W1 리텐션 · ${cohort.span}` : 'W1 리텐션'}
           value={pct(cohort.w1?.rate)}
           sub={cohort.w1 ? `코호트 ${num(cohort.w1.n)}명` : '1주 경과 전'}
         />
         <Tile
+          metricId="R01"
           label={cohort.span4 ? `W4 리텐션 · ${cohort.span4}` : 'W4 리텐션'}
           value={pct(cohort.w4?.rate)}
           sub={cohort.w4 ? `코호트 ${num(cohort.w4.n)}명` : '4주 경과 전'}
@@ -149,7 +155,7 @@ export default function Members({ data, s, range }: TabProps) {
             <TimeChart data={split.rows} kind="stack" tipTitle={weekTip(split.weekly)} series={series} height={260} />
           )}
         </Card>
-        <Card title="리텐션 곡선" meta={cohort.span ? `첫 방문 코호트 ${cohort.span}` : '첫 방문 코호트'}>
+        <Card title="리텐션 곡선" metricId="R01" meta={cohort.span ? `첫 방문 코호트 ${cohort.span}` : '첫 방문 코호트'}>
           {cohort.curve.length > 0 ? (
             <TimeChart
               data={cohort.curve as { week: string; rate: number }[]}
@@ -169,4 +175,9 @@ export default function Members({ data, s, range }: TabProps) {
       </div>
     </div>
   )
+}
+
+export default function Members(p: TabProps) {
+  if (p.s.view === 'subscription') return <Subscription {...p} />
+  return <MemberView {...p} />
 }

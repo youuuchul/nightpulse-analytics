@@ -9,6 +9,8 @@ import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
 import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
 import Venues from './Venues'
+import Revenue from './Revenue'
+import type { DailyEvent } from '../lib/types'
 
 function Flow({ data, s, range }: TabProps) {
   const seg = segFilter(s)
@@ -51,10 +53,11 @@ function Flow({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-5">
-        <Tile label="신청" value={num(cur.applies)} unit="건" delta={delta(data, range, cur.applies, prev.applies)} />
-        <Tile label="결제" value={num(cur.pay_count)} unit="건" delta={delta(data, range, cur.pay_count, prev.pay_count)} />
-        <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} />
+        <Tile metricId="C11" label="신청" value={num(cur.applies)} unit="건" delta={delta(data, range, cur.applies, prev.applies)} />
+        <Tile metricId="C12" label="결제" value={num(cur.pay_count)} unit="건" delta={delta(data, range, cur.pay_count, prev.pay_count)} />
+        <Tile metricId="C13" label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} />
         <Tile
+          metricId="C07"
           label="결제자당 금액"
           value={won(arppu)}
           unit="원"
@@ -63,6 +66,7 @@ function Flow({ data, s, range }: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="C06"
           label="취소율"
           value={pct(cancel)}
           sub={`신청 ${num(cur.applies)}건 중`}
@@ -83,7 +87,7 @@ function Flow({ data, s, range }: TabProps) {
             <TimeChart data={trend.rows} kind="line" tipTitle={weekTip(trend.weekly)} series={series} height={240} />
           )}
         </Card>
-        <Card title="결제 퍼널" wait={pw}>
+        <Card title="결제 퍼널" metricId="C14" wait={pw}>
           <Funnel
             steps={[
               { label: '행사 상세', value: pCur.detail },
@@ -96,6 +100,8 @@ function Flow({ data, s, range }: TabProps) {
     </div>
   )
 }
+
+const NO_EVENTS: DailyEvent[] = []
 
 interface EventRow {
   event_id: number
@@ -111,17 +117,20 @@ interface EventRow {
 }
 
 function EventList({ data, s, range }: TabProps) {
+  const evL = useTable(data, 'daily_event')
+  const ev = ready(evL) ?? NO_EVENTS
+  const ew = waitOf(evL)
   const rows = useMemo(
     () =>
-      inRange(data.daily_event, range.from, range.to).filter(
+      inRange(ev, range.from, range.to).filter(
         (r) => (s.et === 'all' || r.event_type === s.et) && (s.pt === 'all' || r.price_tier === s.pt),
       ),
-    [data, range.from, range.to, s.et, s.pt],
+    [ev, range.from, range.to, s.et, s.pt],
   )
   const keys = ['detail_viewers', 'applies', 'pay_count', 'pay_amount', 'cancels'] as const
   const tot = sum(rows, [...keys])
   const g = groupSum(rows, (r) => String(r.event_id), [...keys])
-  const meta = new Map(data.daily_event.map((r) => [String(r.event_id), r]))
+  const meta = useMemo(() => new Map(ev.map((r) => [String(r.event_id), r])), [ev])
   const list: EventRow[] = [...g.entries()].map(([id, v]) => {
     const x = meta.get(id)!
     return {
@@ -166,13 +175,13 @@ function EventList({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-4">
-        <Tile label="조회된 행사" value={num(list.length)} unit="건" />
-        <Tile label="신청" value={num(tot.applies)} unit="건" />
-        <Tile label="결제 금액" value={won(tot.pay_amount)} unit="원" sub={`결제 ${num(tot.pay_count)}건`} />
-        <Tile label="취소율" value={pct(ratio(tot.cancels, tot.applies))} sub={`신청 ${num(tot.applies)}건 중`} />
+        <Tile metricId="E07" label="조회된 행사" value={num(list.length)} unit="건" wait={ew} />
+        <Tile metricId="C11" label="신청" value={num(tot.applies)} unit="건" wait={ew} />
+        <Tile metricId="C13" label="결제 금액" value={won(tot.pay_amount)} unit="원" sub={`결제 ${num(tot.pay_count)}건`} wait={ew} />
+        <Tile metricId="C06" label="취소율" value={pct(ratio(tot.cancels, tot.applies))} sub={`신청 ${num(tot.applies)}건 중`} wait={ew} />
       </TileRow>
       {!range.oneDay && (
-        <Card title="결제 금액 추이" meta={`${grain(trend.weekly)} · 원`}>
+        <Card title="결제 금액 추이" meta={`${grain(trend.weekly)} · 원`} wait={ew} waitH={220}>
           <TimeChart
             data={trend.rows}
             kind="bar"
@@ -183,7 +192,7 @@ function EventList({ data, s, range }: TabProps) {
           />
         </Card>
       )}
-      <Card title="행사별 성과" meta={`${list.length}건`}>
+      <Card title="행사별 성과" metricId="E04" meta={`${list.length}건`} wait={ew}>
         <DataTable cols={cols} rows={list} sortKey="applies" rowKey={(r) => String(r.event_id)} />
       </Card>
     </div>
@@ -193,5 +202,6 @@ function EventList({ data, s, range }: TabProps) {
 export default function Events(p: TabProps) {
   if (p.s.view === 'event') return <EventList {...p} />
   if (p.s.view === 'venue') return <Venues {...p} />
+  if (p.s.view === 'revenue') return <Revenue {...p} />
   return <Flow {...p} />
 }

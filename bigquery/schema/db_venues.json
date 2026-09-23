@@ -9,25 +9,61 @@
     "name": "name",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "공간명 (가상)"
+    "description": "상호 (가상 조합)"
   },
   {
     "name": "region",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "지역 (가상)"
+    "description": "상권 (서울 나이트라이프 상권 9개 + 기타)"
+  },
+  {
+    "name": "district",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "구"
+  },
+  {
+    "name": "lat",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "위도 (상권 중심·부중심 주변 지터, 가상 위치)"
+  },
+  {
+    "name": "lng",
+    "type": "FLOAT",
+    "mode": "NULLABLE",
+    "description": "경도"
   },
   {
     "name": "genre",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "대표 장르"
+    "description": "대표 장르: 힙합 / 하우스/테크노 / EDM / 라운지/재즈 / K-pop/믹스 / 라이브"
+  },
+  {
+    "name": "venue_type",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "공간 유형: 클럽 / 라운지바 / 펍 / 루프탑 / 라이브홀 / 파티룸"
   },
   {
     "name": "capacity_band",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "수용 규모 S/M/L"
+    "description": "수용 규모 S(~80) / M(~200) / L(~500) / XL(500+)"
+  },
+  {
+    "name": "registered_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "등록 시각 (UTC). 런칭일 초기 일괄 등록은 런칭일 00:00 KST. 서비스 노출은 등록 다음 날부터(초기 일괄은 당일)"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "active / closed (폐업)"
   },
   {
     "name": "snapshot_date",

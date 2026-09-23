@@ -2,6 +2,7 @@
 //   npm run build && npm run capture            탭 6개 × 라이트
 //   npm run capture -- --all                    + 보기 전환·1일·다크·폰 폭·데이터 페이지
 //   NP_CATALOG=/tmp/catalog.json npm run capture -- --all   catalog.json 을 이 파일로 대체해 찍는다
+//   NP_DATA=/tmp/np_v2/data npm run capture -- --all        dist/data/ 요청을 이 폴더 파일로 대체해 찍는다(샘플 데이터)
 import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { chromium } from 'playwright'
@@ -12,6 +13,8 @@ const OUT = new URL('../captures/', import.meta.url).pathname
 const all = process.argv.includes('--all')
 const catalogFile = process.env.NP_CATALOG
 if (catalogFile && !existsSync(catalogFile)) throw new Error(`NP_CATALOG 파일 없음: ${catalogFile}`)
+const dataDir = process.env.NP_DATA
+if (dataDir && !existsSync(`${dataDir}/index.json`)) throw new Error(`NP_DATA 에 index.json 없음: ${dataDir}`)
 
 const tabs = [
   ['01_overview', 'tab=overview'],
@@ -20,6 +23,7 @@ const tabs = [
   ['04_members', 'tab=members'],
   ['05_acquisition', 'tab=acquisition'],
   ['06_periodic', 'tab=periodic'],
+  ['61_venues', 'tab=venues'],
 ]
 const extras = [
   ['07_events_venue', 'tab=events&view=venue'],
@@ -35,6 +39,13 @@ const extras = [
   ['50_overview_90', 'tab=overview&p=90'],
   ['51_overview_1year', 'tab=overview&p=365'],
   ['52_overview_7_member_ios', 'tab=overview&p=7&ms=member&pf=ios'],
+  ['62_members_subscription', 'tab=members&view=subscription&p=90'],
+  ['63_events_revenue_1year', 'tab=events&view=revenue&p=365'],
+  ['64_events_revenue_28', 'tab=events&view=revenue'],
+  ['65_metrics', 'page=metrics'],
+  ['66_venues_region_1year', `tab=venues&p=365&sr=${encodeURIComponent('홍대·합정·연남')}`],
+  ['67_venues_partner_genre', `tab=venues&sp=partner&sg=${encodeURIComponent('힙합')}`],
+  ['68_overview_1year', 'tab=overview&p=365'],
 ]
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' })
@@ -65,6 +76,13 @@ try {
     if (opts.noCatalog) await page.route('**/catalog.json', (route) => route.fulfill({ status: 404, body: '' }))
     else if (catalogFile)
       await page.route('**/catalog.json', (route) => route.fulfill({ json: JSON.parse(readFileSync(catalogFile, 'utf8')) }))
+    if (dataDir)
+      await page.route('**/data/*', (route) => {
+        const name = new URL(route.request().url()).pathname.split('/').pop()
+        const file = `${dataDir}/${name}`
+        if (!existsSync(file)) return route.fulfill({ status: 404, body: '' })
+        return route.fulfill({ body: readFileSync(file), contentType: name.endsWith('.bin') ? 'application/octet-stream' : 'application/json' })
+      })
     if (opts.strip)
       await page.route('**/data/index.json', async (route) => {
         const body = await (await route.fetch()).json()
@@ -87,6 +105,10 @@ try {
       await page.waitForTimeout(400)
       console.log(`  드릴다운 → ${new URL(page.url()).search}`)
     }
+    if (opts.help) {
+      await page.locator(`button[aria-label="${opts.help} 정의"]`).first().click()
+      await page.waitForTimeout(200)
+    }
     const file = `${OUT}${name}.png`
     if (opts.section) {
       const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.section}")`) })
@@ -96,8 +118,9 @@ try {
       }
       if (opts.hover != null) {
         await card.scrollIntoViewIfNeeded()
-        const box = await card.locator('.recharts-wrapper').boundingBox()
-        await page.mouse.move(box.x + box.width * opts.hover, box.y + box.height * 0.5)
+        const box = await card.locator(opts.hoverSel ?? '.recharts-wrapper').first().boundingBox()
+        const [hx, hy] = Array.isArray(opts.hover) ? opts.hover : [opts.hover, 0.5]
+        await page.mouse.move(box.x + box.width * hx, box.y + box.height * hy)
         await page.waitForTimeout(200)
       }
       await card.screenshot({ path: file })
@@ -136,6 +159,15 @@ try {
     await shoot('59_overview_drill_week', 'tab=overview&p=90', { drill: '방문자' })
     await shoot('60_overview_1day_dark', 'tab=overview&p=1', { scheme: 'dark' })
     await shoot('47_header_tablet', 'tab=funnel', { viewport: { width: 768, height: 400 }, clip: true })
+    await shoot('69_venues_map_hover', 'tab=venues', { section: '서울 분포', hover: [0.39, 0.52], hoverSel: 'svg[role=img]' })
+    await shoot('70_venues_dark', 'tab=venues', { scheme: 'dark' })
+    await shoot('71_venues_phone', 'tab=venues', { viewport: { width: 390, height: 844 }, scale: 2 })
+    await shoot('72_metrics_phone', 'page=metrics', { viewport: { width: 390, height: 844 }, scale: 2, wait: 'main section' })
+    await shoot('73_metrics_dark', 'page=metrics', { scheme: 'dark', wait: 'main section' })
+    await shoot('74_overview_help', 'tab=overview', { help: '총 매출', clip: true })
+    await shoot('75_overview_revenue_hover', 'tab=overview&p=365', { section: '매출 구성', hover: 0.8 })
+    await shoot('76_members_subscription_dark', 'tab=members&view=subscription&p=365', { scheme: 'dark' })
+    await shoot('77_header_phone_metrics', 'page=metrics', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
   }
   await browser.close()
 } finally {

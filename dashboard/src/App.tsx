@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType } from 'react'
+import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react'
 import { campaignSpans, resolveRange } from './lib/agg'
 import { md } from './lib/date'
 import { type State, type TabId, toHref, useUrlState } from './lib/state'
@@ -10,6 +10,8 @@ import Overview from './tabs/Overview'
 import FunnelTab from './tabs/FunnelTab'
 import About from './About'
 import DataPage from './DataPage'
+import MetricsPage from './MetricsPage'
+import Spaces from './tabs/Spaces'
 import Header, { goPage } from './components/Header'
 import Events from './tabs/Events'
 import Members from './tabs/Members'
@@ -36,9 +38,19 @@ const TABS: TabDef[] = [
       { value: 'flow', label: '흐름' },
       { value: 'event', label: '행사별' },
       { value: 'venue', label: '공간별' },
+      { value: 'revenue', label: '매출 구성' },
     ],
   },
-  { id: 'members', label: '회원', el: Members },
+  {
+    id: 'members',
+    label: '회원',
+    el: Members,
+    views: [
+      { value: 'member', label: '회원' },
+      { value: 'subscription', label: '구독' },
+    ],
+  },
+  { id: 'venues', label: '공간', el: Spaces },
   {
     id: 'acquisition',
     label: '유입·광고',
@@ -112,6 +124,7 @@ export default function App() {
   const st: State = { ...s, tab: tab.id, view, p }
   const range = useMemo(() => (data ? resolveRange(st, data) : null), [data, st.p, st.d, st.from, st.to, st.camp])
   const venues = ready(useTable(data, 'daily_venue', tab.id === 'events' && view === 'venue')) ?? []
+  const events = ready(useTable(data, 'daily_event', tab.id === 'events' && view === 'event')) ?? []
 
   const go = (patch: Partial<State>) => {
     const next = { ...st, ...patch }
@@ -126,7 +139,18 @@ export default function App() {
     return (
       <div className="min-h-screen">
         {header}
-        <About dataHref={toHref({ ...s, page: 'data' })} onData={() => goPage(s, set, 'data')} />
+        <About
+          hrefs={{ data: toHref({ ...s, page: 'data' }), metrics: toHref({ ...s, page: 'metrics' }) }}
+          onPage={(page) => goPage(s, set, page)}
+        />
+      </div>
+    )
+
+  if (s.page === 'metrics')
+    return (
+      <div className="min-h-screen">
+        {header}
+        <MetricsPage />
       </div>
     )
 
@@ -188,8 +212,23 @@ export default function App() {
         extra={view === 'campaign' ? { value: 'target', label: '캠페인 기간' } : undefined}
       />
     )
-    let controls = <SegmentControls s={st} set={set} />
-    if (view === 'venue')
+    let controls: ReactNode = <SegmentControls s={st} set={set} />
+    if (tab.id === 'venues') {
+      const regs = uniq([
+        ...(data.daily_venue_registry ?? []).map((r) => r.region),
+        ...(data.venue_registry ?? []).map((r) => r.region),
+      ])
+      controls = (
+        <Select
+          label="상권"
+          value={regs.some((r) => r.value === st.sr) ? st.sr : 'all'}
+          width="w-40"
+          onChange={(sr) => set({ sr })}
+          options={[{ value: 'all', label: '전체' }, ...regs]}
+        />
+      )
+    } else if (view === 'revenue' || view === 'subscription') controls = null
+    else if (view === 'venue')
       controls = (
         <>
           <Select
@@ -216,7 +255,7 @@ export default function App() {
             value={st.et}
             width="w-36"
             onChange={(et) => set({ et })}
-            options={[{ value: 'all', label: '전체' }, ...uniq(data.daily_event.map((r) => r.event_type))]}
+            options={[{ value: 'all', label: '전체' }, ...uniq(events.map((r) => r.event_type))]}
           />
           <Select
             label="가격대"

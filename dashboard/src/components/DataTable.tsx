@@ -17,6 +17,7 @@ export function DataTable<T>({
   limit = 20,
   selected,
   onSelect,
+  minW = 'min-w-[640px]',
 }: {
   cols: Col<T>[]
   rows: T[]
@@ -25,6 +26,7 @@ export function DataTable<T>({
   limit?: number
   selected?: string
   onSelect?: (r: T) => void
+  minW?: string
 }) {
   const [sort, setSort] = useState<{ key: string; desc: boolean }>({ key: sortKey, desc: true })
   const [all, setAll] = useState(false)
@@ -45,7 +47,7 @@ export function DataTable<T>({
   return (
     <div>
       <div className="-mx-4 overflow-x-auto px-4 sm:-mx-5 sm:px-5">
-        <table className="w-full min-w-[640px] border-collapse text-[13px]">
+        <table className={`w-full ${minW} border-collapse text-[13px]`}>
           <thead>
             <tr className="border-b border-axis">
               {cols.map((c) => {

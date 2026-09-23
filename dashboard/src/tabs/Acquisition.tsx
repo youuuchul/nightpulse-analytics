@@ -88,21 +88,23 @@ function Channels({ data, s, range }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-5">
-        <Tile label="세션" value={num(cur.sessions)} delta={delta(data, range, cur.sessions, prev.sessions)} wait={w} />
+        <Tile metricId="A01" label="세션" value={num(cur.sessions)} delta={delta(data, range, cur.sessions, prev.sessions)} wait={w} />
         <Tile
+          metricId="A02"
           label="광고 세션 비중"
           value={pct(paidShare)}
           sub={`세션 ${num(cur.sessions)} 중`}
           delta={ptDelta(data, range, paidShare, ratio(paid(prevRows), prev.sessions), null)}
           wait={w}
         />
-        <Tile label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={delta(data, range, cur.new_persons, prev.new_persons)} wait={w} />
-        <Tile label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} wait={w} />
-        <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} wait={w} />
+        <Tile metricId="A03" label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={delta(data, range, cur.new_persons, prev.new_persons)} wait={w} />
+        <Tile metricId="C10" label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} wait={w} />
+        <Tile metricId="C13" label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} wait={w} />
       </TileRow>
 
       <Card
         title="유입 유형별 세션"
+        metricId="A01"
         meta={range.oneDay ? range.from : `${grain(stack.weekly)} · 세션 라스트클릭`}
         right={range.oneDay ? undefined : <Legend items={series} />}
         wait={w}
@@ -123,7 +125,7 @@ function Channels({ data, s, range }: TabProps) {
         )}
       </Card>
 
-      <Card title="채널별 성과" meta={`${list.length}개`} wait={w}>
+      <Card title="채널별 성과" metricId="A03" meta={`${list.length}개`} wait={w}>
         <DataTable cols={cols} rows={list} sortKey="sessions" rowKey={(r) => r.key} />
       </Card>
     </div>
@@ -218,24 +220,24 @@ function Campaigns({ data, s, set, range }: TabProps) {
     <div className="flex flex-col gap-4">
       <div className="card flex flex-col divide-y divide-line overflow-hidden lg:flex-row lg:divide-x lg:divide-y-0">
         <Stage title="집행">
-          <Tile label="지출" value={won(t.spend)} unit="원" />
-          <Tile label="노출" value={num(t.impressions)} />
-          <Tile label="클릭" value={num(t.clicks)} sub={`CTR ${pct(ratio(t.clicks, t.impressions), 2)}`} />
+          <Tile metricId="A08" label="지출" value={won(t.spend)} unit="원" />
+          <Tile metricId="A09" label="노출" value={num(t.impressions)} />
+          <Tile metricId="A04" label="클릭" value={num(t.clicks)} sub={`CTR ${pct(ratio(t.clicks, t.impressions), 2)}`} />
         </Stage>
         <Stage title="유입">
-          <Tile label="세션" value={num(t.sessions)} sub={`클릭 대비 ${pct(ratio(t.sessions, t.clicks), 0)}`} />
-          {hasNew && <Tile label="신규 방문자" value={num(newPersons)} unit="명" />}
+          <Tile metricId="A10" label="세션" value={num(t.sessions)} sub={`클릭 대비 ${pct(ratio(t.sessions, t.clicks), 0)}`} />
+          {hasNew && <Tile metricId="A11" label="신규 방문자" value={num(newPersons)} unit="명" />}
         </Stage>
         <Stage title="행동">
-          <Tile label="가입" value={num(t.signups)} unit="명" sub={`CAC ${won(ratio(t.spend, t.signups))}원`} />
-          <Tile label="신청" value={num(t.applies)} unit="건" />
-          <Tile label="결제 금액" value={won(t.pay_amount)} unit="원" sub={`ROAS ${pct(ratio(t.pay_amount, t.spend), 0)}`} />
+          <Tile metricId="A05" label="가입" value={num(t.signups)} unit="명" sub={`CAC ${won(ratio(t.spend, t.signups))}원`} />
+          <Tile metricId="C11" label="신청" value={num(t.applies)} unit="건" />
+          <Tile metricId="A06" label="결제 금액" value={won(t.pay_amount)} unit="원" sub={`ROAS ${pct(ratio(t.pay_amount, t.spend), 0)}`} />
         </Stage>
       </div>
 
       {!range.oneDay && (
         <div className="grid gap-4 lg:grid-cols-2">
-          <Card title="지출" meta={`${grain(trend.weekly)} · 원`}>
+          <Card title="지출" metricId="A08" meta={`${grain(trend.weekly)} · 원`}>
             <TimeChart
               data={trend.rows}
               kind="bar"
@@ -245,7 +247,7 @@ function Campaigns({ data, s, set, range }: TabProps) {
               height={200}
             />
           </Card>
-          <Card title="광고 세션" meta={`${grain(trend.weekly)} · 세션`}>
+          <Card title="광고 세션" metricId="A10" meta={`${grain(trend.weekly)} · 세션`}>
             <TimeChart
               data={trend.rows}
               kind="bar"
@@ -257,7 +259,7 @@ function Campaigns({ data, s, set, range }: TabProps) {
         </div>
       )}
 
-      <Card title="캠페인 비교" meta={`${list.length}개`}>
+      <Card title="캠페인 비교" metricId="A07" meta={`${list.length}개`}>
         <DataTable
           cols={cols}
           rows={list}

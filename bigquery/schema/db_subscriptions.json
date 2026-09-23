@@ -1,0 +1,44 @@
+[
+  {
+    "name": "subscription_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "구독 ID (= subscribe·subscription_cancel 의 subscription_id)"
+  },
+  {
+    "name": "member_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "회원 ID. 회원당 구독 최대 1건 (재구독 없음)"
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "구독 시작 (UTC) = subscribe 시각"
+  },
+  {
+    "name": "ended_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "해지 시각 (UTC) = subscription_cancel 시각. 즉시 종료, 이후 미청구. NULL = 진행 중"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "active / canceled"
+  },
+  {
+    "name": "price",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "월 요금 (원) 9,900"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

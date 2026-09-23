@@ -1,0 +1,1381 @@
+{
+ "rules": [
+  "**단위.** 사람 = `person_id`(회원이면 `member_id`, 아니면 기기 `client_id`). 기기 행 수를 사람 수로 쓰지 않는다. 세션 = (`client_id`, `session_id`). 건 = 원장 행(`order_id`·`contract_id`·`subscription_id`). 공간 = `venue_id`.",
+  "**방문.** 자동 로드 세션(체류 0ms·화면 1개 이하·2초 이내)은 방문이 아니다. 모든 마트의 `sessions` 는 자동 로드를 뺀 방문 세션이고, 자동 로드는 `auto_load_sessions` 로 따로 둔다.",
+  "**날짜.** 모든 날짜는 KST. 세션과 그 안의 행동은 세션 시작일에 속한다. 원장 지표는 신청일(`applied_date`)·결제일(`paid_at`)·계약일 기준.",
+  "**세그먼트.** `channel1`(첫 유입 paid/non_paid)·`device_platform`(첫 방문 기기 ios/android/web)·`member_seg`(member/guest) 는 사람당 1개라 조합 합이 전체다. `member_seg` 는 일·시간 마트에서 그날 0시 기준이며 가입 당일은 `guest` 다. 예외: `daily_channel` 의 `channel1~3` 은 세션 라스트클릭 채널이다.",
+  "**사람 수 합산.** 사람 열은 같은 날(주·월) 안에서 세그먼트끼리만 더할 수 있다. 여러 날을 더하면 같은 사람이 중복된다. 화면의 기간 고유 사람 수는 `person_day` 비트로 다시 세고, 주·월 고유는 `weekly_activity`·`monthly_summary` 를 쓴다.",
+  "**로그 vs 원장.** 결제·신청·취소의 건수·금액은 원장이 기준이다(`daily_event`·`daily_venue`·`daily_revenue`·`monthly_summary`). `daily_metrics`·`hourly_metrics`·`daily_channel`·`daily_ad` 의 `applies`·`pay_count`·`pay_amount`·`cancels` 는 로그 이벤트 기준이며 원장과의 일치는 검사 C1·C2·C9 가 확인한다.",
+  "**매출 세 갈래.** 티켓(행사 결제, 구독 할인 후 순액)·구독(소비자 월 구독 9,900원)·B2B(공간 파트너 월 이용료). 티켓·구독은 결제 원장, B2B 는 계약 원장의 월별 활성 계약 × 요금에서 나온다. 매출은 세그먼트 축이 없으므로 세그먼트 필터를 걸면 매출 타일·카드는 화면에서 빠진다.",
+  "**비율.** 마트는 분자·분모 열만 두고 화면이 필터 적용 후 각각 합산한 뒤 나눈다. 비율의 증감은 %p, 건수·금액의 증감은 %."
+ ],
+ "groups": [
+  {
+   "id": "visit",
+   "name": "방문·활동"
+  },
+  {
+   "id": "explore",
+   "name": "탐색"
+  },
+  {
+   "id": "convert",
+   "name": "전환"
+  },
+  {
+   "id": "retention",
+   "name": "리텐션"
+  },
+  {
+   "id": "revenue",
+   "name": "매출"
+  },
+  {
+   "id": "subscription",
+   "name": "구독"
+  },
+  {
+   "id": "venue",
+   "name": "공간·파트너"
+  },
+  {
+   "id": "acquisition",
+   "name": "유입·광고"
+  }
+ ],
+ "notes": {
+  "explore": [
+   "`weekly_path` 는 세션 안 `screen_view` 를 시각 순으로 앞 5개만 쓴다. 같은 화면이 연달아 나와도 그대로 센다. 기간 전체 기준 상위 12개 화면 밖은 `(기타)` 로 접는다. 단계 n 의 세션 합 = 화면을 n개 이상 본 세션 수이고, `step = 1` 합은 그 주 방문 세션 수와 같다(검사 C7)."
+  ],
+  "convert": [
+   "`funnel_daily` 의 단계는 누적 조건이다. 방문 → +행사 상세 → +로그인 상태(회원 ID 가 실린 방문 세션, 그날 가입 포함) → +신청 화면 → +결제. 같은 날 안에서 판정하며 뒤 단계는 앞 단계보다 클 수 없다.",
+   "오디언스(C09)는 사람 × 주로 판정하며 서로 겹친다. 오디언스끼리 더하지 않는다. `new` + `returning` 의 `landing` 합은 `weekly_activity.wau` 와 같다(검사 C6).",
+   "| 오디언스 | 조건 |\n|---|---|\n| `new` 신규 | 그 주가 첫 방문 주 (`weekly_activity.new_persons` 와 같은 판정) |\n| `returning` 재방문 | 그 주 이전에 첫 방문 |\n| `paid_inflow` 광고 유입 | 그 주 방문 세션 중 세션 라스트클릭 `channel1 = 'paid'` 1개 이상 |\n| `past_payer` 결제 경험 | 그 주 시작 전 결제 1회 이상 (로그 결제 이벤트) |\n| `apply_no_pay` 신청 후 미결제 | 그 주 시작 전 신청 1회 이상, 그 주 시작 전 결제 0회 |\n| `explorer_only` 탐색만 | 그 주 행사 상세 조회 있음, 신청 화면 조회 없음 |"
+  ],
+  "retention": [
+   "코호트 = 첫 방문일이 속한 주(월요일 시작)·달. 검사 R1(W1 15~30%)·R2(W4 8~18%)는 관측이 끝난 코호트 전체 합으로 본다.",
+   "코호트 마트의 `member_seg` 는 코호트 주(달) 말일 기준 회원 여부다. 일 마트의 `member_seg`(그날 0시 기준)와 기준 시점이 다르다. `cohort_size` 는 경과 주(월)와 무관하게 반복되고 0주차 `retained = cohort_size`."
+  ],
+  "revenue": [
+   "티켓 할인: 구독자가 파트너 공간 행사를 결제하면 `discount_amount = round(price × 0.15)`. `partner_flag` 는 행사 개최 시점의 계약 여부이며 티켓 행에만 값이 있다.",
+   "B2B 는 결제 표가 아니라 계약 표에서 월 이용료로 계산한다. 일 행은 그날 활성 계약의 월 요금 ÷ 그 달 일수라서 한 달을 더하면 월 이용료 합이 된다. b2b 행의 `pay_count` 는 활성 계약 수, `payers` 는 공간 수.",
+   "매출 마트는 세그먼트 축이 없다. 개요 탭에서 세그먼트 필터를 걸면 매출 타일·매출 구성 카드는 빠진다."
+  ],
+  "subscription": [
+   "구독은 회원만 가능하며 2025-12-01 출시. `person_day` 의 비트 32768 `subscribed` 가 그날 구독 활성 여부다. 구독자 vs 비구독 회원 비교는 member 코드인 날만 센다(한 사람이 기간 중 구독을 시작하면 양쪽에 모두 나타난다)."
+  ],
+  "venue": [
+   "`daily_venue_registry` 의 `*_total`·`mrr_*` 은 그날 값이라 기간으로 더하지 않고 기간 마지막 날 값을 쓴다. `new_*`·`churned_*` 만 기간 합.",
+   "`venue_registry` 는 기준일(`as_of_date`) 스냅샷이다. 파트너 판정은 `is_partner` 로만 한다 — 활성 계약이 없는 공간도 `plan`·계약일 열에 가장 최근 계약 값이 남는다. `status = closed` 공간은 지도·표에서 뺀다.",
+   "`daily_venue_registry` 의 축은 상권(`region`) 하나라 공간 탭 스코어보드·추이는 상권 선택만 받는다. 장르·파트너 여부는 기준일 스냅샷 `venue_registry` 를 쓰는 지도 카드 안에서만 고른다."
+  ],
+  "acquisition": [
+   "유입 분류는 세션 라스트클릭이다(`daily_channel.channel1~3`). 다른 마트의 세그먼트 `channel1` 은 사람의 첫 유입이다.",
+   "광고 귀속은 광고 세션 안에서 일어난 가입·결제만 센다. 이후 다른 채널로 돌아와 전환한 경우는 포함하지 않으므로 CAC 는 보수적(높게), ROAS 는 낮게 나온다.",
+   "채널 규칙(`channel1` paid/non_paid, `channel2` 유입 유형, `channel3` 플랫폼)의 원본은 `bigquery/sql/01_map_channel.sql` 하나다."
+  ]
+ },
+ "tabs": [
+  {
+   "id": "overview",
+   "name": "개요",
+   "question": "서비스가 이번 기간 커지고 있는가, 매출은 어디서 나오는가",
+   "users": [
+    "경영진",
+    "전 직군"
+   ],
+   "key_metrics": [
+    "V12",
+    "M01",
+    "C12"
+   ]
+  },
+  {
+   "id": "funnel",
+   "name": "퍼널",
+   "question": "방문한 사람이 결제까지 가는 길에서 어디서 가장 많이 빠지는가",
+   "users": [
+    "프로덕트",
+    "데이터 분석"
+   ],
+   "key_metrics": [
+    "C15",
+    "C16",
+    "E01"
+   ]
+  },
+  {
+   "id": "events",
+   "name": "행사·결제",
+   "question": "어떤 행사·공간이 신청과 매출을 만들고, 객단가와 할인은 어떻게 움직이는가",
+   "users": [
+    "운영",
+    "파트너십"
+   ],
+   "key_metrics": [
+    "C07",
+    "M06",
+    "M08"
+   ]
+  },
+  {
+   "id": "members",
+   "name": "회원",
+   "question": "방문자가 회원·구독자로 바뀌고 남아 있는가",
+   "users": [
+    "프로덕트",
+    "마케팅"
+   ],
+   "key_metrics": [
+    "C01",
+    "R01",
+    "S01"
+   ]
+  },
+  {
+   "id": "venues",
+   "name": "공간",
+   "question": "등록 공간과 파트너 계약이 어느 상권에서 늘고 B2B 매출로 이어지는가",
+   "users": [
+    "파트너십",
+    "경영진"
+   ],
+   "key_metrics": [
+    "P02",
+    "P05",
+    "P03"
+   ]
+  },
+  {
+   "id": "acquisition",
+   "name": "유입·광고",
+   "question": "어떤 유입과 캠페인이 가입·결제로 이어지고 비용 대비 효율은 어떤가",
+   "users": [
+    "마케팅"
+   ],
+   "key_metrics": [
+    "A02",
+    "A05",
+    "A06"
+   ]
+  },
+  {
+   "id": "periodic",
+   "name": "주간·월간",
+   "question": "주·월 단위로 활성 사용자와 재방문이 유지되는가",
+   "users": [
+    "경영진",
+    "데이터 분석"
+   ],
+   "key_metrics": [
+    "V03",
+    "V05",
+    "R03"
+   ]
+  }
+ ],
+ "metrics": [
+  {
+   "id": "V01",
+   "name": "일 방문자",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "그날 방문 세션이 1개 이상인 사람",
+   "formula": "Σ persons (같은 날 세그먼트끼리만 합산)",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.persons"
+   ],
+   "why": "하루 규모의 기본 단위"
+  },
+  {
+   "id": "V02",
+   "name": "신규 방문자",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "그날이 첫 방문일인 사람",
+   "formula": "Σ new_persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.new_persons"
+   ],
+   "why": "새로 들어오는 사람의 흐름"
+  },
+  {
+   "id": "V03",
+   "name": "주간 방문자(WAU)",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 주(월요일 시작)에 방문한 고유 사람",
+   "formula": "Σ wau (세그먼트 합)",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "weekly_activity.wau"
+   ],
+   "why": "주 단위 활성 규모"
+  },
+  {
+   "id": "V04",
+   "name": "월간 방문자(MAU)",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 달 방문한 고유 사람",
+   "formula": "persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "monthly_summary.persons"
+   ],
+   "why": "월 단위 활성 규모"
+  },
+  {
+   "id": "V05",
+   "name": "재방문 비중",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 주 방문자 중 이전 주에 첫 방문한 사람의 비중",
+   "formula": "Σ returning_persons ÷ Σ wau",
+   "unit": "사람",
+   "denominator": "WAU",
+   "mart_columns": [
+    "weekly_activity.returning_persons",
+    "weekly_activity.wau"
+   ],
+   "why": "신규 유입 없이도 남는 사용자층의 두께"
+  },
+  {
+   "id": "V06",
+   "name": "주 2일+ 방문 비중",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 주 2일 이상 방문한 사람의 비중",
+   "formula": "Σ two_plus_days ÷ Σ wau",
+   "unit": "사람",
+   "denominator": "WAU",
+   "mart_columns": [
+    "weekly_activity.two_plus_days",
+    "weekly_activity.wau"
+   ],
+   "why": "습관 형성 정도"
+  },
+  {
+   "id": "V07",
+   "name": "방문 세션",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "자동 로드가 아닌 세션",
+   "formula": "Σ sessions",
+   "unit": "세션",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.sessions"
+   ],
+   "why": "방문의 양"
+  },
+  {
+   "id": "V08",
+   "name": "활성 세션 비율",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "방문 세션 중 engaged 세션의 비율",
+   "formula": "Σ engaged_sessions ÷ Σ sessions",
+   "unit": "세션",
+   "denominator": "방문 세션",
+   "mart_columns": [
+    "daily_metrics.engaged_sessions",
+    "daily_metrics.sessions"
+   ],
+   "why": "들어와서 실제로 머문 비율 — 유입 품질 신호"
+  },
+  {
+   "id": "V09",
+   "name": "자동 로드 세션 비중",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "전체 세션 중 자동 로드 세션",
+   "formula": "auto_load_sessions ÷ (sessions + auto_load_sessions)",
+   "unit": "세션",
+   "denominator": "전체 세션",
+   "mart_columns": [
+    "daily_metrics.auto_load_sessions"
+   ],
+   "why": "웹뷰·미리보기 같은 비방문 세션 규모 점검"
+  },
+  {
+   "id": "V10",
+   "name": "세션당 체류",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "방문 세션의 평균 체류 시간",
+   "formula": "engagement_msec ÷ 1000 ÷ sessions",
+   "unit": "초",
+   "denominator": "방문 세션",
+   "mart_columns": [
+    "daily_metrics.engagement_msec",
+    "daily_metrics.sessions"
+   ],
+   "why": "콘텐츠 몰입도"
+  },
+  {
+   "id": "V11",
+   "name": "하루 2세션+ 비중",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "그날 방문 세션 2개 이상인 사람의 비중",
+   "formula": "multi_session_persons ÷ persons",
+   "unit": "사람",
+   "denominator": "일 방문자",
+   "mart_columns": [
+    "daily_metrics.multi_session_persons",
+    "daily_metrics.persons"
+   ],
+   "why": "하루 안 재방문"
+  },
+  {
+   "id": "V12",
+   "name": "방문자",
+   "tab": "overview",
+   "group": "visit",
+   "definition": "기간·세그먼트 안에 방문한 고유 사람",
+   "formula": "person_day 에서 visited 비트를 가진 고유 pk 수 (키가 없으면 Σ persons)",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "person_day.flags(visited)",
+    "daily_metrics.persons"
+   ],
+   "why": "기간 규모의 기본 지표. 일 방문자를 더한 값(사람 × 일)과 다르다"
+  },
+  {
+   "id": "V13",
+   "name": "시간대 세션",
+   "tab": "funnel",
+   "group": "visit",
+   "definition": "요일 × 시간대 방문 세션의 하루 평균(1일 보기는 시간별 세션)",
+   "formula": "Σ sessions ÷ 그 요일 날짜 수",
+   "unit": "세션",
+   "denominator": "요일별 일수",
+   "mart_columns": [
+    "hourly_metrics.sessions"
+   ],
+   "why": "운영·푸시 시간대 결정"
+  },
+  {
+   "id": "V14",
+   "name": "회원 방문자",
+   "tab": "members",
+   "group": "visit",
+   "definition": "member_seg = member 인 날 방문한 고유 사람",
+   "formula": "person_day 에서 member 코드 ∧ visited 고유 pk",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "person_day.flags(visited)",
+    "person_day.m"
+   ],
+   "why": "로그인 상태로 돌아오는 핵심 사용자 규모"
+  },
+  {
+   "id": "V15",
+   "name": "방문자 중 회원 비중",
+   "tab": "members",
+   "group": "visit",
+   "definition": "기간 방문자 중 회원으로 방문한 사람의 비중",
+   "formula": "회원 방문자 ÷ 방문자",
+   "unit": "사람",
+   "denominator": "방문자(기간 고유)",
+   "mart_columns": [
+    "person_day.flags(visited)",
+    "person_day.m"
+   ],
+   "why": "비회원 트래픽 의존도"
+  },
+  {
+   "id": "V16",
+   "name": "주간 신규",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 주가 첫 방문 주인 사람",
+   "formula": "Σ new_persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "weekly_activity.new_persons"
+   ],
+   "why": "주간 유입"
+  },
+  {
+   "id": "V17",
+   "name": "주간 재방문",
+   "tab": "periodic",
+   "group": "visit",
+   "definition": "그 주 이전에 첫 방문한 사람 중 그 주 방문",
+   "formula": "Σ returning_persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "weekly_activity.returning_persons"
+   ],
+   "why": "주간 유지"
+  },
+  {
+   "id": "E01",
+   "name": "탐색 도달률",
+   "tab": "funnel",
+   "group": "explore",
+   "definition": "방문자 중 지도·검색·검색 결과 화면을 본 사람",
+   "formula": "고유(visited ∧ explored) ÷ 고유(visited)",
+   "unit": "사람",
+   "denominator": "방문자(기간 고유)",
+   "mart_columns": [
+    "person_day.flags(explored)",
+    "daily_metrics.explorers"
+   ],
+   "why": "탐색 기능이 쓰이는 정도"
+  },
+  {
+   "id": "E02",
+   "name": "행사 상세 조회율",
+   "tab": "funnel",
+   "group": "explore",
+   "definition": "일 방문자 중 행사 상세를 본 사람",
+   "formula": "detail_viewers ÷ persons",
+   "unit": "사람",
+   "denominator": "일 방문자",
+   "mart_columns": [
+    "daily_metrics.detail_viewers",
+    "daily_metrics.persons"
+   ],
+   "why": "행사 콘텐츠의 흡인력"
+  },
+  {
+   "id": "E03",
+   "name": "신청 화면 도달률",
+   "tab": "funnel",
+   "group": "explore",
+   "definition": "일 방문자 중 신청 화면을 본 사람",
+   "formula": "apply_viewers ÷ persons",
+   "unit": "사람",
+   "denominator": "일 방문자",
+   "mart_columns": [
+    "daily_metrics.apply_viewers",
+    "daily_metrics.persons"
+   ],
+   "why": "구매 의도 규모"
+  },
+  {
+   "id": "E04",
+   "name": "행사 상세 조회",
+   "tab": "events",
+   "group": "explore",
+   "definition": "그 행사 상세를 본 사람의 일별 합",
+   "formula": "Σ detail_viewers",
+   "unit": "사람(일 합)",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_event.detail_viewers"
+   ],
+   "why": "행사별 관심도 순위"
+  },
+  {
+   "id": "E05",
+   "name": "공간 상세 조회",
+   "tab": "events",
+   "group": "explore",
+   "definition": "그 공간 상세를 본 사람의 일별 합",
+   "formula": "Σ detail_viewers",
+   "unit": "사람(일 합)",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue.detail_viewers"
+   ],
+   "why": "공간별 관심도 순위"
+  },
+  {
+   "id": "E06",
+   "name": "화면 경로 전이",
+   "tab": "funnel",
+   "group": "explore",
+   "definition": "n번째 화면에서 n+1번째 화면으로 넘어간 방문 세션",
+   "formula": "링크 세션 ÷ 출발 노드 세션",
+   "unit": "세션",
+   "denominator": "그 단계 출발 화면의 세션",
+   "mart_columns": [
+    "weekly_path.sessions"
+   ],
+   "why": "사람들이 실제로 움직이는 길"
+  },
+  {
+   "id": "E07",
+   "name": "조회된 행사",
+   "tab": "events",
+   "group": "explore",
+   "definition": "기간 안 상세 조회·신청이 1건 이상 있는 행사 수",
+   "formula": "고유 event_id 수",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_event.event_id"
+   ],
+   "why": "노출된 행사 폭"
+  },
+  {
+   "id": "E08",
+   "name": "조회된 공간",
+   "tab": "events",
+   "group": "explore",
+   "definition": "기간 안 상세 조회·신청이 1건 이상 있는 공간 수",
+   "formula": "고유 venue_id 수",
+   "unit": "곳",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue.venue_id"
+   ],
+   "why": "노출된 공간 폭"
+  },
+  {
+   "id": "C01",
+   "name": "신규 방문자 대비 가입",
+   "tab": "members",
+   "group": "convert",
+   "definition": "신규 방문자 대비 가입한 사람",
+   "formula": "Σ signups ÷ Σ new_persons",
+   "unit": "사람",
+   "denominator": "신규 방문자",
+   "mart_columns": [
+    "daily_metrics.signups",
+    "daily_metrics.new_persons"
+   ],
+   "why": "첫 방문을 회원으로 바꾸는 힘"
+  },
+  {
+   "id": "C02",
+   "name": "방문 → 가입 전환(기간 누적)",
+   "tab": "members",
+   "group": "convert",
+   "definition": "기간 방문 고유 사람 중 기간 안 가입한 사람",
+   "formula": "고유(signed_up) ÷ 고유(visited)",
+   "unit": "사람",
+   "denominator": "방문자(기간 고유)",
+   "mart_columns": [
+    "staging.int_person_day"
+   ],
+   "why": "검사 R3 기준값"
+  },
+  {
+   "id": "C03",
+   "name": "행사 상세 → 신청",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "행사 상세를 본 사람 중 신청한 사람",
+   "formula": "appliers ÷ detail_viewers",
+   "unit": "사람 × 일",
+   "denominator": "행사 상세를 본 사람",
+   "mart_columns": [
+    "daily_metrics.appliers",
+    "daily_metrics.detail_viewers"
+   ],
+   "why": "상세 화면의 설득력"
+  },
+  {
+   "id": "C04",
+   "name": "신청 화면 → 신청",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "신청 화면을 본 사람 중 신청한 사람",
+   "formula": "appliers ÷ apply_viewers",
+   "unit": "사람 × 일",
+   "denominator": "신청 화면을 본 사람",
+   "mart_columns": [
+    "daily_metrics.appliers",
+    "daily_metrics.apply_viewers"
+   ],
+   "why": "신청 양식의 마찰"
+  },
+  {
+   "id": "C05",
+   "name": "신청 → 결제 완료",
+   "tab": "events",
+   "group": "convert",
+   "definition": "유료 행사 신청 중 결제 완료",
+   "formula": "pay_count ÷ paid_tier_applies",
+   "unit": "건",
+   "denominator": "유료 행사 신청",
+   "mart_columns": [
+    "daily_event.pay_count",
+    "daily_event.paid_tier_applies"
+   ],
+   "why": "결제 단계 이탈"
+  },
+  {
+   "id": "C06",
+   "name": "취소율",
+   "tab": "events",
+   "group": "convert",
+   "definition": "신청 중 취소된 신청",
+   "formula": "Σ cancels ÷ Σ applies",
+   "unit": "건",
+   "denominator": "신청",
+   "mart_columns": [
+    "daily_metrics.cancels",
+    "daily_metrics.applies",
+    "daily_event.cancels"
+   ],
+   "why": "노쇼·환불 위험"
+  },
+  {
+   "id": "C07",
+   "name": "결제자당 금액",
+   "tab": "events",
+   "group": "convert",
+   "definition": "기간 결제 금액을 기간 고유 결제자로 나눈 값",
+   "formula": "Σ pay_amount ÷ 고유(paid)",
+   "unit": "원",
+   "denominator": "결제한 사람(기간 고유)",
+   "mart_columns": [
+    "daily_metrics.pay_amount",
+    "person_day.flags(paid)"
+   ],
+   "why": "사람당 지출 크기"
+  },
+  {
+   "id": "C08",
+   "name": "방문 퍼널 단계",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "랜딩 → 행사 상세 → 로그인·가입 → 신청 화면 → 결제, 같은 날 누적 조건",
+   "formula": "단계별 고유 사람 (person_day 비트 AND)",
+   "unit": "사람",
+   "denominator": "이전 단계",
+   "mart_columns": [
+    "funnel_daily.persons",
+    "person_day.flags"
+   ],
+   "why": "퍼널 탭의 뼈대"
+  },
+  {
+   "id": "C09",
+   "name": "오디언스별 퍼널 단계",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "그 주 그 오디언스 중 그 단계까지 도달한 사람",
+   "formula": "Σ step_k ÷ Σ landing",
+   "unit": "사람 × 주",
+   "denominator": "그 오디언스의 랜딩",
+   "mart_columns": [
+    "weekly_audience_funnel.persons"
+   ],
+   "why": "누구에게 어느 단계가 막히는가"
+  },
+  {
+   "id": "C10",
+   "name": "가입",
+   "tab": "overview",
+   "group": "convert",
+   "definition": "그날 가입한 사람(사람당 1회)",
+   "formula": "Σ signups",
+   "unit": "명",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.signups"
+   ],
+   "why": "회원 기반 성장"
+  },
+  {
+   "id": "C11",
+   "name": "신청",
+   "tab": "events",
+   "group": "convert",
+   "definition": "행사 신청 이벤트 수",
+   "formula": "Σ applies",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.applies"
+   ],
+   "why": "수요의 양"
+  },
+  {
+   "id": "C12",
+   "name": "결제",
+   "tab": "overview",
+   "group": "convert",
+   "definition": "결제 완료 이벤트 수",
+   "formula": "Σ pay_count",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.pay_count"
+   ],
+   "why": "거래의 양"
+  },
+  {
+   "id": "C13",
+   "name": "결제 금액",
+   "tab": "overview",
+   "group": "convert",
+   "definition": "로그 결제 이벤트 금액 합(할인 전)",
+   "formula": "Σ pay_amount",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.pay_amount"
+   ],
+   "why": "세그먼트로 쪼갤 수 있는 거래액"
+  },
+  {
+   "id": "C14",
+   "name": "결제 퍼널",
+   "tab": "events",
+   "group": "convert",
+   "definition": "행사 상세 → 신청 화면 → 결제, 같은 날 누적 조건의 기간 고유 사람",
+   "formula": "고유(event_detail ∧ apply_view ∧ paid) 등 비트 AND",
+   "unit": "사람",
+   "denominator": "이전 단계",
+   "mart_columns": [
+    "person_day.flags"
+   ],
+   "why": "행사 화면 이후 결제까지의 이탈"
+  },
+  {
+   "id": "C15",
+   "name": "전체 전환율",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "랜딩한 사람 중 같은 날 결제까지 간 사람",
+   "formula": "n(payment) ÷ n(landing)",
+   "unit": "사람",
+   "denominator": "랜딩(방문자)",
+   "mart_columns": [
+    "person_day.flags",
+    "funnel_daily.persons"
+   ],
+   "why": "퍼널 전체 효율 한 숫자"
+  },
+  {
+   "id": "C16",
+   "name": "최대 이탈 단계",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "랜딩 대비 도달률이 가장 크게 떨어지는 단계",
+   "formula": "argmax r(k−1) − r(k), r(k) = n(k) ÷ n(landing)",
+   "unit": "%p",
+   "denominator": "랜딩",
+   "mart_columns": [
+    "person_day.flags"
+   ],
+   "why": "개선 우선순위"
+  },
+  {
+   "id": "C17",
+   "name": "가장 크게 변한 단계",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "직전 단계 대비 전환율의 전기 대비 변화가 가장 큰 단계",
+   "formula": "argmax |c(k) − c_prev(k)|",
+   "unit": "%p",
+   "denominator": "이전 단계",
+   "mart_columns": [
+    "person_day.flags"
+   ],
+   "why": "배포·캠페인 영향 감지"
+  },
+  {
+   "id": "C18",
+   "name": "세그먼트별 퍼널",
+   "tab": "funnel",
+   "group": "convert",
+   "definition": "세그먼트 값마다 랜딩 대비 단계 도달률",
+   "formula": "n_seg(k) ÷ n_seg(landing)",
+   "unit": "사람",
+   "denominator": "그 세그먼트의 랜딩",
+   "mart_columns": [
+    "person_day.flags"
+   ],
+   "why": "어느 집단이 어디서 막히는가"
+  },
+  {
+   "id": "C19",
+   "name": "조회 대비 신청",
+   "tab": "events",
+   "group": "convert",
+   "definition": "행사·공간별 상세 조회 대비 신청",
+   "formula": "Σ applies ÷ Σ detail_viewers",
+   "unit": "건 ÷ 사람(일 합)",
+   "denominator": "상세 조회 사람(일 합)",
+   "mart_columns": [
+    "daily_event.applies",
+    "daily_event.detail_viewers",
+    "daily_venue.applies"
+   ],
+   "why": "대상별 전환 효율"
+  },
+  {
+   "id": "C20",
+   "name": "누적 회원",
+   "tab": "overview",
+   "group": "convert",
+   "definition": "기준일까지 가입한 사람 수(필터 미적용)",
+   "formula": "Σ signups (전체 기간)",
+   "unit": "명",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_metrics.signups"
+   ],
+   "why": "회원 기반의 크기"
+  },
+  {
+   "id": "R01",
+   "name": "주간 리텐션 Wn",
+   "tab": "members",
+   "group": "retention",
+   "definition": "첫 방문 주 코호트 중 n주 뒤 주에 방문한 사람",
+   "formula": "Σ retained ÷ Σ cohort_size (week_offset = n, 완결 주만)",
+   "unit": "사람",
+   "denominator": "코호트 크기",
+   "mart_columns": [
+    "weekly_cohort.retained",
+    "weekly_cohort.cohort_size"
+   ],
+   "why": "제품이 다시 부르는 힘"
+  },
+  {
+   "id": "R02",
+   "name": "W1 리텐션(월 요약)",
+   "tab": "periodic",
+   "group": "retention",
+   "definition": "그 달 시작 코호트의 W1 재방문자 합 ÷ 코호트 크기 합",
+   "formula": "w1_retention",
+   "unit": "사람",
+   "denominator": "코호트 크기",
+   "mart_columns": [
+    "monthly_summary.w1_retention"
+   ],
+   "why": "월 브리핑용 리텐션"
+  },
+  {
+   "id": "R03",
+   "name": "월 리텐션 Mn",
+   "tab": "periodic",
+   "group": "retention",
+   "definition": "첫 방문 월 코호트 중 n달 뒤 달에 방문한 사람",
+   "formula": "Σ retained ÷ Σ cohort_size (month_offset = n)",
+   "unit": "사람",
+   "denominator": "코호트 크기",
+   "mart_columns": [
+    "monthly_cohort.retained",
+    "monthly_cohort.cohort_size"
+   ],
+   "why": "장기 유지"
+  },
+  {
+   "id": "M01",
+   "name": "총 매출",
+   "tab": "overview",
+   "group": "revenue",
+   "definition": "티켓(할인 후) + 구독 + B2B 순매출 합",
+   "formula": "Σ net_amount (kind 전체)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_revenue.net_amount"
+   ],
+   "why": "사업 규모의 한 숫자"
+  },
+  {
+   "id": "M02",
+   "name": "티켓 매출",
+   "tab": "overview",
+   "group": "revenue",
+   "definition": "행사 결제 순매출(구독 할인·환불 차감)",
+   "formula": "Σ net_amount (kind = ticket), net = gross − discount − refund",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_revenue.net_amount",
+    "daily_revenue.kind"
+   ],
+   "why": "거래 수수료 기반 매출"
+  },
+  {
+   "id": "M03",
+   "name": "구독 매출",
+   "tab": "overview",
+   "group": "revenue",
+   "definition": "소비자 구독 결제 합(월 9,900원 반복 결제)",
+   "formula": "Σ net_amount (kind = subscription)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_revenue.net_amount",
+    "daily_revenue.kind"
+   ],
+   "why": "반복 매출"
+  },
+  {
+   "id": "M04",
+   "name": "B2B 매출",
+   "tab": "overview",
+   "group": "revenue",
+   "definition": "파트너 공간 월 이용료를 일별로 나눠 쌓은 값",
+   "formula": "Σ net_amount (kind = b2b)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_revenue.net_amount",
+    "daily_revenue.kind"
+   ],
+   "why": "공급 측 매출"
+  },
+  {
+   "id": "M05",
+   "name": "매출 구성",
+   "tab": "events",
+   "group": "revenue",
+   "definition": "기간 매출의 종류별(티켓·구독·B2B) 비중",
+   "formula": "종류별 Σ net_amount ÷ 총 매출",
+   "unit": "원",
+   "denominator": "총 매출",
+   "mart_columns": [
+    "daily_revenue.net_amount",
+    "daily_revenue.kind"
+   ],
+   "why": "매출이 한 갈래에 쏠리는지"
+  },
+  {
+   "id": "M06",
+   "name": "티켓 객단가",
+   "tab": "events",
+   "group": "revenue",
+   "definition": "티켓 결제 1건당 결제 금액(할인 전)",
+   "formula": "Σ gross_amount ÷ Σ pay_count (kind = ticket)",
+   "unit": "원",
+   "denominator": "티켓 결제 건수",
+   "mart_columns": [
+    "daily_revenue.gross_amount",
+    "daily_revenue.pay_count"
+   ],
+   "why": "가격대·상품 구성 변화"
+  },
+  {
+   "id": "M07",
+   "name": "구독 할인액",
+   "tab": "events",
+   "group": "revenue",
+   "definition": "구독자가 파트너 공간 행사를 결제할 때 받은 15% 할인 합",
+   "formula": "Σ discount_amount (kind = ticket)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_revenue.discount_amount"
+   ],
+   "why": "구독 혜택의 비용"
+  },
+  {
+   "id": "M08",
+   "name": "파트너 티켓 매출 비중",
+   "tab": "events",
+   "group": "revenue",
+   "definition": "티켓 순매출 중 파트너 공간 행사에서 나온 몫",
+   "formula": "Σ net_amount (partner_flag) ÷ Σ net_amount (ticket)",
+   "unit": "원",
+   "denominator": "티켓 매출",
+   "mart_columns": [
+    "daily_revenue.partner_flag",
+    "daily_revenue.net_amount"
+   ],
+   "why": "파트너 계약이 거래를 끌어오는가"
+  },
+  {
+   "id": "S01",
+   "name": "구독자",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "기간 마지막 날 활성 구독 중인 고유 회원",
+   "formula": "active_subscribers (기간 끝일)",
+   "unit": "명",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_subscription.active_subscribers"
+   ],
+   "why": "반복 매출의 기반"
+  },
+  {
+   "id": "S02",
+   "name": "신규 구독",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "기간 안 시작한 구독 건수",
+   "formula": "Σ new_subscribers",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_subscription.new_subscribers"
+   ],
+   "why": "구독 획득"
+  },
+  {
+   "id": "S03",
+   "name": "구독 해지",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "기간 안 끝난 구독 건수",
+   "formula": "Σ churned_subscribers",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_subscription.churned_subscribers"
+   ],
+   "why": "구독 이탈"
+  },
+  {
+   "id": "S04",
+   "name": "구독 MRR",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "기간 마지막 날 활성 구독자 × 월 요금",
+   "formula": "mrr (기간 끝일)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_subscription.mrr"
+   ],
+   "why": "월 반복 매출 규모"
+  },
+  {
+   "id": "S05",
+   "name": "월 이탈률",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "기간 해지를 기간 시작일 활성 구독자로 나눠 30일로 환산",
+   "formula": "Σ churned_subscribers ÷ active_subscribers(기간 시작일) × 30 ÷ 기간 일수",
+   "unit": "명",
+   "denominator": "기간 시작일 활성 구독자",
+   "mart_columns": [
+    "daily_subscription.churned_subscribers",
+    "daily_subscription.active_subscribers"
+   ],
+   "why": "구독 유지력 — 시나리오 기준 월 6%"
+  },
+  {
+   "id": "S06",
+   "name": "구독 회원 결제 전환",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "구독 중 방문한 회원 중 티켓을 결제한 사람(비구독 회원과 비교)",
+   "formula": "고유(member ∧ subscribed ∧ paid) ÷ 고유(member ∧ subscribed ∧ visited)",
+   "unit": "사람",
+   "denominator": "구독 중 방문한 회원",
+   "mart_columns": [
+    "person_day.flags(subscribed)",
+    "person_day.flags(paid)"
+   ],
+   "why": "구독이 결제를 늘리는가"
+  },
+  {
+   "id": "S07",
+   "name": "구독자 티켓 결제 금액",
+   "tab": "members",
+   "group": "subscription",
+   "definition": "구독 중인 사람이 결제한 티켓 순매출",
+   "formula": "Σ subscriber_ticket_amount",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_subscription.subscriber_ticket_amount"
+   ],
+   "why": "구독자의 거래 기여"
+  },
+  {
+   "id": "P01",
+   "name": "등록 공간",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기간 끝일까지 등록된 공간 누적",
+   "formula": "Σ registered_total (기간 끝일, 상권 합)",
+   "unit": "곳",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue_registry.registered_total"
+   ],
+   "why": "공급 측 목록의 크기"
+  },
+  {
+   "id": "P02",
+   "name": "파트너 공간",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기간 끝일에 계약이 진행 중인 공간",
+   "formula": "Σ partner_total (기간 끝일)",
+   "unit": "곳",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue_registry.partner_total"
+   ],
+   "why": "유료 계약 공급자 규모"
+  },
+  {
+   "id": "P03",
+   "name": "신규 계약",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기간 안 시작한 파트너 계약",
+   "formula": "Σ new_contracts",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue_registry.new_contracts"
+   ],
+   "why": "영업 성과"
+  },
+  {
+   "id": "P04",
+   "name": "계약 해지",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기간 안 끝난 파트너 계약",
+   "formula": "Σ churned_contracts",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue_registry.churned_contracts"
+   ],
+   "why": "파트너 유지"
+  },
+  {
+   "id": "P05",
+   "name": "B2B MRR",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기간 끝일 활성 계약의 월 이용료 합(basic 99,000 · pro 299,000)",
+   "formula": "Σ (mrr_basic + mrr_pro) (기간 끝일)",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_venue_registry.mrr_basic",
+    "daily_venue_registry.mrr_pro"
+   ],
+   "why": "공급 측 반복 매출"
+  },
+  {
+   "id": "P06",
+   "name": "파트너 비중",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "등록 공간 중 파트너 공간",
+   "formula": "파트너 공간 ÷ 등록 공간",
+   "unit": "곳",
+   "denominator": "등록 공간",
+   "mart_columns": [
+    "daily_venue_registry.partner_total",
+    "daily_venue_registry.registered_total"
+   ],
+   "why": "목록을 매출로 바꾸는 비율"
+  },
+  {
+   "id": "P07",
+   "name": "공간 28일 조회",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기준일까지 28일간 그 공간 상세를 본 사람의 일별 합",
+   "formula": "detail_viewers_28d",
+   "unit": "사람(일 합)",
+   "denominator": "—",
+   "mart_columns": [
+    "venue_registry.detail_viewers_28d"
+   ],
+   "why": "공간별 수요의 크기 — 지도 점 크기"
+  },
+  {
+   "id": "P08",
+   "name": "공간 행사 수",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기준일까지 365일 그 공간에서 열린 행사",
+   "formula": "events_365d",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "venue_registry.events_365d"
+   ],
+   "why": "파트너 활동량"
+  },
+  {
+   "id": "P09",
+   "name": "공간 티켓 매출",
+   "tab": "venues",
+   "group": "venue",
+   "definition": "기준일까지 365일 그 공간 행사의 티켓 순매출",
+   "formula": "ticket_amount_365d",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "venue_registry.ticket_amount_365d"
+   ],
+   "why": "공간별 거래 기여"
+  },
+  {
+   "id": "A01",
+   "name": "채널별 방문 세션",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "세션 라스트클릭 채널별 방문 세션",
+   "formula": "Σ sessions (channel1~3)",
+   "unit": "세션",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_channel.sessions"
+   ],
+   "why": "유입 구성"
+  },
+  {
+   "id": "A02",
+   "name": "광고 세션 비중",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "방문 세션 중 광고(paid) 세션",
+   "formula": "Σ sessions(channel1 = paid) ÷ Σ sessions",
+   "unit": "세션",
+   "denominator": "방문 세션",
+   "mart_columns": [
+    "daily_channel.sessions",
+    "daily_channel.channel1"
+   ],
+   "why": "광고 의존도"
+  },
+  {
+   "id": "A03",
+   "name": "채널별 신규 유입",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "그 채널 세션이 첫 방문인 사람",
+   "formula": "Σ new_persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_channel.new_persons"
+   ],
+   "why": "새 사람을 데려오는 채널"
+  },
+  {
+   "id": "A04",
+   "name": "CTR",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "노출 대비 클릭",
+   "formula": "Σ clicks ÷ Σ impressions",
+   "unit": "건",
+   "denominator": "노출",
+   "mart_columns": [
+    "daily_ad.clicks",
+    "daily_ad.impressions"
+   ],
+   "why": "소재 반응"
+  },
+  {
+   "id": "A05",
+   "name": "가입당 비용(CAC)",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "광고비를 광고 세션 안 가입으로 나눈 값",
+   "formula": "Σ spend ÷ Σ signups",
+   "unit": "원",
+   "denominator": "광고 세션 안 가입",
+   "mart_columns": [
+    "daily_ad.spend",
+    "daily_ad.signups"
+   ],
+   "why": "회원 한 명을 사는 비용(보수적)"
+  },
+  {
+   "id": "A06",
+   "name": "ROAS",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "광고 세션 안 결제 금액 ÷ 광고비",
+   "formula": "Σ pay_amount ÷ Σ spend",
+   "unit": "배",
+   "denominator": "광고비",
+   "mart_columns": [
+    "daily_ad.pay_amount",
+    "daily_ad.spend"
+   ],
+   "why": "광고비 회수"
+  },
+  {
+   "id": "A07",
+   "name": "캠페인 방문자 · 활성 방문자",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "광고 방문 세션(활성 세션)을 가진 사람",
+   "formula": "Σ persons, Σ active_persons",
+   "unit": "사람(일 합)",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_ad.persons",
+    "daily_ad.active_persons"
+   ],
+   "why": "캠페인 유입 품질"
+  },
+  {
+   "id": "A08",
+   "name": "광고비",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "캠페인 집행 금액",
+   "formula": "Σ spend",
+   "unit": "원",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_ad.spend"
+   ],
+   "why": "집행 규모"
+  },
+  {
+   "id": "A09",
+   "name": "노출 · 클릭",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "광고 리포트의 노출·클릭",
+   "formula": "Σ impressions, Σ clicks",
+   "unit": "건",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_ad.impressions",
+    "daily_ad.clicks"
+   ],
+   "why": "집행 도달"
+  },
+  {
+   "id": "A10",
+   "name": "광고 세션",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "캠페인 라스트클릭 방문 세션",
+   "formula": "Σ sessions",
+   "unit": "세션",
+   "denominator": "클릭(클릭 대비 세션)",
+   "mart_columns": [
+    "daily_ad.sessions"
+   ],
+   "why": "클릭이 방문으로 이어지는 정도"
+  },
+  {
+   "id": "A11",
+   "name": "캠페인 신규 방문자",
+   "tab": "acquisition",
+   "group": "acquisition",
+   "definition": "광고 세션이 첫 방문인 사람(사람당 1회)",
+   "formula": "Σ new_persons",
+   "unit": "사람",
+   "denominator": "—",
+   "mart_columns": [
+    "daily_ad.new_persons"
+   ],
+   "why": "광고가 데려온 새 사람"
+  }
+ ]
+}

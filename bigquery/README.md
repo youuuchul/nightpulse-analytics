@@ -1,7 +1,7 @@
 <!-- 생성물: python3 bigquery/build_catalog.py 가 SQL 머리 주석에서 만든다. 직접 고치지 않는다. -->
 # bigquery — 표 카탈로그
 
-합성 이벤트 로그와 서비스 원장을 raw → staging → marts → ops 네 층으로 쌓는 SQL 모음. 표 33개, 층마다 BigQuery 데이터셋 하나. 이 문서의 모든 표 정보는 각 SQL 파일 머리 주석에서 온다.
+합성 이벤트 로그와 서비스 원장을 raw → staging → marts → ops 네 층으로 쌓는 SQL 모음. 표 41개, 층마다 BigQuery 데이터셋 하나. 이 문서의 모든 표 정보는 각 SQL 파일 머리 주석에서 온다.
 
 ```bash
 bigquery/load_all.sh                     # 적재 → 정제 → 마트 → 검사 → 신선도 (0~9단계)
@@ -33,10 +33,12 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 |---|---|---|---|---|---|---|---|
 | **ga4_events**<br>행동 로그 원천 (GA4 export 단순화, 합성) | 이벤트 1건 | (user_pseudo_id, ga_session_id, event_timestamp, event_name) | event_date / event_name | data/raw/ga4_events.ndjson.gz (생성기 출력). event_date 는 KST, 파티션 필터 필수 | staging.map_channel·events_clean |  | [raw_tables.sql](schema/raw_tables.sql) |
 | **db_members**<br>서비스 RDB 회원 스냅샷 (합성) | 회원 1명 | member_id | 없음 / 없음 | data/raw/db_members.csv (생성기 출력) | staging.int_person_day·dim_member |  | [raw_tables.sql](schema/raw_tables.sql) |
-| **db_venues**<br>서비스 RDB 공간 스냅샷 (합성) | 공간 1곳 | venue_id | 없음 / 없음 | data/raw/db_venues.csv (생성기 출력) | staging.dim_event·dim_venue |  | [raw_tables.sql](schema/raw_tables.sql) |
-| **db_events**<br>서비스 RDB 행사 스냅샷 (합성) | 행사 1건 | event_id | 없음 / 없음 | data/raw/db_events.csv (생성기 출력) | staging.dim_event·dim_venue·fct_order |  | [raw_tables.sql](schema/raw_tables.sql) |
+| **db_venues**<br>서비스 RDB 공간 스냅샷 (합성) | 공간 1곳 | venue_id | 없음 / 없음 | data/raw/db_venues.csv (생성기 출력). 상권·구·좌표·등록일·상태 포함 | staging.dim_event·dim_venue, ops.reconciliation |  | [raw_tables.sql](schema/raw_tables.sql) |
+| **db_events**<br>서비스 RDB 행사 스냅샷 (합성) | 행사 1건 | event_id | 없음 / 없음 | data/raw/db_events.csv (생성기 출력). 정원·가격대·가격·개최 시점 파트너 여부 포함 | staging.dim_event·dim_venue·fct_order |  | [raw_tables.sql](schema/raw_tables.sql) |
 | **db_applications**<br>서비스 RDB 신청 원장 스냅샷 (합성) | 신청 1건 | order_id | 없음 / 없음 | data/raw/db_applications.csv (생성기 출력) | staging.fct_order, ops.reconciliation |  | [raw_tables.sql](schema/raw_tables.sql) |
-| **db_payments**<br>서비스 RDB 결제 원장 스냅샷 (합성) | 결제 1건 | order_id | 없음 / 없음 | data/raw/db_payments.csv (생성기 출력) | staging.fct_order, ops.reconciliation |  | [raw_tables.sql](schema/raw_tables.sql) |
+| **db_payments**<br>서비스 RDB 결제 원장 스냅샷 (합성) | 결제 1건 | order_id | 없음 / 없음 | data/raw/db_payments.csv (생성기 출력). kind = ticket / subscription, 할인액·구독 ID 포함 | staging.fct_order·dim_subscription, ops.reconciliation |  | [raw_tables.sql](schema/raw_tables.sql) |
+| **db_venue_contracts**<br>서비스 RDB 파트너 계약 스냅샷 (합성) | 계약 1건 | contract_id | 없음 / 없음 | data/raw/db_venue_contracts.csv (생성기 출력). ended_at NULL = 진행 중 | staging.dim_contract |  | [raw_tables.sql](schema/raw_tables.sql) |
+| **db_subscriptions**<br>서비스 RDB 소비자 구독 스냅샷 (합성) | 구독 1건 | subscription_id | 없음 / 없음 | data/raw/db_subscriptions.csv (생성기 출력). ended_at NULL = 진행 중 | staging.dim_subscription, ops.reconciliation |  | [raw_tables.sql](schema/raw_tables.sql) |
 | **ads_spend**<br>광고 플랫폼 일별 집행 리포트 (합성) | 캠페인 × 일 | (campaign_id, date) | date / 없음 | data/raw/ads_spend.csv (생성기 출력). date 는 KST | staging.ad_spend |  | [raw_tables.sql](schema/raw_tables.sql) |
 
 ### staging — 정제·중간·차원
@@ -44,14 +46,16 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 | 표 | 1행 | 키 | 파티션 / 클러스터 | 원천 | 소비 | 검사 | 파일 |
 |---|---|---|---|---|---|---|---|
 | **map_channel**<br>채널 3단계 매핑 | (source, medium) 1쌍 | (source, medium) | 없음 / 없음 | raw.ga4_events.traffic_source (관측된 쌍 전부) | staging.int_session (세션 라스트클릭 채널 — 채널·광고 마트는 이 열을 쓴다) |  | [01_map_channel.sql](sql/01_map_channel.sql) |
-| **events_clean**<br>정제 이벤트 | 이벤트 1건 | (client_id, session_id, event_at, event_name) | kst_date / event_name, client_id | raw.ga4_events | staging.int_session, marts.daily_event·daily_venue·weekly_path, ops.reconciliation | C1a·C1b·C2·I3 | [02_events_clean.sql](sql/02_events_clean.sql) |
-| **int_session**<br>세션 판정 단일 원본 | 세션 1건 | (client_id, session_id) | session_date / person_id | staging.events_clean, staging.map_channel | staging.int_person_day·dim_member, marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path, ops.reconciliation | I1·I2·R7·R8 | [03_int_session.sql](sql/03_int_session.sql) |
-| **int_person_day**<br>사람 × 일 중간 표 | 사람 × 일(KST, 세션 시작일) | (person_id, kst_date) | kst_date / channel1, device_platform, member_seg | staging.int_session, raw.db_members (가입일) | marts.daily_metrics·funnel_daily·weekly_cohort·monthly_cohort·weekly_activity·monthly_summary, marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path·person_day, ops.reconciliation | R3 | [04_int_person_day.sql](sql/04_int_person_day.sql) |
+| **events_clean**<br>정제 이벤트 | 이벤트 1건 | (client_id, session_id, event_at, event_name) | kst_date / event_name, client_id | raw.ga4_events | staging.int_session, marts.daily_event·daily_venue·weekly_path·venue_registry, ops.reconciliation | C1a·C1b·C2·I3 | [02_events_clean.sql](sql/02_events_clean.sql) |
+| **int_session**<br>세션 판정 단일 원본 | 세션 1건 | (client_id, session_id) | session_date / person_id | staging.events_clean, staging.map_channel | staging.int_person_day·dim_member, marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path·venue_registry, ops.reconciliation | I1·I2·R7·R8 | [03_int_session.sql](sql/03_int_session.sql) |
+| **dim_subscription**<br>소비자 구독 차원 | 구독 1건 | subscription_id | 없음 / member_id | raw.db_subscriptions, raw.db_payments (구독 결제 집계) | staging.int_person_day, marts.daily_subscription |  | [04_dim_subscription.sql](sql/04_dim_subscription.sql) |
+| **int_person_day**<br>사람 × 일 중간 표 | 사람 × 일(KST, 세션 시작일) | (person_id, kst_date) | kst_date / channel1, device_platform, member_seg | staging.int_session·dim_subscription (그날 활성 구독), raw.db_members (가입일) | marts.daily_metrics·funnel_daily·weekly_cohort·monthly_cohort·weekly_activity·monthly_summary, marts.daily_channel·hourly_metrics·weekly_audience_funnel·weekly_path·person_day, ops.reconciliation | R3 | [04_int_person_day.sql](sql/04_int_person_day.sql) |
 | **dim_member**<br>회원 차원 | 회원 1명 | member_id | 없음 / member_id | raw.db_members (속성의 진실), staging.int_session (첫 유입·첫 방문을 로그에서 역산) | marts.weekly_cohort·monthly_cohort·weekly_activity·monthly_summary·weekly_audience_funnel·weekly_path (가입일), 회원 탭 분포, 애드혹 분석 |  | [05_dim_member.sql](sql/05_dim_member.sql) |
 | **ad_spend**<br>광고 집행 정리 | 캠페인 × 일(KST) | (campaign_id, kst_date) | kst_date / campaign_id | raw.ads_spend | marts.daily_ad, ops.reconciliation (집행일) |  | [06_ad_spend.sql](sql/06_ad_spend.sql) |
-| **dim_event**<br>행사 차원 | 행사 1건 | event_id | 없음 / event_id | raw.db_events, raw.db_venues, staging.fct_order | marts.daily_event (행사 속성), 행사 리스트 |  | [06_dim_event.sql](sql/06_dim_event.sql) |
-| **dim_venue**<br>공간 차원 | 공간 1곳 | venue_id | 없음 / 없음 | raw.db_venues, raw.db_events | marts.daily_venue (공간 속성) |  | [06_dim_venue.sql](sql/06_dim_venue.sql) |
-| **fct_order**<br>주문(신청) 원장 정리 | 신청 1건 | order_id | applied_date / event_id | raw.db_applications, raw.db_payments, raw.db_events | staging.dim_event, marts.daily_event·daily_venue·monthly_summary, ops.reconciliation | R5·R6·I4 | [06_fct_order.sql](sql/06_fct_order.sql) |
+| **dim_contract**<br>공간 파트너 계약 차원 | 계약 1건 | contract_id | 없음 / venue_id | raw.db_venue_contracts | staging.dim_venue, marts.daily_revenue·daily_venue_registry |  | [06_dim_contract.sql](sql/06_dim_contract.sql) |
+| **dim_event**<br>행사 차원 | 행사 1건 | event_id | 없음 / event_id | raw.db_events, raw.db_venues, staging.fct_order | marts.daily_event·venue_registry (행사 속성·365일 개최 행사), 행사 리스트 |  | [06_dim_event.sql](sql/06_dim_event.sql) |
+| **dim_venue**<br>공간 차원 | 공간 1곳 | venue_id | 없음 / 없음 | raw.db_venues, raw.db_events, staging.dim_contract | marts.daily_venue·daily_venue_registry·venue_registry (공간 속성) |  | [06_dim_venue.sql](sql/06_dim_venue.sql) |
+| **fct_order**<br>주문 원장 정리 (티켓 신청 + 구독 결제) | 주문 1건 = 티켓 신청 1건(kind ticket) 또는 구독 결제 1건(kind subscription) | order_id | applied_date / kind, event_id | raw.db_applications, raw.db_payments, raw.db_events | staging.dim_event, marts.daily_event·daily_venue·monthly_summary·daily_revenue·daily_subscription·venue_registry, ops.reconciliation | R5·R6·I4·C9 | [06_fct_order.sql](sql/06_fct_order.sql) |
 
 ### marts — 화면용 지표·리스트
 
@@ -61,12 +65,16 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 | **daily_channel**<br>세션 채널 마트 | 일(KST) × 세션 채널 3단계 × device_platform × member_seg | 이 여섯 열 | kst_date / channel2, device_platform, member_seg | staging.int_session (세션 라스트클릭 채널), staging.int_person_day (기기·회원 세그먼트) | 유입·광고 탭 채널 보기. 광고 세션 비중 = channel1 = 'paid' 의 sessions / 전체 sessions. ops.reconciliation | C5 | [daily_channel.sql](sql/marts/daily_channel.sql) |
 | **daily_event**<br>행사별 일 마트 (리스트 집계) | 일(KST) × 행사 | (kst_date, event_id) | kst_date / event_id | staging.events_clean·int_session (조회 흐름, 세션 시작일·사람 단위), staging.fct_order (원장, 신청일 기준), staging.dim_event (속성) | 행사 리스트, 행사 결제 퍼널 (상세 조회 → 신청 화면 → 신청 → 결제). 세그먼트 축 없음 |  | [daily_event.sql](sql/marts/daily_event.sql) |
 | **daily_metrics**<br>일 지표 마트 | 일(KST) × channel1 × device_platform × member_seg | 이 네 열 | kst_date / channel1, device_platform, member_seg | staging.int_person_day | 개요·탐색·행사·결제 흐름·회원 탭 스코어보드와 추이. 세그먼트 조합의 합 = 전체. ops.reconciliation | C3·R4 | [daily_metrics.sql](sql/marts/daily_metrics.sql) |
+| **daily_revenue**<br>매출 종류별 일 마트 | 일(KST) × 매출 종류 × 파트너 여부(티켓만) | (kst_date, kind, partner_flag) | kst_date / kind | staging.fct_order (티켓·구독 결제, 결제일 기준), staging.dim_contract (B2B 계약) | 개요 매출 타일·매출 구성 추이, 행사·결제 탭 매출 구성 보기. marts.monthly_summary, ops.reconciliation | C9 | [daily_revenue.sql](sql/marts/daily_revenue.sql) |
+| **daily_subscription**<br>구독 일 마트 | 일(KST) | kst_date | kst_date / 없음 | staging.dim_subscription (구독 원장), staging.fct_order (구독자의 티켓 결제, 결제일 기준) | 회원 탭 구독 보기 스코어보드·추이·구독자 결제 비교, 개요 기준일 구독자. marts.monthly_summary, ops.reconciliation | C10 | [daily_subscription.sql](sql/marts/daily_subscription.sql) |
 | **daily_venue**<br>공간별 일 마트 (리스트 집계) | 일(KST) × 공간 | (kst_date, venue_id) | kst_date / venue_id | staging.events_clean·int_session (공간 상세·리뷰 조회, 세션 시작일·사람 단위), staging.fct_order (그 공간 행사의 신청, 신청일 기준), staging.dim_venue | 공간 상위 N 표. 단위가 공간이므로 사람 세그먼트 축이 없다 |  | [daily_venue.sql](sql/marts/daily_venue.sql) |
+| **daily_venue_registry**<br>상권별 공간 등록·파트너 계약 일 마트 | 일(KST) × 상권 | (kst_date, region) | kst_date / region | staging.dim_venue (등록일·상권), staging.dim_contract (계약) | 공간 탭 스코어보드·등록/파트너 누적 추이·상권별 표. marts.monthly_summary, ops.reconciliation | C11 | [daily_venue_registry.sql](sql/marts/daily_venue_registry.sql) |
 | **funnel_daily**<br>일 방문 퍼널 마트 | 일(KST) × 단계 × channel1 × device_platform × member_seg | 이 다섯 열 | kst_date / step_order, channel1, device_platform, member_seg | staging.int_person_day | 탐색 탭 방문 퍼널 5단계. 막대 = 이전 단계 대비 |  | [funnel_daily.sql](sql/marts/funnel_daily.sql) |
 | **hourly_metrics**<br>시간대 마트 | 일(KST) × 시(KST, 세션 시작 시) × channel1 × device_platform × member_seg | 이 다섯 열 | kst_date / channel1, device_platform, member_seg | staging.int_session (세션), staging.int_person_day (세그먼트: 사람 × 일) | 요일 × 시간대 세션 히트맵, 1일 선택 시 시간별 차트. 세그먼트 필터를 받아야 해서 축을 둔다 |  | [hourly_metrics.sql](sql/marts/hourly_metrics.sql) |
 | **monthly_cohort**<br>월간 리텐션 코호트 | 코호트 월 × 경과 월 × member_seg | 이 세 열 | DATE_TRUNC(cohort_month, MONTH) / month_offset, member_seg | staging.int_person_day, staging.dim_member | 월 리텐션 표. 리텐션 = retained / cohort_size (화면에서 나눈다) |  | [monthly_cohort.sql](sql/marts/monthly_cohort.sql) |
-| **monthly_summary**<br>월간 브리핑 표 | 월(KST) | month | DATE_TRUNC(month, MONTH) / 없음 | staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장), marts.weekly_cohort (W1 리텐션 — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다) | 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다. 예외: w1_retention 은 화면 계약상 비율(0~1)로도 둔다. 분자·분모는 w1_retained·w1_cohort_size |  | [monthly_summary.sql](sql/marts/monthly_summary.sql) |
-| **person_day**<br>사람 × 일 행동 플래그 마트 (기간 고유 사람 수 계산용) | 사람 × 일(KST). 플래그가 하나도 없는 날(자동 로드만 있는 날)은 뺀다 | (person_key, kst_date) | kst_date / person_key | staging.int_person_day | 대시보드 사람 지표 타일·분해·전기 대비(기간 고유 사람 수). ops.reconciliation | C8 | [person_day.sql](sql/marts/person_day.sql) |
+| **monthly_summary**<br>월간 브리핑 표 | 월(KST) | month | DATE_TRUNC(month, MONTH) / 없음 | staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장), marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry (W1 리텐션·매출 구성·월말 구독자·월말 공간 — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다) | 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다. 예외: w1_retention 은 화면 계약상 비율(0~1)로도 둔다. 분자·분모는 w1_retained·w1_cohort_size |  | [monthly_summary.sql](sql/marts/monthly_summary.sql) |
+| **person_day**<br>사람 × 일 행동 플래그 마트 (기간 고유 사람 수 계산용) | 사람 × 일(KST). 행동 플래그(비트 1~16384)가 하나도 없는 날(자동 로드만 있는 날)은 뺀다. 상태 비트 32768 만 있는 날도 뺀다 | (person_key, kst_date) | kst_date / person_key | staging.int_person_day | 대시보드 사람 지표 타일·분해·전기 대비(기간 고유 사람 수). ops.reconciliation | C8 | [person_day.sql](sql/marts/person_day.sql) |
+| **venue_registry**<br>공간 목록 (기준일 스냅샷, 리스트 집계) | 공간 1곳 | venue_id | 없음 / region | staging.dim_venue (속성·파트너 여부·요금제·계약일), staging.dim_event (개최 행사), staging.fct_order (티켓 매출), staging.events_clean·int_session (공간 상세 조회 사람) | 공간 탭 서울 분포 지도(좌표·28일 조회·파트너 여부)·상권별 표·파트너 공간 표. 기간 필터를 받지 않는 기준일 고정 표 |  | [venue_registry.sql](sql/marts/venue_registry.sql) |
 | **weekly_activity**<br>주간 활동 마트 | 주(월요일 시작) × channel1 × device_platform × member_seg | 이 네 열 | week_start / channel1, device_platform, member_seg | staging.int_person_day, staging.dim_member (가입일) | 주간 탭 — WAU·신규·재방문·주 2일+ 방문. 기간 필터 대신 주차 선택기로 본다. ops.reconciliation (C6·C7 기준값) |  | [weekly_activity.sql](sql/marts/weekly_activity.sql) |
 | **weekly_audience_funnel**<br>오디언스별 주간 퍼널 마트 | 주(월요일 시작) × 오디언스 × 단계 × channel1 × device_platform × member_seg | 이 여섯 열 | week_start / audience_id, step_order, channel1, device_platform | staging.int_person_day, staging.int_session (광고 유입 판정), staging.dim_member (가입일) | 퍼널 탭 드릴다운 '오디언스별 퍼널' — 오디언스 × 단계 도달률 표, 선택 오디언스의 주별 전환율 추이. ops.reconciliation | C6 | [weekly_audience_funnel.sql](sql/marts/weekly_audience_funnel.sql) |
 | **weekly_cohort**<br>주간 리텐션 코호트 | 코호트 주 × 경과 주 × channel1 × device_platform × member_seg | 이 다섯 열 | cohort_week / week_offset, channel1, device_platform, member_seg | staging.int_person_day (방문·첫 방문), staging.dim_member (가입일) | 회원 탭 리텐션 곡선, 주간 탭 코호트 히트맵 W1~W12. 리텐션 = retained / cohort_size (화면에서 나눈다). marts.monthly_summary (W1), ops.reconciliation | C4·R1·R2 | [weekly_cohort.sql](sql/marts/weekly_cohort.sql) |
@@ -78,7 +86,7 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 |---|---|---|---|---|---|---|---|
 | **build_log**<br>파이프라인 실행 기록 (없을 때만 만든다. 기록은 누적된다) | 실행 1회 × 단계(SQL 파일 1개) | (run_id, step, step_name) | DATE(started_at) / 없음 | load_all.sh 가 단계마다 1행 추가 | 파이프라인 상태 확인, bigquery/README.md 마지막 실행 요약 |  | [00_ops_tables.sql](sql/00_ops_tables.sql) |
 | **freshness**<br>표별 신선도 (전체 교체) | 표 1개 | (dataset_name, table_name) | 없음 / 없음 | 각 데이터셋 __TABLES__ (행 수·변경 시각), INFORMATION_SCHEMA.PARTITIONS (마지막 파티션) | 대시보드 데이터 탭 기준일, 파이프라인 상태 확인 |  | [09_freshness.sql](sql/09_freshness.sql) |
-| **reconciliation**<br>대조·범위·무결성 검사 결과 (행 추가) | 실행 1회 × 검사 항목 | (run_id, check_id) | DATE(checked_at) / 없음 | raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend, marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day | load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1 |  | [reconciliation.sql](checks/reconciliation.sql) |
+| **reconciliation**<br>대조·범위·무결성 검사 결과 (행 추가) | 실행 1회 × 검사 항목 | (run_id, check_id) | DATE(checked_at) / 없음 | raw.db_payments·db_applications·db_subscriptions·db_venues, staging.events_clean·int_session·int_person_day·fct_order·ad_spend, marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day, marts.daily_revenue·daily_subscription·daily_venue_registry | load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1 |  | [reconciliation.sql](checks/reconciliation.sql) |
 
 ## 계보
 
@@ -93,15 +101,19 @@ flowchart LR
     raw_db_events["db_events"]
     raw_db_applications["db_applications"]
     raw_db_payments["db_payments"]
+    raw_db_venue_contracts["db_venue_contracts"]
+    raw_db_subscriptions["db_subscriptions"]
     raw_ads_spend["ads_spend"]
   end
   subgraph staging
     staging_map_channel["map_channel"]
     staging_events_clean["events_clean"]
     staging_int_session["int_session"]
+    staging_dim_subscription["dim_subscription"]
     staging_int_person_day["int_person_day"]
     staging_dim_member["dim_member"]
     staging_ad_spend["ad_spend"]
+    staging_dim_contract["dim_contract"]
     staging_dim_event["dim_event"]
     staging_dim_venue["dim_venue"]
     staging_fct_order["fct_order"]
@@ -111,12 +123,16 @@ flowchart LR
     marts_daily_channel["daily_channel"]
     marts_daily_event["daily_event"]
     marts_daily_metrics["daily_metrics"]
+    marts_daily_revenue["daily_revenue"]
+    marts_daily_subscription["daily_subscription"]
     marts_daily_venue["daily_venue"]
+    marts_daily_venue_registry["daily_venue_registry"]
     marts_funnel_daily["funnel_daily"]
     marts_hourly_metrics["hourly_metrics"]
     marts_monthly_cohort["monthly_cohort"]
     marts_monthly_summary["monthly_summary"]
     marts_person_day["person_day"]
+    marts_venue_registry["venue_registry"]
     marts_weekly_activity["weekly_activity"]
     marts_weekly_audience_funnel["weekly_audience_funnel"]
     marts_weekly_cohort["weekly_cohort"]
@@ -131,16 +147,21 @@ flowchart LR
   raw_ga4_events --> staging_events_clean
   staging_events_clean --> staging_int_session
   staging_map_channel --> staging_int_session
+  raw_db_payments --> staging_dim_subscription
+  raw_db_subscriptions --> staging_dim_subscription
   raw_db_members --> staging_int_person_day
+  staging_dim_subscription --> staging_int_person_day
   staging_int_session --> staging_int_person_day
   raw_db_members --> staging_dim_member
   staging_int_session --> staging_dim_member
   raw_ads_spend --> staging_ad_spend
+  raw_db_venue_contracts --> staging_dim_contract
   raw_db_events --> staging_dim_event
   raw_db_venues --> staging_dim_event
   staging_fct_order --> staging_dim_event
   raw_db_events --> staging_dim_venue
   raw_db_venues --> staging_dim_venue
+  staging_dim_contract --> staging_dim_venue
   raw_db_applications --> staging_fct_order
   raw_db_events --> staging_fct_order
   raw_db_payments --> staging_fct_order
@@ -153,21 +174,35 @@ flowchart LR
   staging_fct_order --> marts_daily_event
   staging_int_session --> marts_daily_event
   staging_int_person_day --> marts_daily_metrics
+  staging_dim_contract --> marts_daily_revenue
+  staging_fct_order --> marts_daily_revenue
+  staging_dim_subscription --> marts_daily_subscription
+  staging_fct_order --> marts_daily_subscription
   staging_dim_venue --> marts_daily_venue
   staging_events_clean --> marts_daily_venue
   staging_fct_order --> marts_daily_venue
   staging_int_session --> marts_daily_venue
+  staging_dim_contract --> marts_daily_venue_registry
+  staging_dim_venue --> marts_daily_venue_registry
   staging_int_person_day --> marts_funnel_daily
   staging_int_person_day --> marts_hourly_metrics
   staging_int_session --> marts_hourly_metrics
   staging_dim_member --> marts_monthly_cohort
   staging_int_person_day --> marts_monthly_cohort
+  marts_daily_revenue --> marts_monthly_summary
+  marts_daily_subscription --> marts_monthly_summary
+  marts_daily_venue_registry --> marts_monthly_summary
   marts_weekly_cohort --> marts_monthly_summary
   staging_dim_member --> marts_monthly_summary
   staging_fct_order --> marts_monthly_summary
   staging_int_person_day --> marts_monthly_summary
   staging_int_session --> marts_monthly_summary
   staging_int_person_day --> marts_person_day
+  staging_dim_event --> marts_venue_registry
+  staging_dim_venue --> marts_venue_registry
+  staging_events_clean --> marts_venue_registry
+  staging_fct_order --> marts_venue_registry
+  staging_int_session --> marts_venue_registry
   staging_dim_member --> marts_weekly_activity
   staging_int_person_day --> marts_weekly_activity
   staging_dim_member --> marts_weekly_audience_funnel
@@ -197,14 +232,18 @@ flowchart LR
 | 1 | raw.db_events | [schema/db_events.json](schema/db_events.json) |
 | 1 | raw.db_applications | [schema/db_applications.json](schema/db_applications.json) |
 | 1 | raw.db_payments | [schema/db_payments.json](schema/db_payments.json) |
+| 1 | raw.db_venue_contracts | [schema/db_venue_contracts.json](schema/db_venue_contracts.json) |
+| 1 | raw.db_subscriptions | [schema/db_subscriptions.json](schema/db_subscriptions.json) |
 | 1 | raw.ads_spend | [schema/ads_spend.json](schema/ads_spend.json) |
 | 2 | staging.map_channel | [sql/01_map_channel.sql](sql/01_map_channel.sql) |
 | 3 | staging.events_clean | [sql/02_events_clean.sql](sql/02_events_clean.sql) |
 | 4 | staging.int_session | [sql/03_int_session.sql](sql/03_int_session.sql) |
+| 5 | staging.dim_subscription | [sql/04_dim_subscription.sql](sql/04_dim_subscription.sql) |
 | 5 | staging.int_person_day | [sql/04_int_person_day.sql](sql/04_int_person_day.sql) |
 | 6 | staging.dim_member | [sql/05_dim_member.sql](sql/05_dim_member.sql) |
 | 6 | staging.fct_order | [sql/06_fct_order.sql](sql/06_fct_order.sql) |
 | 6 | staging.dim_event | [sql/06_dim_event.sql](sql/06_dim_event.sql) |
+| 6 | staging.dim_contract | [sql/06_dim_contract.sql](sql/06_dim_contract.sql) |
 | 6 | staging.dim_venue | [sql/06_dim_venue.sql](sql/06_dim_venue.sql) |
 | 6 | staging.ad_spend | [sql/06_ad_spend.sql](sql/06_ad_spend.sql) |
 | 7 | marts.daily_metrics | [sql/marts/daily_metrics.sql](sql/marts/daily_metrics.sql) |
@@ -217,6 +256,10 @@ flowchart LR
 | 7 | marts.weekly_cohort | [sql/marts/weekly_cohort.sql](sql/marts/weekly_cohort.sql) |
 | 7 | marts.monthly_cohort | [sql/marts/monthly_cohort.sql](sql/marts/monthly_cohort.sql) |
 | 7 | marts.weekly_activity | [sql/marts/weekly_activity.sql](sql/marts/weekly_activity.sql) |
+| 7 | marts.daily_revenue | [sql/marts/daily_revenue.sql](sql/marts/daily_revenue.sql) |
+| 7 | marts.daily_subscription | [sql/marts/daily_subscription.sql](sql/marts/daily_subscription.sql) |
+| 7 | marts.daily_venue_registry | [sql/marts/daily_venue_registry.sql](sql/marts/daily_venue_registry.sql) |
+| 7 | marts.venue_registry | [sql/marts/venue_registry.sql](sql/marts/venue_registry.sql) |
 | 7 | marts.monthly_summary | [sql/marts/monthly_summary.sql](sql/marts/monthly_summary.sql) |
 | 7 | marts.weekly_audience_funnel | [sql/marts/weekly_audience_funnel.sql](sql/marts/weekly_audience_funnel.sql) |
 | 7 | marts.weekly_path | [sql/marts/weekly_path.sql](sql/marts/weekly_path.sql) |
@@ -239,14 +282,17 @@ flowchart LR
 | C6 | 대조 | 오디언스 퍼널: 신규 + 재방문 vs WAU | 0 | weekly_audience_funnel | 0.0 | 통과 |
 | C7 | 대조 | 경로 1단계 세션 vs 주간 방문 세션 | 0 | weekly_path | 0.0 | 통과 |
 | C8 | 대조 | 사람 마트 방문 고유 vs 일 마트 방문 사람 | 0 | person_day | 0.0 | 통과 |
-| R1 | 범위 | 신규 방문자 W1 리텐션 | 0.15 ~ 0.30 | weekly_cohort | 0.2194 | 통과 |
-| R2 | 범위 | W4 리텐션 | 0.08 ~ 0.18 | weekly_cohort | 0.1009 | 통과 |
-| R3 | 범위 | 방문 → 가입 전환 (기간 누적 사람) | 0.06 ~ 0.12 | int_person_day | 0.0967 | 통과 |
-| R4 | 범위 | 행사 상세 조회 → 신청 (사람 × 일) | 0.03 ~ 0.08 | daily_metrics | 0.0616 | 통과 |
-| R5 | 범위 | 신청 → 결제 완료 (유료 행사) | 0.55 ~ 0.75 | fct_order | 0.6643 | 통과 |
-| R6 | 범위 | 취소율 (신청 대비) | 0.05 ~ 0.12 | fct_order | 0.0949 | 통과 |
-| R7 | 범위 | 광고 세션 비중 (집행일, 자동 로드 제외) | 0.10 ~ 0.30 | int_session | 0.2018 | 통과 |
-| R8 | 범위 | 자동 로드 세션 비중 | 0.05 ~ 0.10 | int_session | 0.0719 | 통과 |
+| C9 | 대조 | 티켓 결제 금액: 매출 마트 vs 결제 원장 | 0 | fct_order, daily_revenue | 0.0 | 통과 |
+| C10 | 대조 | 일별 활성 구독자: 구독 마트 vs 구독 원장 | 0 | daily_subscription | 0.0 | 통과 |
+| C11 | 대조 | 등록 공간 누적: 상권 마트 vs 공간 원장 | 0 | daily_venue_registry | 0.0 | 통과 |
+| R1 | 범위 | 신규 방문자 W1 리텐션 | 0.15 ~ 0.30 | weekly_cohort | 0.2185 | 통과 |
+| R2 | 범위 | W4 리텐션 | 0.08 ~ 0.18 | weekly_cohort | 0.0997 | 통과 |
+| R3 | 범위 | 방문 → 가입 전환 (기간 누적 사람) | 0.06 ~ 0.12 | int_person_day | 0.0935 | 통과 |
+| R4 | 범위 | 행사 상세 조회 → 신청 (사람 × 일) | 0.03 ~ 0.15 | daily_metrics | 0.1189 | 통과 |
+| R5 | 범위 | 신청 → 결제 완료 (유료 행사) | 0.55 ~ 0.75 | fct_order | 0.7079 | 통과 |
+| R6 | 범위 | 취소율 (신청 대비) | 0.05 ~ 0.12 | fct_order | 0.088 | 통과 |
+| R7 | 범위 | 광고 세션 비중 (집행일, 자동 로드 제외) | 0.10 ~ 0.30 | int_session | 0.199 | 통과 |
+| R8 | 범위 | 자동 로드 세션 비중 | 0.05 ~ 0.10 | int_session | 0.0718 | 통과 |
 | I1 | 무결성 | 기기당 회원 1명 | 0 | int_session | 0.0 | 통과 |
 | I2 | 무결성 | 채널 매핑 누락 세션 | 0 | int_session | 0.0 | 통과 |
 | I3 | 무결성 | event_date = KST 날짜 | 0 | events_clean | 0.0 | 통과 |
@@ -254,36 +300,42 @@ flowchart LR
 
 ## 마지막 실행
 
-검사 run `20260923T133759Z` (2026-09-23 22:41 KST): 21/21 통과
+검사 run `20260923T153053Z` (2026-09-24 00:30 KST): 24/24 통과
 
 단계별 마지막 기록 (`ops.build_log`, 시각 KST):
 
 | 단계 | 표 | run | 종료 | 초 | 행 | 처리 바이트 | 상태 |
 |---|---|---|---|---:|---:|---:|---|
-| 1 | raw | 20260923T133349Z | 2026-09-23 22:37 | 211 | 8,830,992 | 0 | ok |
-| 2 | staging.map_channel | 20260923T133759Z | 2026-09-23 22:38 | 5 | 21 | 236,503,091 | ok |
-| 3 | staging.events_clean | 20260923T133759Z | 2026-09-23 22:38 | 10 | 8,762,591 | 2,165,053,142 | ok |
-| 4 | staging.int_session | 20260923T133759Z | 2026-09-23 22:38 | 10 | 1,403,799 | 1,371,872,527 | ok |
-| 5 | staging.int_person_day | 20260923T133759Z | 2026-09-23 22:38 | 9 | 742,983 | 223,848,331 | ok |
-| 6 | staging.dim_member | 20260923T133759Z | 2026-09-23 22:38 | 5 | 7,717 | 136,888,764 | ok |
-| 6 | staging.fct_order | 20260923T133759Z | 2026-09-23 22:39 | 8 | 40,945 | 2,978,642 | ok |
-| 6 | staging.dim_event | 20260923T133759Z | 2026-09-23 22:39 | 5 | 250 | 1,747,181 | ok |
-| 6 | staging.dim_venue | 20260923T133759Z | 2026-09-23 22:39 | 5 | 60 | 5,378 | ok |
-| 6 | staging.ad_spend | 20260923T133759Z | 2026-09-23 22:39 | 5 | 133 | 9,856 | ok |
-| 7 | marts.daily_metrics | 20260923T133759Z | 2026-09-23 22:39 | 8 | 4,154 | 77,333,322 | ok |
-| 7 | marts.hourly_metrics | 20260923T133759Z | 2026-09-23 22:39 | 9 | 87,433 | 116,135,905 | ok |
-| 7 | marts.daily_channel | 20260923T133759Z | 2026-09-23 22:39 | 9 | 20,360 | 151,930,333 | ok |
-| 7 | marts.daily_ad | 20260923T133759Z | 2026-09-23 22:40 | 7 | 134 | 40,916,108 | ok |
-| 7 | marts.daily_event | 20260923T133759Z | 2026-09-23 22:40 | 9 | 4,615 | 628,312,042 | ok |
-| 7 | marts.daily_venue | 20260923T133759Z | 2026-09-23 22:40 | 9 | 20,328 | 598,355,063 | ok |
-| 7 | marts.funnel_daily | 20260923T133759Z | 2026-09-23 22:40 | 8 | 20,770 | 25,324,512 | ok |
-| 7 | marts.weekly_cohort | 20260923T133759Z | 2026-09-23 22:40 | 6 | 5,085 | 30,201,833 | ok |
-| 7 | marts.monthly_cohort | 20260923T133759Z | 2026-09-23 22:40 | 6 | 140 | 20,051,832 | ok |
-| 7 | marts.weekly_activity | 20260923T133759Z | 2026-09-23 22:41 | 6 | 593 | 38,374,646 | ok |
-| 7 | marts.monthly_summary | 20260923T133759Z | 2026-09-23 22:41 | 6 | 13 | 48,649,159 | ok |
-| 7 | marts.weekly_audience_funnel | 20260923T133759Z | 2026-09-23 22:41 | 5 | 10,990 | 70,949,822 | ok |
-| 7 | marts.weekly_path | 20260923T133759Z | 2026-09-23 22:41 | 7 | 80,186 | 692,959,188 | ok |
-| 7 | marts.person_day | 20260923T133759Z | 2026-09-23 22:41 | 10 | 697,289 | 45,245,155 | ok |
-| 8 | ops.reconciliation | 20260923T133759Z | 2026-09-23 22:41 | 9 | 0 | 590,114,082 | ok |
-| 9 | ops.freshness | 20260923T133759Z | 2026-09-23 22:42 | 9 | 30 | 31,458,894 | ok |
+| 1 | raw | 20260923T151916Z | 2026-09-24 00:23 | 220 | 8,412,220 | 0 | ok |
+| 2 | staging.map_channel | 20260923T152530Z | 2026-09-24 00:25 | 5 | 21 | 223,769,558 | ok |
+| 3 | staging.events_clean | 20260923T152530Z | 2026-09-24 00:25 | 10 | 8,265,295 | 2,184,523,390 | ok |
+| 4 | staging.int_session | 20260923T152530Z | 2026-09-24 00:26 | 9 | 1,269,803 | 1,300,804,704 | ok |
+| 5 | staging.dim_subscription | 20260923T152530Z | 2026-09-24 00:26 | 5 | 2,466 | 1,166,166 | ok |
+| 5 | staging.int_person_day | 20260923T152530Z | 2026-09-24 00:26 | 9 | 675,891 | 212,736,426 | ok |
+| 6 | staging.dim_member | 20260923T152530Z | 2026-09-24 00:26 | 5 | 7,462 | 124,291,660 | ok |
+| 6 | staging.fct_order | 20260923T152530Z | 2026-09-24 00:26 | 7 | 87,865 | 7,957,935 | ok |
+| 6 | staging.dim_event | 20260923T152530Z | 2026-09-24 00:26 | 4 | 2,402 | 4,724,966 | ok |
+| 6 | staging.dim_contract | 20260923T152530Z | 2026-09-24 00:26 | 5 | 200 | 11,012 | ok |
+| 6 | staging.dim_venue | 20260923T152530Z | 2026-09-24 00:26 | 5 | 1,800 | 255,795 | ok |
+| 6 | staging.ad_spend | 20260923T152530Z | 2026-09-24 00:27 | 6 | 153 | 11,236 | ok |
+| 7 | marts.daily_metrics | 20260923T152530Z | 2026-09-24 00:27 | 7 | 4,170 | 71,611,752 | ok |
+| 7 | marts.hourly_metrics | 20260923T152530Z | 2026-09-24 00:27 | 9 | 86,493 | 105,687,903 | ok |
+| 7 | marts.daily_channel | 20260923T152530Z | 2026-09-24 00:27 | 10 | 20,243 | 138,120,020 | ok |
+| 7 | marts.daily_ad | 20260923T152530Z | 2026-09-24 00:27 | 7 | 153 | 48,388,470 | ok |
+| 7 | marts.daily_event | 20260923T152530Z | 2026-09-24 00:27 | 9 | 41,191 | 595,635,240 | ok |
+| 7 | marts.daily_venue | 20260923T152530Z | 2026-09-24 00:28 | 8 | 158,441 | 564,496,372 | ok |
+| 7 | marts.funnel_daily | 20260923T152530Z | 2026-09-24 00:28 | 7 | 20,850 | 22,947,600 | ok |
+| 7 | marts.weekly_cohort | 20260923T152530Z | 2026-09-24 00:28 | 6 | 5,073 | 27,606,706 | ok |
+| 7 | marts.monthly_cohort | 20260923T152530Z | 2026-09-24 00:28 | 6 | 140 | 18,448,453 | ok |
+| 7 | marts.weekly_activity | 20260923T152530Z | 2026-09-24 00:28 | 7 | 593 | 35,041,507 | ok |
+| 7 | marts.daily_revenue | 20260923T152530Z | 2026-09-24 00:28 | 8 | 1,351 | 4,975,012 | ok |
+| 7 | marts.daily_subscription | 20260923T152530Z | 2026-09-24 00:29 | 10 | 294 | 3,570,222 | ok |
+| 7 | marts.daily_venue_registry | 20260923T152530Z | 2026-09-24 00:29 | 7 | 3,640 | 86,204 | ok |
+| 7 | marts.venue_registry | 20260923T152530Z | 2026-09-24 00:29 | 5 | 1,800 | 560,819,671 | ok |
+| 7 | marts.monthly_summary | 20260923T152530Z | 2026-09-24 00:29 | 6 | 13 | 47,045,663 | ok |
+| 7 | marts.weekly_audience_funnel | 20260923T152530Z | 2026-09-24 00:29 | 5 | 11,110 | 69,806,583 | ok |
+| 7 | marts.weekly_path | 20260923T152530Z | 2026-09-24 00:29 | 7 | 84,511 | 644,831,422 | ok |
+| 7 | marts.person_day | 20260923T152530Z | 2026-09-24 00:29 | 9 | 634,096 | 41,945,090 | ok |
+| 8 | ops.reconciliation | 20260923T153053Z | 2026-09-24 00:31 | 4 | 0 | 557,775,577 | ok |
+| 9 | ops.freshness | 20260923T152530Z | 2026-09-24 00:30 | 9 | 38 | 31,459,090 | ok |
 

@@ -148,7 +148,7 @@ interface FlowNode {
 
 const SOURCES: FlowNode[] = [
   { id: 'log', label: '행동 로그', sub: 'GA4형 이벤트' },
-  { id: 'db', label: '서비스 DB', sub: '야간 스냅샷' },
+  { id: 'db', label: '서비스 DB', sub: '공간·계약·구독·결제' },
   { id: 'ad', label: '광고 리포트', sub: '일별 집행' },
 ]
 const LAYERS: FlowNode[] = [
@@ -279,11 +279,11 @@ function FlowTall() {
   )
 }
 
-const DOCS: { label: string; sub: string; href: string; internal?: boolean }[] = [
-  { label: '데이터 페이지', sub: '층별 표·컬럼·마트 미리보기', href: '', internal: true },
+const DOCS: { label: string; sub: string; href: string; internal?: 'data' | 'metrics' }[] = [
+  { label: '데이터 페이지', sub: '층별 표·컬럼·마트 미리보기', href: '', internal: 'data' },
+  { label: '지표 가이드', sub: '탭별 질문·지표 정의·산식', href: '', internal: 'metrics' },
   { label: 'SQL 카탈로그', sub: '표 목록·계보·실행 순서', href: `${REPO}/blob/main/bigquery/README.md` },
   { label: '데이터 아키텍처', sub: '층·표·그레인·파이프라인', href: `${REPO}/blob/main/docs/architecture.md` },
-  { label: '지표 정의', sub: '산식·단위·분모', href: `${REPO}/blob/main/docs/metrics.md` },
   { label: '대시보드 설계', sub: '탭·필터·데이터 계약', href: `${REPO}/blob/main/docs/dashboard.md` },
   { label: '저장소', sub: '생성기·SQL·대시보드 코드', href: REPO },
 ]
@@ -300,11 +300,17 @@ function Section({ n, title, children }: { n: number; title: string; children: R
   )
 }
 
-export default function About({ dataHref, onData }: { dataHref: string; onData: () => void }) {
-  const openData = (e: MouseEvent<HTMLAnchorElement>) => {
+export default function About({
+  hrefs,
+  onPage,
+}: {
+  hrefs: Record<'data' | 'metrics', string>
+  onPage: (page: 'data' | 'metrics') => void
+}) {
+  const open = (page: 'data' | 'metrics') => (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
     e.preventDefault()
-    onData()
+    onPage(page)
   }
   return (
     <main className="mx-auto flex max-w-[1280px] flex-col gap-12 px-4 pb-20 pt-8 sm:px-6">
@@ -322,8 +328,8 @@ export default function About({ dataHref, onData }: { dataHref: string; onData: 
           className="max-w-[640px] scroll-mt-6 border-l-2 border-line pl-3 text-[13px] leading-relaxed text-muted"
         >
           이 대시보드의 수치는 가상 서비스 NightPulse의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
-          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 8,000명·회원 약 700명·이벤트
-          약 86만 건 규모입니다.
+          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 80,000명·회원 약 7,700명·등록 공간
+          1,800곳·이벤트 약 880만 건 규모입니다. 상권 이름과 위치는 공개 지리 정보이고 상호는 모두 가상입니다.
         </p>
       </div>
 
@@ -332,6 +338,12 @@ export default function About({ dataHref, onData }: { dataHref: string; onData: 
           NightPulse는 클럽·바·라운지 같은 공간과 그곳에서 열리는 행사를 찾아보고, 신청하고, 결제하는 서비스입니다. 탐색은
           비회원도 할 수 있지만 신청부터는 로그인이 필요합니다. iOS·Android 앱과 웹으로 들어오고, 일부 방문은 SNS 광고
           캠페인에서 옵니다. 분석의 질문은 두 가지입니다 — 어느 단계에서 사람이 빠지는가, 어떤 유입이 결제까지 이어지는가.
+        </p>
+        <p className="max-w-[720px] text-[14px] leading-relaxed text-ink2">
+          공간은 두 층입니다. 서울 주요 상권의 공간 1,800곳이 목록에 등록돼 있고, 그중 약 10%는 월 이용료(베이직 9.9만·프로
+          29.9만 원)를 내는 파트너 공간으로 행사를 엽니다. 2025년 12월부터 회원은 월 9,900원 구독으로 파트너 공간 행사를 15%
+          할인받습니다. 그래서 매출은 티켓·구독·B2B 계약 세 갈래이고, 질문이 하나 더 붙습니다 — 파트너 계약과 구독이 거래를
+          늘리는가.
         </p>
       </Section>
 
@@ -371,8 +383,8 @@ export default function About({ dataHref, onData }: { dataHref: string; onData: 
           {DOCS.map((d) => (
             <li key={d.label}>
               <a
-                href={d.internal ? dataHref : d.href}
-                {...(d.internal ? { onClick: openData } : { target: '_blank', rel: 'noreferrer' })}
+                href={d.internal ? hrefs[d.internal] : d.href}
+                {...(d.internal ? { onClick: open(d.internal) } : { target: '_blank', rel: 'noreferrer' })}
                 className="card flex h-full flex-col gap-1 px-4 py-3 transition-shadow hover:shadow-[0_0_0_1px_var(--axis)]"
               >
                 <span className="flex items-center justify-between text-[14px] font-medium text-ink">

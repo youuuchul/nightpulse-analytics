@@ -55,6 +55,42 @@ SCREEN_NEXT: dict[str, list[tuple[str, float]]] = {
 }
 
 
+# 시나리오 2.0: 상권·장르·유형은 생성기 시드(names.json)를 그대로 쓴다. 상호는 전부 가상 조합.
+REGIONS: list[dict] = NAMES["regions"]
+GENRES: list[str] = NAMES["genres"]
+VENUE_TYPES: list[str] = NAMES["venue_types"]
+PLANS = [("basic", 99000, 0.7), ("pro", 299000, 0.3)]
+SUB_PRICE = 9900
+SUB_LAUNCH = date(2025, 12, 1)
+PD = {
+    "visited": 1,
+    "explored": 2,
+    "event_detail": 4,
+    "detail_any": 8,
+    "signed_up": 16,
+    "logged_in": 32,
+    "apply_view": 64,
+    "applied": 128,
+    "paid": 256,
+    "cancelled": 512,
+    "searched": 1024,
+    "banner": 2048,
+    "shared": 4096,
+    "multi_session": 8192,
+    "first_visit": 16384,
+    "subscribed": 32768,
+}
+SAMPLE_VENUES = 60
+
+
+def venue_name(rng: random.Random, vtype: str) -> str:
+    """가상 상호 한 개(한글 또는 영문 조합 + 유형 접미사)."""
+    ko, en = NAMES["venue_type_suffix"][vtype]
+    if rng.random() < NAMES["venue_name_en_share"]:
+        return f"{rng.choice(NAMES['venue_name_en_a'])} {rng.choice(NAMES['venue_name_en_b'])} {en}"
+    return f"{rng.choice(NAMES['venue_name_ko_a'])}{rng.choice(NAMES['venue_name_ko_b'])} {ko}"
+
+
 def pick(rng: random.Random, pairs: list[tuple]) -> object:
     """가중치 목록에서 하나를 고른다.
 
@@ -108,13 +144,20 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
     days = [from_date + timedelta(days=i) for i in range((to_date - from_date).days + 1)]
 
     venues = []
-    for i, name in enumerate(NAMES["venues"]):
+    used: set[str] = set()
+    for i in range(SAMPLE_VENUES):
+        vtype = rng.choice(VENUE_TYPES)
+        name = ""
+        while not name or name in used:
+            name = venue_name(rng, vtype)
+        used.add(name)
         venues.append(
             {
                 "venue_id": 101 + i,
                 "venue_name": name,
-                "region": rng.choice(NAMES["regions"]),
-                "genre": rng.choice(NAMES["genres"]),
+                "venue_type": vtype,
+                "region": pick(rng, [(r["name"], r["share"]) for r in REGIONS if not r.get("scatter")]),
+                "genre": rng.choice(GENRES),
                 "pop": rng.paretovariate(1.6),
             }
         )
@@ -144,8 +187,11 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
 
     campaigns = []
     for c in NAMES["campaigns"]:
-        s = from_date + timedelta(days=(c["start_week"] - 1) * 7)
-        e = from_date + timedelta(days=c["end_week"] * 7 - 1)
+        if "start_date" in c:
+            s, e = date.fromisoformat(c["start_date"]), date.fromisoformat(c["end_date"])
+        else:
+            s = from_date + timedelta(days=(c["start_week"] - 1) * 7)
+            e = from_date + timedelta(days=c["end_week"] * 7 - 1)
         campaigns.append({**c, "start": s, "end": e})
 
     def campaign_on(d: date) -> dict | None:
@@ -221,6 +267,8 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
     person_day: dict[tuple[int, date], tuple[list[bool], bool, bool]] = {}
     wp: dict[tuple, int] = defaultdict(int)
     prng = random.Random(seed + 1)
+    pd_flags: dict[tuple[int, date], int] = {}
+    payments: list[tuple[date, int, int, int]] = []
 
     for p in people:
         for d in p.visits:
@@ -265,6 +313,7 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
                 if amount > 0 and paid_ok:
                     pay_count = 1
                     pay_amount = amount + rng.choice([-2000, 0, 0, 3000])
+                    payments.append((d, p.pid, e["venue_id"], pay_amount))
                     ev[(d, e["event_id"])]["pay_count"] += 1
                     ev[(d, e["event_id"])]["pay_amount"] += pay_amount
                     vn[(d, e["venue_id"])]["pay_count"] += 1
@@ -304,6 +353,19 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
                     c2, c3 = pick(rng, NON_PAID)
                     chans.append(("non_paid", c2, c3))
             hits = [True, detail, gate, apply_view, pay_count > 0]
+            pd_flags[(p.pid, d)] = (
+                PD["visited"]
+                | (PD["explored"] if explorer else 0)
+                | (PD["event_detail"] | PD["detail_any"] if detail else 0)
+                | (PD["signed_up"] if signed_today else 0)
+                | (PD["logged_in"] if logged else 0)
+                | (PD["apply_view"] if apply_view else 0)
+                | (PD["applied"] if applies else 0)
+                | (PD["paid"] if pay_count else 0)
+                | (PD["cancelled"] if cancels else 0)
+                | (PD["multi_session"] if n_sess >= 2 else 0)
+                | (PD["first_visit"] if first else 0)
+            )
             person_day[(p.pid, d)] = (hits, any(c[0] == "paid" for c in chans), applies > 0)
             wk_seg = p.seg(monday(d))
             for _ in range(n_sess):
@@ -602,8 +664,9 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
             }
         )
     out["monthly_summary"] = ms
+    build_v2(seed, out, people, days, venues, events, payments, pd_flags)
 
-    tables = {k: len(v) for k, v in out.items()}
+    tables = {k: len(v["rows"]) if isinstance(v, dict) else len(v) for k, v in out.items()}
     meta = {
         "to_date": ds(to_date),
         "from_date": ds(from_date),
@@ -612,6 +675,325 @@ def build(seed: int, to_date: date, weeks: int, persons: int) -> dict:
         "tables": tables,
     }
     return {"meta": meta, **out}
+
+
+def jitter(rng: random.Random, lat: float, lng: float, meters: float) -> tuple[float, float]:
+    """중심에서 정규 분포로 흩뿌린 좌표(미터 단위 표준편차)."""
+    return (
+        round(lat + rng.gauss(0, meters) / 111_000, 6),
+        round(lng + rng.gauss(0, meters) / 88_000, 6),
+    )
+
+
+def build_v2(
+    seed: int,
+    out: dict,
+    people: list[Person],
+    days: list[date],
+    venues: list[dict],
+    events: list[dict],
+    payments: list[tuple[date, int, int, int]],
+    pd_flags: dict[tuple[int, date], int],
+) -> None:
+    """시나리오 2.0 마트(공간 원장·계약·구독·매출)와 person_day 를 샘플로 만든다.
+
+    Args:
+        seed: 난수 시드.
+        out: 결과 사전. 새 키를 추가하고 monthly_summary 행에 열을 더한다.
+        people: 샘플 사람 목록.
+        days: 기간 날짜 목록.
+        venues: 행사를 여는 공간(샘플 이벤트용).
+        events: 행사 목록.
+        payments: (날짜, 사람, 공간, 금액) 티켓 결제.
+        pd_flags: (사람, 날짜) → 행동 비트.
+    """
+    rng = random.Random(seed + 2)
+    from_date = days[0]
+    n_days = len(days)
+    total = 1800
+
+    subcenters = {
+        r["name"]: [jitter(rng, *rng.choice(r["centers"]), 420) for _ in range(rng.randint(2, 4))]
+        for r in REGIONS
+        if not r.get("scatter")
+    }
+    event_ids = {v["venue_id"] for v in venues}
+    names: set[str] = {v["venue_name"] for v in venues}
+    reg: list[dict] = []
+    for i in range(total):
+        ev = venues[i] if i < len(venues) else None
+        if ev:
+            rdef = next(r for r in REGIONS if r["name"] == ev["region"])
+        else:
+            rdef = pick(rng, [(r, r["share"]) for r in REGIONS])
+        ci = rng.choices(range(len(rdef["centers"])), weights=rdef.get("center_weights"))[0]
+        district = rdef["center_districts"][ci] if "center_districts" in rdef else rdef["district"]
+        if rdef.get("scatter"):
+            lat, lng = jitter(rng, *rdef["centers"][ci], 700)
+        else:
+            lat, lng = jitter(rng, *rng.choice(subcenters[rdef["name"]]), 230)
+        genre = ev["genre"] if ev else rng.choices(GENRES, weights=rdef["genre_w"])[0]
+        vtype = ev["venue_type"] if ev else rng.choices(VENUE_TYPES, weights=rdef["type_w"])[0]
+        if ev:
+            name = ev["venue_name"]
+        else:
+            name = ""
+            while not name or name in names:
+                name = venue_name(rng, vtype)
+        names.add(name)
+        if i < 300:
+            reg_day = 0
+        else:
+            u = rng.random()
+            reg_day = int((n_days - 1) * math.acos(1 - 2 * u) / math.pi)
+        band = rng.choices(NAMES["capacity_bands"], weights=NAMES["type_capacity_weights"][vtype])[0]
+        reg.append(
+            {
+                "venue_id": ev["venue_id"] if ev else 1001 + i,
+                "name": name,
+                "region": rdef["name"],
+                "district": district,
+                "lat": lat,
+                "lng": lng,
+                "genre": genre,
+                "venue_type": vtype,
+                "capacity_band": band,
+                "registered_day": reg_day,
+                "pop": rng.paretovariate(1.4) * rdef["share"] * 5,
+            }
+        )
+
+    contracts: list[dict] = []
+    for v in reg:
+        is_event = v["venue_id"] in event_ids
+        if not (rng.random() < (0.8 if is_event else 0.093)):
+            continue
+        start = v["registered_day"] + (int(rng.expovariate(1 / 20)) if is_event else int(rng.expovariate(1 / 60)))
+        if start >= n_days:
+            continue
+        plan, fee, _ = pick(rng, [((a, b, c), c) for a, b, c in PLANS])
+        end = None
+        m = start + 30
+        while m < n_days:
+            if rng.random() < 0.02:
+                end = m
+                break
+            m += 30
+        contracts.append({"venue_id": v["venue_id"], "plan": plan, "fee": fee, "start": start, "end": end})
+    by_venue = {c["venue_id"]: c for c in contracts}
+
+    def partner_on(vid: int, di: int) -> bool:
+        c = by_venue.get(vid)
+        return c is not None and c["start"] <= di and (c["end"] is None or di < c["end"])
+
+    # 구독: 회원만, 12/01 출시, 월 이탈 6%
+    subs: dict[int, tuple[int, int | None]] = {}
+    launch = (SUB_LAUNCH - from_date).days
+    for p in people:
+        if p.signup_day is None or rng.random() > (0.55 if p.core else 0.3):
+            continue
+        s0 = max((p.signup_day - from_date).days, launch) + int(rng.expovariate(1 / 25))
+        if s0 >= n_days:
+            continue
+        end = None
+        m = s0 + 30
+        while m < n_days:
+            if rng.random() < 0.06:
+                end = m
+                break
+            m += 30
+        subs[p.pid] = (s0, end)
+
+    def sub_on(pid: int, di: int) -> bool:
+        x = subs.get(pid)
+        return x is not None and x[0] <= di and (x[1] is None or di < x[1])
+
+    by_pid = {p.pid: p for p in people}
+    dm_index = {(r["kst_date"], r["channel1"], r["device_platform"], r["member_seg"]): r for r in out["daily_metrics"]}
+    for r in out["daily_metrics"]:
+        r["subscribers"] = 0
+        r["sub_payers"] = 0
+    for (pid, d), f in list(pd_flags.items()):
+        di = (d - from_date).days
+        if sub_on(pid, di):
+            pd_flags[(pid, d)] = f | PD["subscribed"]
+            p = by_pid[pid]
+            row = dm_index[(d.isoformat(), p.channel1, p.platform, p.seg(d))]
+            row["subscribers"] += 1
+            s0 = subs[pid][0]
+            if (di - s0) % 30 == 0:
+                row["sub_payers"] += 1
+
+    # 매출(일 × 종류)
+    rev: dict[tuple, dict] = defaultdict(lambda: defaultdict(int))
+    payers_t: dict[tuple, set[int]] = defaultdict(set)
+    sub_pay: dict[int, list[int]] = defaultdict(lambda: [0, 0, 0])
+    sub_payers: dict[int, set[int]] = defaultdict(set)
+    v_events: dict[int, int] = defaultdict(int)
+    v_amount: dict[int, int] = defaultdict(int)
+    for d, pid, vid, amount in payments:
+        di = (d - from_date).days
+        partner = partner_on(vid, di)
+        sub = sub_on(pid, di)
+        disc = round(amount * 0.15) if (partner and sub) else 0
+        refund = amount - disc if rng.random() < 0.03 else 0
+        r = rev[(di, "ticket", partner)]
+        r["pay_count"] += 1
+        r["gross_amount"] += amount
+        r["discount_amount"] += disc
+        r["refund_amount"] += refund
+        r["net_amount"] += amount - disc - refund
+        payers_t[(di, partner)].add(pid)
+        v_amount[vid] += amount - disc
+        if sub:
+            sub_pay[di][0] += amount - disc
+            sub_payers[di].add(pid)
+    for e in events:
+        v_events[e["venue_id"]] += 1
+    for (di, partner), ps in payers_t.items():
+        rev[(di, "ticket", partner)]["payers"] = len(ps)
+
+    ds = lambda i: (from_date + timedelta(days=i)).isoformat()  # noqa: E731
+    subs_rows = []
+    for di in range(n_days):
+        active = sum(1 for s0, e in subs.values() if s0 <= di and (e is None or di < e))
+        new = sum(1 for s0, _ in subs.values() if s0 == di)
+        churned = sum(1 for _, e in subs.values() if e == di)
+        billed = [pid for pid, (s0, e) in subs.items() if di >= s0 and (di - s0) % 30 == 0 and (e is None or di < e)]
+        if billed:
+            r = rev[(di, "subscription", None)]
+            r["pay_count"] = r["payers"] = len(billed)
+            r["gross_amount"] = r["net_amount"] = len(billed) * SUB_PRICE
+        d = from_date + timedelta(days=di)
+        dim = (date(d.year + d.month // 12, d.month % 12 + 1, 1) - d.replace(day=1)).days
+        act = [c for c in contracts if c["start"] <= di and (c["end"] is None or di < c["end"])]
+        if act:
+            r = rev[(di, "b2b", None)]
+            r["pay_count"] = r["payers"] = len(act)
+            r["gross_amount"] = r["net_amount"] = round(sum(c["fee"] for c in act) / dim)
+        subs_rows.append(
+            {
+                "kst_date": ds(di),
+                "active_subscribers": active,
+                "new_subscribers": new,
+                "churned_subscribers": churned,
+                "mrr": active * SUB_PRICE,
+                "subscriber_ticket_payers": len(sub_payers[di]),
+                "subscriber_ticket_amount": sub_pay[di][0],
+            }
+        )
+    kinds = ["ticket", "subscription", "b2b"]
+    out["daily_revenue"] = [
+        {
+            "kst_date": ds(k[0]),
+            "kind": k[1],
+            "partner_flag": k[2],
+            **{
+                c: v.get(c, 0)
+                for c in ["pay_count", "gross_amount", "discount_amount", "refund_amount", "net_amount", "payers"]
+            },
+        }
+        for k, v in sorted(rev.items(), key=lambda kv: (kv[0][0], kinds.index(kv[0][1]), not kv[0][2]))
+    ]
+    out["daily_subscription"] = subs_rows
+
+    regions = [r["name"] for r in REGIONS]
+    dvr = []
+    for di in range(n_days):
+        for rg in regions:
+            vs = [v for v in reg if v["region"] == rg]
+            ids = {v["venue_id"] for v in vs}
+            cs = [c for c in contracts if c["venue_id"] in ids]
+            act = [c for c in cs if c["start"] <= di and (c["end"] is None or di < c["end"])]
+            dvr.append(
+                {
+                    "kst_date": ds(di),
+                    "region": rg,
+                    "registered_total": sum(1 for v in vs if v["registered_day"] <= di),
+                    "partner_total": len(act),
+                    "new_registered": sum(1 for v in vs if v["registered_day"] == di),
+                    "new_contracts": sum(1 for c in cs if c["start"] == di),
+                    "churned_contracts": sum(1 for c in cs if c["end"] == di),
+                    "mrr_basic": sum(c["fee"] for c in act if c["plan"] == "basic"),
+                    "mrr_pro": sum(c["fee"] for c in act if c["plan"] == "pro"),
+                }
+            )
+    out["daily_venue_registry"] = dvr
+
+    last = n_days - 1
+    views28: dict[int, int] = defaultdict(int)
+    for r in out["daily_venue"]:
+        if r["kst_date"] > ds(last - 28):
+            views28[r["venue_id"]] += r["detail_viewers"]
+    out["venue_registry"] = []
+    for v in reg:
+        if v["registered_day"] > last:
+            continue
+        c = by_venue.get(v["venue_id"])
+        partner = partner_on(v["venue_id"], last)
+        base = views28.get(v["venue_id"], 0)
+        synth = int(v["pop"] * (2.2 if partner else 1.0) * 4)
+        out["venue_registry"].append(
+            {
+                "venue_id": v["venue_id"],
+                "name": v["name"],
+                "region": v["region"],
+                "district": v["district"],
+                "lat": v["lat"],
+                "lng": v["lng"],
+                "genre": v["genre"],
+                "venue_type": v["venue_type"],
+                "capacity_band": v["capacity_band"],
+                "registered_at": ds(v["registered_day"]),
+                "is_partner": partner,
+                "plan": c["plan"] if c else None,
+                "contract_started_at": ds(c["start"]) if c else None,
+                "contract_ended_at": ds(c["end"]) if c and c["end"] is not None else None,
+                "events_365d": v_events.get(v["venue_id"], 0),
+                "ticket_amount_365d": v_amount.get(v["venue_id"], 0),
+                "detail_viewers_28d": base * 6 + synth,
+                "status": "closed" if rng.random() < 0.02 else "active",
+                "as_of_date": ds(last),
+            }
+        )
+
+    by_month: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for r in out["daily_revenue"]:
+        by_month[r["kst_date"][:7]][r["kind"]] += r["net_amount"]
+    eom: dict[str, int] = {}
+    for i in range(n_days):
+        eom[ds(i)[:7]] = i
+    for row in out["monthly_summary"]:
+        m = row["month"]
+        i = eom[m]
+        row["ticket_amount"] = by_month[m]["ticket"]
+        row["subscription_amount"] = by_month[m]["subscription"]
+        row["b2b_amount"] = by_month[m]["b2b"]
+        row["active_subscribers_eom"] = subs_rows[i]["active_subscribers"]
+        day_rows = [r for r in dvr if r["kst_date"] == ds(i)]
+        row["partner_total_eom"] = sum(r["partner_total"] for r in day_rows)
+        row["registered_total_eom"] = sum(r["registered_total"] for r in day_rows)
+
+    codes = {"c": ["non_paid", "paid"], "p": ["android", "ios", "web"], "m": ["guest", "member"]}
+    rows = []
+    for (pid, d), f in sorted(pd_flags.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+        p = by_pid[pid]
+        rows.append(
+            [
+                pid,
+                (d - from_date).days,
+                codes["c"].index(p.channel1),
+                codes["p"].index(p.platform),
+                codes["m"].index(p.seg(d)),
+                f,
+            ]
+        )
+    out["person_day"] = {
+        "base_date": from_date.isoformat(),
+        "cols": ["pk", "d", "c", "p", "m", "f"],
+        "codes": codes,
+        "rows": rows,
+    }
 
 
 def main() -> None:

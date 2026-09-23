@@ -6,6 +6,8 @@ import { F, uniquePersons } from '../lib/persons'
 import { ready, useTable, waitOf } from '../lib/source'
 import type { DailyMetric, HourlyMetric } from '../lib/types'
 import TrendCard, { type TrendMetric } from '../components/TrendCard'
+import RevenueCard from '../components/RevenueCard'
+import { sumRevenue } from '../lib/revenue'
 import { Pending, Tile, TileRow } from '../components/ui'
 import { delta, ptDelta, type TabProps } from './common'
 
@@ -60,8 +62,28 @@ export default function Overview({ data, s, set, range }: TabProps) {
     for (const r of data.daily_metrics) if (r.kst_date <= to) members += r.signups
     const dv = ready(venueL)
     const venues = dv ? new Set(dv.filter((r) => r.kst_date <= to).map((r) => r.venue_id)).size : null
-    return { to, members, venues }
+    let registered: number | null = null
+    let partners: number | null = null
+    const reg = data.daily_venue_registry
+    if (reg?.length) {
+      const last = reg.reduce((a, r) => (r.kst_date <= to && r.kst_date > a ? r.kst_date : a), '')
+      registered = 0
+      partners = 0
+      for (const r of reg)
+        if (r.kst_date === last) {
+          registered += r.registered_total
+          partners += r.partner_total
+        }
+    }
+    const subs = data.daily_subscription?.filter((r) => r.kst_date <= to)
+    const subscribers = subs?.length ? subs[subs.length - 1].active_subscribers : null
+    return { to, members, venues, registered, partners, subscribers }
   }, [data, venueL])
+
+  const segOn = s.ch !== 'all' || s.pf !== 'all' || s.ms !== 'all'
+  const rev = data.daily_revenue
+  const rCur = rev ? sumRevenue(rev, range.from, range.to) : null
+  const rPrev = rev ? sumRevenue(rev, range.prevFrom, range.prevTo) : null
 
   const engaged = ratio(cur.engaged_sessions, cur.sessions)
   const engagedPrev = ratio(prev.engaged_sessions, prev.sessions)
@@ -85,38 +107,94 @@ export default function Overview({ data, s, set, range }: TabProps) {
         <span className="text-ink2">
           누적 회원 <span className="tnum font-semibold text-ink">{num(status.members)}</span>명
         </span>
-        <span className="text-ink2">
-          공간{' '}
-          {status.venues == null && waitOf(venueL) ? (
-            <Pending wait={waitOf(venueL)} h={14} w="w-10" inline />
-          ) : (
-            <span className="tnum font-semibold text-ink">{num(status.venues)}</span>
-          )}
-          {waitOf(venueL) !== 'error' && '곳'}
-        </span>
+        {status.registered == null ? (
+          <span className="text-ink2">
+            공간{' '}
+            {status.venues == null && waitOf(venueL) ? (
+              <Pending wait={waitOf(venueL)} h={14} w="w-10" inline />
+            ) : (
+              <span className="tnum font-semibold text-ink">{num(status.venues)}</span>
+            )}
+            {waitOf(venueL) !== 'error' && '곳'}
+          </span>
+        ) : (
+          <>
+            <span className="text-ink2">
+              등록 공간 <span className="tnum font-semibold text-ink">{num(status.registered)}</span>곳
+            </span>
+            <span className="text-ink2">
+              파트너 공간 <span className="tnum font-semibold text-ink">{num(status.partners)}</span>곳
+            </span>
+          </>
+        )}
+        {status.subscribers != null && (
+          <span className="text-ink2">
+            구독자 <span className="tnum font-semibold text-ink">{num(status.subscribers)}</span>명
+          </span>
+        )}
       </section>
 
       <TileRow cols="sm:grid-cols-4 lg:grid-cols-8">
-        <Tile label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} wait={waitOf(pdL)} />
-        <Tile label="세션" value={num(cur.sessions)} delta={d('sessions')} />
+        <Tile metricId="V12" label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} wait={waitOf(pdL)} />
+        <Tile metricId="V07" label="세션" value={num(cur.sessions)} delta={d('sessions')} />
         <Tile
+          metricId="V08"
           label="활성 세션 비율"
           value={pct(engaged)}
           sub={`세션 ${num(cur.sessions)} 중`}
           delta={ptDelta(data, range, engaged, engagedPrev)}
         />
-        <Tile label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={d('new_persons')} />
-        <Tile label="가입" value={num(cur.signups)} unit="명" delta={d('signups')} />
-        <Tile label="신청" value={num(cur.applies)} unit="건" delta={d('applies')} />
-        <Tile label="결제" value={num(cur.pay_count)} unit="건" delta={d('pay_count')} />
-        <Tile label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={d('pay_amount')} />
+        <Tile metricId="V02" label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={d('new_persons')} />
+        <Tile metricId="C10" label="가입" value={num(cur.signups)} unit="명" delta={d('signups')} />
+        <Tile metricId="C11" label="신청" value={num(cur.applies)} unit="건" delta={d('applies')} />
+        <Tile metricId="C12" label="결제" value={num(cur.pay_count)} unit="건" delta={d('pay_count')} />
+        <Tile metricId="C13" label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={d('pay_amount')} />
       </TileRow>
+
+      {!segOn && rCur && rPrev && (
+        <TileRow cols="sm:grid-cols-4 lg:grid-cols-4">
+          <Tile metricId="M01" label="총 매출" value={won(rCur.total)} unit="원" delta={delta(data, range, rCur.total, rPrev.total)} />
+          <Tile
+            metricId="M02"
+            label="티켓"
+            value={won(rCur.ticket)}
+            unit="원"
+            sub={`총 매출의 ${pct(ratio(rCur.ticket, rCur.total), 0)}`}
+            delta={delta(data, range, rCur.ticket, rPrev.ticket)}
+          />
+          <Tile
+            metricId="M03"
+            label="구독"
+            value={won(rCur.subscription)}
+            unit="원"
+            sub={`총 매출의 ${pct(ratio(rCur.subscription, rCur.total), 0)}`}
+            delta={delta(data, range, rCur.subscription, rPrev.subscription)}
+          />
+          <Tile
+            metricId="M04"
+            label="B2B"
+            value={won(rCur.b2b)}
+            unit="원"
+            sub={`총 매출의 ${pct(ratio(rCur.b2b, rCur.total), 0)}`}
+            delta={delta(data, range, rCur.b2b, rPrev.b2b)}
+          />
+        </TileRow>
+      )}
 
       <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />
       <TrendCard title="활성 세션" metrics={ENGAGED} {...card} />
       <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} />
       <TrendCard title="신청 · 결제" metrics={APPLY_PAY} {...card} />
       <TrendCard title="결제 금액" metrics={AMOUNT} {...card} />
+      {!segOn && (
+        <RevenueCard
+          rows={rev}
+          range={range}
+          dataFrom={data.meta.from_date}
+          dataTo={data.meta.to_date}
+          onDrill={card.onDrill}
+        />
+      )}
     </div>
   )
 }

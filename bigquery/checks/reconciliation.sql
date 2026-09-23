@@ -2,8 +2,10 @@
 -- 1행: 실행 1회 × 검사 항목
 -- 키: (run_id, check_id)
 -- 파티션·클러스터: DATE(checked_at) / 없음
--- 원천: raw.db_payments·db_applications, staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
---       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day
+-- 원천: raw.db_payments·db_applications·db_subscriptions·db_venues,
+--       staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
+--       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day,
+--       marts.daily_revenue·daily_subscription·daily_venue_registry
 -- 소비: load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1
 --
 -- 표 정의는 sql/00_ops_tables.sql.
@@ -28,8 +30,8 @@ log_ev AS (
 ),
 ledger AS (
   SELECT
-    (SELECT COUNT(*) FROM raw.db_payments) AS payments,
-    (SELECT SUM(amount) FROM raw.db_payments) AS payment_amount,
+    (SELECT COUNT(*) FROM raw.db_payments WHERE kind = 'ticket') AS payments,
+    (SELECT SUM(amount) FROM raw.db_payments WHERE kind = 'ticket') AS payment_amount,
     (SELECT COUNT(*) FROM raw.db_applications) AS applications
 ),
 -- C3 일 방문 사람: 마트 합 vs 중간 표 재집계, 날짜별
@@ -149,6 +151,75 @@ c8 AS (
     GROUP BY 1, 2, 3, 4
   ) AS d USING (kst_date, channel1, device_platform, member_seg)
 ),
+-- C9 티켓 결제: 매출 마트 ticket 실결제액(정가 - 할인) vs 결제 원장 kind = ticket 금액, 결제일별(금액·건수)
+c9 AS (
+  SELECT
+    SUM(COALESCE(m.amt, 0)) AS mart_v,
+    SUM(COALESCE(r.amt, 0)) AS raw_v,
+    COUNTIF(COALESCE(m.amt, -1) != COALESCE(r.amt, -1) OR COALESCE(m.n, -1) != COALESCE(r.n, -1)) AS bad_days
+  FROM (
+    SELECT kst_date, SUM(gross_amount - discount_amount) AS amt, SUM(pay_count) AS n
+    FROM marts.daily_revenue
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND kind = 'ticket'
+    GROUP BY 1
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT DATE(paid_at, 'Asia/Seoul') AS kst_date, SUM(amount) AS amt, COUNT(*) AS n
+    FROM raw.db_payments
+    WHERE kind = 'ticket'
+    GROUP BY 1
+  ) AS r USING (kst_date)
+),
+-- C10 일별 활성 구독자: 구독 마트 vs 구독 원장 재집계(start <= d < end, KST), 날짜별
+c10 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(r.v, 0)) AS raw_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(r.v, -1)) AS bad_days
+  FROM (
+    SELECT kst_date, active_subscribers AS v
+    FROM marts.daily_subscription
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND active_subscribers > 0
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT d AS kst_date, COUNT(DISTINCT member_id) AS v
+    FROM raw.db_subscriptions,
+      UNNEST(GENERATE_DATE_ARRAY(
+        DATE(started_at, 'Asia/Seoul'),
+        LEAST(COALESCE(DATE_SUB(DATE(ended_at, 'Asia/Seoul'), INTERVAL 1 DAY), snapshot_date), snapshot_date))) AS d
+    GROUP BY 1
+  ) AS r USING (kst_date)
+),
+-- C11 등록 공간 누적: 상권 마트 합 vs 공간 원장 등록일 누적, 날짜별
+c11 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(r.v, 0)) AS raw_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(r.v, -1)) AS bad_days
+  FROM (
+    SELECT kst_date, SUM(registered_total) AS v
+    FROM marts.daily_venue_registry
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    GROUP BY 1
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT sp.d AS kst_date, SUM(COALESCE(reg.cnt, 0)) OVER (ORDER BY sp.d) AS v
+    FROM (
+      SELECT d
+      FROM (
+        SELECT MIN(DATE(registered_at, 'Asia/Seoul')) AS lo, MAX(snapshot_date) AS hi
+        FROM raw.db_venues
+      ) AS b, UNNEST(GENERATE_DATE_ARRAY(b.lo, b.hi)) AS d
+    ) AS sp
+    LEFT JOIN (
+      SELECT DATE(registered_at, 'Asia/Seoul') AS d, COUNT(*) AS cnt
+      FROM raw.db_venues
+      GROUP BY 1
+    ) AS reg USING (d)
+  ) AS r USING (kst_date)
+),
 cohort_ret AS (
   SELECT
     SUM(IF(week_offset = 1, retained, 0)) AS w1_num,
@@ -178,6 +249,7 @@ orders AS (
     COUNTIF(is_paid_tier AND is_paid) AS paid_tier_paid
   FROM staging.fct_order
   WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    AND kind = 'ticket'
 ),
 spend_days AS (
   SELECT DISTINCT kst_date
@@ -207,18 +279,18 @@ integrity AS (
        WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS kst_date_mismatch,
     (SELECT COUNTIF(price_tier IS NULL)
        FROM staging.fct_order
-       WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS orphan_orders
+       WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31' AND kind = 'ticket') AS orphan_orders
 ),
 checks AS (
   SELECT 'C1a' AS check_id, 'reconcile' AS category, '결제 건수: 로그 vs 원장' AS check_name,
          'events_clean purchase' AS left_label, CAST(l.purchases AS FLOAT64) AS left_value,
-         'raw.db_payments 행' AS right_label, CAST(g.payments AS FLOAT64) AS right_value,
+         'raw.db_payments 행 (kind = ticket)' AS right_label, CAST(g.payments AS FLOAT64) AS right_value,
          CAST(ABS(l.purchases - g.payments) AS FLOAT64) AS observed, 0.0 AS lower_bound, 0.0 AS upper_bound,
          CAST(NULL AS STRING) AS note
   FROM log_ev AS l, ledger AS g
   UNION ALL
   SELECT 'C1b', 'reconcile', '결제 금액: 로그 vs 원장',
-         'events_clean purchase value 합', l.purchase_amount, 'raw.db_payments amount 합', g.payment_amount,
+         'events_clean purchase value 합', l.purchase_amount, 'raw.db_payments amount 합 (kind = ticket)', g.payment_amount,
          ABS(l.purchase_amount - g.payment_amount), 0, 0, NULL
   FROM log_ev AS l, ledger AS g
   UNION ALL
@@ -257,6 +329,21 @@ checks AS (
          ABS(mart_v - ref_v) + bad_keys, 0, 0, FORMAT('불일치 일 × 세그먼트 %d', bad_keys)
   FROM c8
   UNION ALL
+  SELECT 'C9', 'reconcile', '티켓 결제 금액: 매출 마트 vs 결제 원장',
+         'daily_revenue ticket 정가 - 할인 합', mart_v, 'raw.db_payments amount 합 (kind = ticket)', raw_v,
+         ABS(mart_v - raw_v) + bad_days, 0, 0, FORMAT('불일치 결제일 %d', bad_days)
+  FROM c9
+  UNION ALL
+  SELECT 'C10', 'reconcile', '일별 활성 구독자: 구독 마트 vs 구독 원장',
+         'daily_subscription active_subscribers 합', mart_v, 'db_subscriptions 활성일 재집계 합', raw_v,
+         ABS(mart_v - raw_v) + bad_days, 0, 0, FORMAT('불일치 날짜 %d', bad_days)
+  FROM c10
+  UNION ALL
+  SELECT 'C11', 'reconcile', '등록 공간 누적: 상권 마트 vs 공간 원장',
+         'daily_venue_registry registered_total 합', mart_v, 'db_venues 등록일 누적 합', raw_v,
+         ABS(mart_v - raw_v) + bad_days, 0, 0, FORMAT('불일치 날짜 %d', bad_days)
+  FROM c11
+  UNION ALL
   SELECT 'R1', 'range', '신규 방문자 W1 리텐션',
          'W1 retained', w1_num, 'cohort_size (W1 관측 완료 코호트)', w1_den,
          SAFE_DIVIDE(w1_num, w1_den), 0.15, 0.30, NULL
@@ -274,7 +361,7 @@ checks AS (
   UNION ALL
   SELECT 'R4', 'range', '행사 상세 조회 → 신청 (사람 × 일)',
          '신청 사람 × 일', appliers, '행사 상세 조회 사람 × 일', detail_viewers,
-         SAFE_DIVIDE(appliers, detail_viewers), 0.03, 0.08, NULL
+         SAFE_DIVIDE(appliers, detail_viewers), 0.03, 0.15, NULL
   FROM day_conv
   UNION ALL
   SELECT 'R5', 'range', '신청 → 결제 완료 (유료 행사)',

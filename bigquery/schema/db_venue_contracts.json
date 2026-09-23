@@ -1,0 +1,50 @@
+[
+  {
+    "name": "contract_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "계약 ID"
+  },
+  {
+    "name": "venue_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "공간 ID. 공간당 진행 계약은 최대 1건, 해지 후 재계약 없음"
+  },
+  {
+    "name": "plan",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "요금제 basic / pro"
+  },
+  {
+    "name": "monthly_fee",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "월 이용료 (원) basic 99,000 / pro 299,000"
+  },
+  {
+    "name": "started_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "계약 시작 (UTC, KST 자정). 이날부터 파트너"
+  },
+  {
+    "name": "ended_at",
+    "type": "TIMESTAMP",
+    "mode": "NULLABLE",
+    "description": "계약 종료 (UTC, KST 자정). 이날부터 비파트너. NULL = 진행 중"
+  },
+  {
+    "name": "status",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "active / ended"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

@@ -159,7 +159,7 @@ function Audience({ data, s, set, range }: TabProps) {
   })
 
   return (
-    <Card title="오디언스별 퍼널" meta={all.length ? `${weekMeta(weeks)} · 사람·주` : undefined}>
+    <Card title="오디언스별 퍼널" metricId="C09" meta={all.length ? `${weekMeta(weeks)} · 사람·주` : undefined}>
       {!all.length ? (
         <NoData />
       ) : (
@@ -233,6 +233,7 @@ function Paths({ data, s, range }: TabProps) {
   return (
     <Card
       title="경로 탐색"
+      metricId="E06"
       meta={all.length ? `${weekMeta(weeks)} · 세션 ${num(total)}` : undefined}
       wait={waitOf(pathL)}
     >
@@ -361,6 +362,7 @@ export default function FunnelTab(p: TabProps) {
     <div className="flex flex-col gap-4">
       <TileRow cols="lg:grid-cols-4">
         <Tile
+          metricId="C15"
           label="전체 전환율 · 랜딩 → 결제"
           value={pct(conv, 2)}
           sub={`랜딩 ${num(cur.landing)}명 중 ${num(cur.payment)}명`}
@@ -368,6 +370,7 @@ export default function FunnelTab(p: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="C16"
           label="최대 이탈 단계"
           value={drop.i ? FUNNEL_LABEL[STEPS[drop.i]] : '—'}
           sub={drop.i ? `${FUNNEL_LABEL[STEPS[drop.i - 1]]}에서 −${dec(drop.v * 100)}%p` : undefined}
@@ -375,6 +378,7 @@ export default function FunnelTab(p: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="C17"
           label="가장 크게 변한 단계"
           value={moved.i ? FUNNEL_LABEL[STEPS[moved.i]] : '—'}
           sub={
@@ -388,6 +392,7 @@ export default function FunnelTab(p: TabProps) {
           wait={pw}
         />
         <Tile
+          metricId="E01"
           label="탐색 도달률"
           value={pct(ratio(dm.explorers, dm.persons))}
           sub={`방문자 ${num(dm.persons)}명 중`}
@@ -398,12 +403,13 @@ export default function FunnelTab(p: TabProps) {
 
       <div className="grid gap-4 xl:grid-cols-[6fr_6fr]">
         {range.oneDay ? (
-          <Card title="단계 전환" meta={`${range.from} · 명`} wait={pw}>
+          <Card title="단계 전환" metricId="C08" meta={`${range.from} · 명`} wait={pw}>
             <Funnel steps={STEPS.map((k) => ({ label: FUNNEL_LABEL[k], value: cur[k] }))} />
           </Card>
         ) : (
           <Card
             title="단계 전환율 추이"
+            metricId="C08"
             meta={weekly ? '주별' : '일별'}
             right={<Legend items={series.map((x) => ({ ...x, kind: 'line' as const }))} />}
             wait={pw}
@@ -421,7 +427,7 @@ export default function FunnelTab(p: TabProps) {
             />
           </Card>
         )}
-        <Card title="세그먼트별 퍼널" meta="랜딩 대비 도달률 · 명" wait={pw}>
+        <Card title="세그먼트별 퍼널" metricId="C18" meta="랜딩 대비 도달률 · 명" wait={pw}>
           <ReachTable rows={segTable} steps={REACH_STEPS} baseLabel="랜딩" unit="명" />
         </Card>
       </div>
@@ -442,7 +448,7 @@ export default function FunnelTab(p: TabProps) {
           />
         </Card>
       ) : (
-        <Card title="요일 × 시간대 세션" meta="하루 평균" wait={hw} waitH={200}>
+        <Card title="요일 × 시간대 세션" metricId="V13" meta="하루 평균" wait={hw} waitH={200}>
           <Heatmap
             cols={Array.from({ length: 24 }, (_, h) => (h % 3 === 0 ? String(h) : ''))}
             rows={heat.map((cells, i) => ({ label: WEEKDAYS[i], cells }))}

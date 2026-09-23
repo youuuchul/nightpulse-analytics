@@ -191,7 +191,7 @@ function Preview({ t, rows }: { t: CatalogTable; rows: Record<string, unknown>[]
   )
 }
 
-const LAZY_ROWS: string[] = ['hourly_metrics', 'daily_channel', 'daily_venue', 'weekly_path'] satisfies LazyKey[]
+const LAZY_ROWS: string[] = ['hourly_metrics', 'daily_channel', 'daily_venue', 'daily_event', 'weekly_path'] satisfies LazyKey[]
 
 function Detail({ t, data }: { t: CatalogTable; data: Data | null }) {
   const lazy = t.layer === 'marts' && LAZY_ROWS.includes(t.name)

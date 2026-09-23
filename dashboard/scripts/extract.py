@@ -1,6 +1,6 @@
 """BigQuery 마트 → dashboard/public/data/ 분할 추출기.
 
-marts 데이터셋의 표 14개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 분할 파일로 쓴다.
+marts 데이터셋의 표 18개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 분할 파일로 쓴다.
 조회는 SELECT 뿐이며 표를 만들거나 바꾸지 않는다. 마트가 적재된 뒤에 실행한다.
 
     uv run dashboard/scripts/extract.py
@@ -32,10 +32,10 @@ DATASET = "marts"
 SEG = ["channel1", "device_platform", "member_seg"]
 
 # 화면이 필요할 때 따로 받는 표. 나머지 표는 index.json 에 넣는다.
-LAZY = ["hourly_metrics", "daily_channel", "daily_venue", "weekly_path"]
+LAZY = ["hourly_metrics", "daily_channel", "daily_venue", "daily_event", "weekly_path"]
 
 # person_day.bin 비트 배치: (필드, 워드, 시작 비트, 비트 수). 리틀엔디언 Uint32 2개 = 행당 8바이트.
-PD_BITS = [("pk", 0, 0, 20), ("d", 0, 20, 9), ("c", 0, 29, 1), ("p", 0, 30, 2), ("m", 1, 0, 1), ("f", 1, 1, 15)]
+PD_BITS = [("pk", 0, 0, 20), ("d", 0, 20, 9), ("c", 0, 29, 1), ("p", 0, 30, 2), ("m", 1, 0, 1), ("f", 1, 1, 16)]
 HASHED = re.compile(r"^[a-z_]+(\.meta)?\.[0-9a-f]{8}\.(json|bin)$")
 
 # 표 이름 → (열 목록, 정렬 열). 열 이름은 docs/architecture.md §2 marts 와 docs/dashboard.md 계약을 따른다.
@@ -57,6 +57,8 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
             "pay_count",
             "pay_amount",
             "cancels",
+            "subscribers",
+            "sub_payers",
         ],
         ["kst_date"],
     ),
@@ -154,8 +156,78 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
             "cancels",
             "w1_retention",
             "top_channel",
+            "ticket_amount",
+            "subscription_amount",
+            "b2b_amount",
+            "active_subscribers_eom",
+            "partner_total_eom",
+            "registered_total_eom",
         ],
         ["month"],
+    ),
+    "daily_revenue": (
+        [
+            "kst_date",
+            "kind",
+            "partner_flag",
+            "pay_count",
+            "gross_amount",
+            "discount_amount",
+            "refund_amount",
+            "net_amount",
+            "payers",
+        ],
+        ["kst_date", "kind", "partner_flag"],
+    ),
+    "daily_subscription": (
+        [
+            "kst_date",
+            "active_subscribers",
+            "new_subscribers",
+            "churned_subscribers",
+            "mrr",
+            "subscriber_ticket_payers",
+            "subscriber_ticket_amount",
+        ],
+        ["kst_date"],
+    ),
+    "daily_venue_registry": (
+        [
+            "kst_date",
+            "region",
+            "registered_total",
+            "partner_total",
+            "new_registered",
+            "new_contracts",
+            "churned_contracts",
+            "mrr_basic",
+            "mrr_pro",
+        ],
+        ["kst_date", "region"],
+    ),
+    "venue_registry": (
+        [
+            "venue_id",
+            "name",
+            "region",
+            "district",
+            "lat",
+            "lng",
+            "genre",
+            "venue_type",
+            "capacity_band",
+            "registered_at",
+            "is_partner",
+            "plan",
+            "contract_started_at",
+            "contract_ended_at",
+            "events_365d",
+            "ticket_amount_365d",
+            "detail_viewers_28d",
+            "status",
+            "as_of_date",
+        ],
+        ["venue_id"],
     ),
 }
 
@@ -183,8 +255,20 @@ STRING_COLS = {
     "audience_id",
     "from_screen",
     "to_screen",
+    "kind",
+    "name",
+    "district",
+    "venue_type",
+    "capacity_band",
+    "registered_at",
+    "plan",
+    "contract_started_at",
+    "contract_ended_at",
+    "status",
+    "as_of_date",
 }
-FLOAT_COLS = {"w1_retention"}
+FLOAT_COLS = {"w1_retention", "lat", "lng"}
+BOOL_COLS = {"partner_flag", "is_partner"}
 MONTH_COLS = {"cohort_month", "month"}
 # 표마다 타입이 다른 열: weekly_path.step 은 정수 1~4 (funnel_daily.step 은 문자열)
 INT_OVERRIDE: dict[str, set[str]] = {"weekly_path": {"step"}}
@@ -217,7 +301,7 @@ def coerce(col: str, value: str | None, table: str = "") -> object:
         table: 표 이름. INT_OVERRIDE 판정에 쓴다.
 
     Returns:
-        문자열·정수·실수 또는 None.
+        문자열·정수·실수·불리언 또는 None.
     """
     if value is None:
         return None
@@ -229,6 +313,8 @@ def coerce(col: str, value: str | None, table: str = "") -> object:
         return str(value)
     if col in FLOAT_COLS:
         return float(value)
+    if col in BOOL_COLS:
+        return str(value).lower() == "true"
     return int(value)
 
 

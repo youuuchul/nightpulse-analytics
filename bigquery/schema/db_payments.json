@@ -3,25 +3,55 @@
     "name": "order_id",
     "type": "STRING",
     "mode": "REQUIRED",
-    "description": "주문 ID (= purchase.order_id)"
+    "description": "주문 ID. 티켓 = apply_event·purchase 의 order_id, 구독 = <subscription_id>-<회차 2자리>"
+  },
+  {
+    "name": "member_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "회원 ID"
+  },
+  {
+    "name": "kind",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "ticket / subscription"
+  },
+  {
+    "name": "event_id",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "행사 ID (티켓만)"
+  },
+  {
+    "name": "subscription_id",
+    "type": "STRING",
+    "mode": "NULLABLE",
+    "description": "구독 ID (구독 결제만)"
   },
   {
     "name": "amount",
     "type": "INTEGER",
     "mode": "REQUIRED",
-    "description": "결제 금액 (원) = purchase.value"
+    "description": "실결제액 (원, 할인 반영 후) = purchase.value. 구독 9,900"
+  },
+  {
+    "name": "discount_amount",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "할인액 (원). 구독 중인 회원의 파트너 공간 행사 티켓 = round(정가 x 0.15), 그 외 0. 정가 = amount + discount_amount"
   },
   {
     "name": "paid_at",
     "type": "TIMESTAMP",
     "mode": "REQUIRED",
-    "description": "결제 시각 (UTC). purchase 시각과 같다"
+    "description": "결제 시각 (UTC). 티켓 = purchase 시각, 구독 1회차 = subscribe 시각, 이후 회차 = 시작 시각 기준 매월 같은 날"
   },
   {
     "name": "status",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "paid / refunded(신청 취소)"
+    "description": "paid / refunded(티켓 신청 취소). 구독 결제는 paid 만"
   },
   {
     "name": "method",

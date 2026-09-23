@@ -17,13 +17,14 @@ import logging
 import sys
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger("nightpulse.validate")
 
 KST = timezone(timedelta(hours=9))
-KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply"}
+KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply", "subscribe", "subscription_cancel"}
 DETAIL_SCREENS = {"venue_detail", "venue_review", "event_detail"}
 APPLY_SCREENS = {"event_apply", "payment_confirm"}
 ROW_RANGE = (7_000_000, 15_000_000)
@@ -41,6 +42,22 @@ RANGES = {
     "광고 세션 비중 (집행일)": (0.10, 0.30),
     "자동 로드 세션 비중": (0.05, 0.10),
 }
+# 시나리오 2.0 완료 기준 (docs/scenario_v2.md §7). 벗어나면 실패
+RANGES_V2 = {
+    "등록 공간 (종료일 누적)": (1700, 1900),
+    "파트너 공간 (종료일 진행 계약)": (160, 200),
+    "활성 구독자 (종료일)": (1800, 2200),
+    "구독 월 이탈률 (월초 활성 대비 그달 해지)": (0.04, 0.08),
+    "티켓 객단가 (원, 결제 완료)": (32000, 44000),
+    "연 티켓 매출 (원, 결제 완료)": (1_200_000_000, 1_800_000_000),
+    "파트너 공간 행사 비중": (0.70, 0.80),
+    "광고비 / 연 티켓 매출": (0.08, 0.12),
+    "파트너 계약 월 해지율 (계약·월 대비)": (0.01, 0.03),
+}
+REGION_TOLERANCE = 0.03
+REGION_ACTIVITY_TOLERANCE = 0.05  # 상권별 조회·행사 비중 - 공간 수 비중
+SUB_PRICE = 9900
+SUB_DISCOUNT = 0.15
 SEED_DIR = Path(__file__).resolve().parent / "seed"
 
 
@@ -104,6 +121,27 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     last_day_apply = 0
     last_day_pay = 0
 
+    apps = _read_csv(raw / "db_applications.csv")
+    pays_all = _read_csv(raw / "db_payments.csv")
+    pays = [p for p in pays_all if p["kind"] == "ticket"]
+    members = _read_csv(raw / "db_members.csv")
+    events_master = _read_csv(raw / "db_events.csv")
+    ads = _read_csv(raw / "ads_spend.csv")
+    venues = _read_csv(raw / "db_venues.csv")
+    contracts = _read_csv(raw / "db_venue_contracts.csv")
+    subs = _read_csv(raw / "db_subscriptions.csv")
+    sub_iv: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    for sb in subs:
+        sub_iv[sb["member_id"]].append((_epoch(sb["started_at"]), _epoch(sb["ended_at"]) if sb["ended_at"] else INF))
+    sub_events: dict[str, tuple[str, str, int]] = {}
+    sub_cancels: dict[str, int] = {}
+    venue_views: Counter[tuple[int, str, str]] = Counter()
+    venue_first_view: dict[int, int] = {}
+    prop_missing = 0
+    prop_mismatch = 0
+    boundary_rows: list[tuple[str, int, str]] = []
+    sub_us: dict[str, list[int]] = defaultdict(list)
+
     with gzip.open(raw / "ga4_events.ndjson.gz", "rt", encoding="utf-8") as f:
         for line in f:
             r = json.loads(line)
@@ -127,6 +165,18 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
             s.ts_max = max(s.ts_max, r["event_timestamp"])
             s.eng += r["engagement_time_msec"]
             s.engaged = r["session_engaged"] == "1"
+            flag = next((u["string_value"] for u in r["user_properties"] if u["key"] == "subscriber"), None)
+            if flag is None:
+                prop_missing += 1
+            elif r["user_id"] in sub_iv:
+                t_s = r["event_timestamp"] // 1_000_000
+                if any(t_s in (a, b) for a, b in sub_iv[r["user_id"]]):
+                    # 원장 시각은 초 단위라 경계 초의 행은 로그의 마이크로초 경계로 나중에 판정한다
+                    boundary_rows.append((r["user_id"], r["event_timestamp"], flag))
+                else:
+                    prop_mismatch += flag != ("1" if _active(sub_iv[r["user_id"]], t_s) else "0")
+            elif r["user_id"] and flag != "0":
+                prop_mismatch += 1
             if r["user_id"]:
                 s.users.add(r["user_id"])
                 client_users[r["user_pseudo_id"]].add(r["user_id"])
@@ -139,6 +189,11 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
                 s.detail |= sn in DETAIL_SCREENS
                 s.event_detail |= sn == "event_detail"
                 s.apply_form |= sn in APPLY_SCREENS
+                if sn == "venue_detail":
+                    vid = int(_param(r, "venue_id"))
+                    venue_views[(vid, r["event_date"], str(_param(r, "is_partner")))] += 1
+                    t_s = r["event_timestamp"] // 1_000_000
+                    venue_first_view[vid] = min(venue_first_view.get(vid, t_s), t_s)
             elif e == "sign_up":
                 s.identified = True
                 signups.add(r["user_id"])
@@ -149,12 +204,16 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
                 purchase_orders[str(_param(r, "order_id"))] = int(_param(r, "value") or 0)
             elif e == "cancel_apply":
                 cancel_orders[str(_param(r, "order_id"))] = int(_param(r, "value") or 0)
-
-    apps = _read_csv(raw / "db_applications.csv")
-    pays = _read_csv(raw / "db_payments.csv")
-    members = _read_csv(raw / "db_members.csv")
-    events_master = _read_csv(raw / "db_events.csv")
-    ads = _read_csv(raw / "ads_spend.csv")
+            elif e == "subscribe":
+                sub_events[str(_param(r, "subscription_id"))] = (
+                    str(_param(r, "order_id")),
+                    r["user_id"],
+                    r["event_timestamp"] // 1_000_000,
+                )
+            elif e == "subscription_cancel":
+                sub_cancels[str(_param(r, "subscription_id"))] = r["event_timestamp"] // 1_000_000
+            if e in ("subscribe", "subscription_cancel"):
+                sub_us[r["user_id"]].append(r["event_timestamp"])
 
     checks: list[tuple[str, bool, str]] = []
 
@@ -227,7 +286,9 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
         ", ".join(f"{c} {ad_sess[c]}/{clicks[c]}={r:.2f}" for c, r in ratios.items()),
     )
 
-    snap = {r["snapshot_date"] for rows in (apps, pays, members, events_master) for r in rows}
+    snap = {
+        r["snapshot_date"] for rows in (apps, pays_all, members, events_master, venues, contracts, subs) for r in rows
+    }
     check("RDB 스냅샷 snapshot_date = 종료일", snap == {end_date.isoformat()}, ", ".join(sorted(snap)))
 
     summary, ret = _summary(
@@ -282,7 +343,394 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     for name, (lo, hi) in RANGES.items():
         v = values[name]
         check(f"범위 {name} {lo:.0%}~{hi:.0%}", lo <= v <= hi, f"{v:.3f}")
+    for uid, t_us, flag in boundary_rows:
+        marks = sorted(sub_us[uid])
+        ivs_us = [(marks[i], marks[i + 1] if i + 1 < len(marks) else INF) for i in range(0, len(marks), 2)]
+        prop_mismatch += flag != ("1" if _active(ivs_us, t_us) else "0")
+    ctx = {
+        "venues": venues,
+        "contracts": contracts,
+        "events": events_master,
+        "subs": subs,
+        "pays_all": pays_all,
+        "apps": apps,
+        "ads": ads,
+        "members": members,
+        "sub_events": sub_events,
+        "sub_cancels": sub_cancels,
+        "venue_views": venue_views,
+        "venue_first_view": venue_first_view,
+        "prop_missing": prop_missing,
+        "prop_mismatch": prop_mismatch,
+    }
+    v2_lines = _v2(ctx, check, start_date, end_date)
+    marker = "\n## 주별 추이"
+    summary = summary.replace(marker, "\n".join(v2_lines) + "\n" + marker, 1)
     return checks, summary
+
+
+INF = float("inf")
+
+
+def _epoch(ts: str) -> int:
+    return int(datetime.strptime(ts, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp())
+
+
+def _kst_date(ts: str) -> date:
+    return datetime.fromtimestamp(_epoch(ts), KST).date()
+
+
+def _active(ivs: list[tuple[int, float]], t: int) -> bool:
+    return any(a <= t < b for a, b in ivs)
+
+
+def _add_months(t: datetime, k: int) -> datetime:
+    m = t.month - 1 + k
+    y, m = t.year + m // 12, m % 12 + 1
+    nxt = date(y + m // 12, m % 12 + 1, 1)
+    return t.replace(year=y, month=m, day=min(t.day, (nxt - date(y, m, 1)).days))
+
+
+def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> list[str]:
+    """시나리오 2.0 단언(공간·계약·행사·구독·할인·매출)을 실행하고 요약 절을 돌려준다.
+
+    Args:
+        ctx: 원장·로그 집계 묶음.
+        check: 단언 기록 함수 (이름, 통과 여부, 상세).
+        start_date: 관측 시작일(KST).
+        end_date: 관측 마지막 날(KST).
+
+    Returns:
+        요약 마크다운 줄 목록.
+    """
+    venues, contracts, events, subs = ctx["venues"], ctx["contracts"], ctx["events"], ctx["subs"]
+    pays_all, apps, ads = ctx["pays_all"], ctx["apps"], ctx["ads"]
+    regions = json.loads((SEED_DIR / "names.json").read_text(encoding="utf-8"))["regions"]
+    range_end = int(datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST).timestamp()) + 86400
+
+    # 공간·계약
+    reg_ts = {int(v["venue_id"]): _epoch(v["registered_at"]) for v in venues}
+    partner_iv: dict[int, list[tuple[date, date]]] = defaultdict(list)
+    far = date(9999, 12, 31)
+    fee_ok = True
+    for c in contracts:
+        a = _kst_date(c["started_at"])
+        b = _kst_date(c["ended_at"]) if c["ended_at"] else far
+        partner_iv[int(c["venue_id"])].append((a, b))
+        fee_ok &= int(c["monthly_fee"]) == {"basic": 99000, "pro": 299000}[c["plan"]]
+        fee_ok &= (c["status"] == "ended") == bool(c["ended_at"])
+    overlap = sum(
+        1 for ivs in partner_iv.values() for i, x in enumerate(sorted(ivs)) for y in sorted(ivs)[i + 1 :] if y[0] < x[1]
+    )
+    check("공간당 진행 계약 1건 이하 (계약 기간 겹침 없음)", overlap == 0, f"겹침 {overlap}")
+    check("계약 요금·상태 규칙 (basic 99,000 / pro 299,000, ended ⇔ ended_at)", fee_ok, f"{len(contracts)} 건")
+    check(
+        "계약 공간이 공간 원장에 있고 등록 후 계약",
+        all(int(c["venue_id"]) in reg_ts and _epoch(c["started_at"]) >= reg_ts[int(c["venue_id"])] for c in contracts),
+        "",
+    )
+
+    def is_partner(vid: int, d: date) -> bool:
+        return any(a <= d < b for a, b in partner_iv.get(vid, []))
+
+    views = ctx["venue_views"]
+    bad_view = sum(
+        n for (vid, d, flag), n in views.items() if flag != ("1" if is_partner(vid, date.fromisoformat(d)) else "0")
+    )
+    check("공간 상세 is_partner = 조회일 계약 상태", bad_view == 0, f"불일치 {bad_view} / {sum(views.values()):,} 조회")
+    early = sum(1 for vid, t in ctx["venue_first_view"].items() if vid not in reg_ts or t < reg_ts[vid])
+    check("공간 상세 조회 공간이 원장에 있고 등록 후 조회", early == 0, f"위반 공간 {early}")
+
+    ev_by_id = {e["event_id"]: e for e in events}
+    bad_host = sum(
+        1 for e in events if int(e["venue_id"]) not in reg_ts or _epoch(e["starts_at"]) < reg_ts[int(e["venue_id"])]
+    )
+    check("행사 개최 공간이 개최 전에 등록", bad_host == 0, f"위반 {bad_host}")
+    bad_flag = sum(
+        1
+        for e in events
+        if (e["is_partner_venue"] == "true") != is_partner(int(e["venue_id"]), _kst_date(e["starts_at"]))
+    )
+    check("행사 is_partner_venue = 개최일 계약 상태", bad_flag == 0, f"불일치 {bad_flag}")
+    seats = Counter(a["event_id"] for a in apps if a["status"] != "payment_pending")
+    over = sum(1 for k, n in seats.items() if n > int(ev_by_id[k]["capacity"]))
+    check(
+        "행사별 신청(결제 대기 제외) <= 정원",
+        over == 0,
+        f"초과 행사 {over}, 정원 도달 {sum(1 for k, n in seats.items() if n == int(ev_by_id[k]['capacity']))}",
+    )
+
+    # 구독
+    members = {m["member_id"]: _epoch(m["signed_up_at"]) for m in ctx["members"]}
+    sub_ev, sub_cancel = ctx["sub_events"], ctx["sub_cancels"]
+    check("구독 이벤트 수 = subscriptions 행 수", len(sub_ev) == len(subs), f"{len(sub_ev)} vs {len(subs)}")
+    ok = all(
+        s["subscription_id"] in sub_ev
+        and sub_ev[s["subscription_id"]][1] == s["member_id"]
+        and sub_ev[s["subscription_id"]][2] == _epoch(s["started_at"])
+        for s in subs
+    )
+    check("구독 이벤트 회원·시각 = 구독 원장", ok, "")
+    canceled = {s["subscription_id"]: _epoch(s["ended_at"]) for s in subs if s["status"] == "canceled"}
+    check("해지 이벤트 = canceled 구독 (시각 포함)", sub_cancel == canceled, f"{len(sub_cancel)} 건")
+    check(
+        "구독자는 회원이고 가입 후 구독",
+        all(s["member_id"] in members and _epoch(s["started_at"]) >= members[s["member_id"]] for s in subs),
+        "",
+    )
+    sub_pays: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for p in pays_all:
+        if p["kind"] == "subscription":
+            sub_pays[p["subscription_id"]].append(p)
+    bad_cycle = 0
+    for s in subs:
+        st = datetime.fromtimestamp(_epoch(s["started_at"]), KST)
+        end = _epoch(s["ended_at"]) if s["ended_at"] else INF
+        exp = []
+        k = 0
+        while (t := int(_add_months(st, k).timestamp())) < min(range_end, end):
+            exp.append(t)
+            k += 1
+        got = sorted(_epoch(p["paid_at"]) for p in sub_pays.get(s["subscription_id"], []))
+        bad_cycle += got != exp or any(
+            int(p["amount"]) != SUB_PRICE or p["member_id"] != s["member_id"] for p in sub_pays[s["subscription_id"]]
+        )
+    check("구독 결제 = 시작일 기준 월 반복 (해지·종료 후 미청구, 9,900원)", bad_cycle == 0, f"위반 구독 {bad_cycle}")
+    first_orders = {v[0] for v in sub_ev.values()}
+    check(
+        "구독 이벤트 order_id = 구독 1회차 결제",
+        first_orders == {f"{s['subscription_id']}-01" for s in subs}
+        and all(o in {p["order_id"] for p in pays_all} for o in first_orders),
+        f"{len(first_orders)} 건",
+    )
+
+    # 할인
+    sub_iv: dict[str, list[tuple[int, float]]] = defaultdict(list)
+    for s in subs:
+        sub_iv[s["member_id"]].append((_epoch(s["started_at"]), _epoch(s["ended_at"]) if s["ended_at"] else INF))
+    tickets = [p for p in pays_all if p["kind"] == "ticket"]
+    bad_disc = 0
+    for p in tickets:
+        e = ev_by_id[p["event_id"]]
+        price = int(e["price"])
+        on = e["is_partner_venue"] == "true" and _active(sub_iv.get(p["member_id"], []), _epoch(p["paid_at"]))
+        disc = int(round(price * SUB_DISCOUNT)) if on else 0
+        bad_disc += int(p["discount_amount"]) != disc or int(p["amount"]) != price - disc
+    n_disc = sum(int(p["discount_amount"]) > 0 for p in tickets)
+    check(
+        "티켓 할인 = 구독 중 파트너 공간 행사 15%, 실결제 = 정가 - 할인",
+        bad_disc == 0,
+        f"위반 {bad_disc}, 할인 결제 {n_disc:,}",
+    )
+    check(
+        "user_properties.subscriber = 그 시점 구독 상태 (회원 행)",
+        ctx["prop_missing"] == 0 and ctx["prop_mismatch"] == 0,
+        f"누락 {ctx['prop_missing']}, 불일치 {ctx['prop_mismatch']}",
+    )
+
+    # 범위
+    end_ts = range_end
+    reg_total = sum(1 for t in reg_ts.values() if t < end_ts)
+    partner_end = sum(1 for c in contracts if c["status"] == "active")
+    active_end = sum(1 for s in subs if s["status"] == "active")
+    paid_tickets = [p for p in tickets if p["status"] == "paid"]
+    ticket_rev = sum(int(p["amount"]) for p in paid_tickets)
+    spend = sum(int(a["spend"]) for a in ads)
+
+    months: list[date] = []
+    m = date(start_date.year, start_date.month, 1)
+    while m <= end_date:
+        months.append(m)
+        m = date(m.year + m.month // 12, m.month % 12 + 1, 1)
+
+    def m_ts(d: date) -> int:
+        return int(datetime(d.year, d.month, d.day, tzinfo=KST).timestamp())
+
+    sub_rows = []
+    churn_num = churn_den = 0
+    for i, m in enumerate(months):
+        nm = months[i + 1] if i + 1 < len(months) else end_date + timedelta(days=1)
+        a, b = m_ts(m), min(m_ts(nm), end_ts)
+        at_start = sum(
+            1 for s in subs if _epoch(s["started_at"]) < a and (not s["ended_at"] or _epoch(s["ended_at"]) >= a)
+        )
+        new = sum(1 for s in subs if a <= _epoch(s["started_at"]) < b)
+        churned = sum(1 for s in subs if s["ended_at"] and a <= _epoch(s["ended_at"]) < b)
+        at_end = sum(
+            1 for s in subs if _epoch(s["started_at"]) < b and (not s["ended_at"] or _epoch(s["ended_at"]) >= b)
+        )
+        full = i + 1 < len(months) and m_ts(nm) <= end_ts
+        if full and at_start >= 100:
+            churn_num += churned
+            churn_den += at_start
+        sub_rows.append((m, at_start, new, churned, at_end))
+    churn = churn_num / churn_den if churn_den else 0.0
+
+    # 계약 월 해지율: 해지 건 / 계약·월(일할)
+    contract_months = 0.0
+    b2b: Counter[date] = Counter()
+    for c in contracts:
+        a = _kst_date(c["started_at"])
+        b = _kst_date(c["ended_at"]) if c["ended_at"] else end_date + timedelta(days=1)
+        d = a
+        while d < b and d <= end_date:
+            mm = date(d.year, d.month, 1)
+            dim = (date(mm.year + mm.month // 12, mm.month % 12 + 1, 1) - mm).days
+            b2b[mm] += int(c["monthly_fee"]) / dim
+            contract_months += 1 / dim
+            d += timedelta(days=1)
+    contract_churn = sum(1 for c in contracts if c["ended_at"]) / contract_months
+
+    region_cnt = Counter(v["region"] for v in venues)
+    region_err = {r["name"]: abs(region_cnt[r["name"]] / len(venues) - r["share"]) for r in regions}
+    partner_events = sum(e["is_partner_venue"] == "true" for e in events) / len(events)
+
+    values = {
+        "등록 공간 (종료일 누적)": reg_total,
+        "파트너 공간 (종료일 진행 계약)": partner_end,
+        "활성 구독자 (종료일)": active_end,
+        "구독 월 이탈률 (월초 활성 대비 그달 해지)": churn,
+        "티켓 객단가 (원, 결제 완료)": ticket_rev / len(paid_tickets),
+        "연 티켓 매출 (원, 결제 완료)": ticket_rev,
+        "파트너 공간 행사 비중": partner_events,
+        "광고비 / 연 티켓 매출": spend / ticket_rev,
+        "파트너 계약 월 해지율 (계약·월 대비)": contract_churn,
+    }
+    for name, (lo, hi) in RANGES_V2.items():
+        v = values[name]
+        fmt = (lambda x: f"{x:.1%}") if hi < 1 else (lambda x: f"{x:,.0f}")
+        check(f"범위 {name} {fmt(lo)}~{fmt(hi)}", lo <= v <= hi, fmt(v) if hi >= 1 else f"{v:.3f}")
+    worst = max(region_err, key=region_err.get)
+    check(
+        f"상권 비중 오차 ±{REGION_TOLERANCE:.0%}p 이내",
+        max(region_err.values()) <= REGION_TOLERANCE,
+        f"최대 {worst} {region_err[worst] * 100:.2f}%p",
+    )
+
+    # 요약 절
+    t_month: Counter[date] = Counter()
+    t_count: Counter[date] = Counter()
+    t_disc: Counter[date] = Counter()
+    s_month: Counter[date] = Counter()
+    for p in pays_all:
+        if p["status"] != "paid":
+            continue
+        d = _kst_date(p["paid_at"])
+        mm = date(d.year, d.month, 1)
+        if p["kind"] == "ticket":
+            t_month[mm] += int(p["amount"])
+            t_count[mm] += 1
+            t_disc[mm] += int(p["discount_amount"])
+        else:
+            s_month[mm] += int(p["amount"])
+    ad_month: Counter[date] = Counter()
+    for a in ads:
+        d = date.fromisoformat(a["date"])
+        ad_month[date(d.year, d.month, 1)] += int(a["spend"])
+    reg_month_end = []
+    for i, m in enumerate(months):
+        nm = months[i + 1] if i + 1 < len(months) else end_date + timedelta(days=1)
+        b = min(m_ts(nm), end_ts)
+        bd = datetime.fromtimestamp(b - 1, KST).date()
+        reg_month_end.append(
+            (
+                sum(1 for t in reg_ts.values() if t < b),
+                sum(1 for vid in partner_iv if is_partner(vid, bd)),
+                sum(1 for c in contracts if m <= _kst_date(c["started_at"]) < nm),
+                sum(1 for c in contracts if c["ended_at"] and m <= _kst_date(c["ended_at"]) < nm),
+            )
+        )
+    out = [
+        "",
+        "## 매출 구성 (월별, KST)",
+        "",
+        "티켓 = 결제 완료(환불 제외) 실결제액, 구독 = 월 반복 결제, B2B = 진행 계약 월 이용료 일할 합.",
+        "",
+        "| 월 | 티켓 결제 | 티켓 매출 | 티켓 할인액 | 구독 매출 | B2B 매출 | 합계 | 광고비 |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    tot = [0, 0, 0, 0, 0, 0, 0]
+    for m in months:
+        row = [t_count[m], t_month[m], t_disc[m], s_month[m], round(b2b[m]), 0, ad_month[m]]
+        row[5] = row[1] + row[3] + row[4]
+        tot = [x + y for x, y in zip(tot, row, strict=True)]
+        out.append(f"| {m:%Y-%m} | " + " | ".join(f"{x:,}" for x in row) + " |")
+    out.append("| 합계 | " + " | ".join(f"{x:,}" for x in tot) + " |")
+    out += [
+        "",
+        "## 공간 등록·파트너 계약 (월말, KST)",
+        "",
+        "| 월 | 등록 공간 누적 | 파트너 (진행 계약) | 신규 계약 | 해지 계약 |",
+        "|---|---|---|---|---|",
+    ]
+    out += [f"| {m:%Y-%m} | {r[0]:,} | {r[1]} | {r[2]} | {r[3]} |" for m, r in zip(months, reg_month_end, strict=True)]
+    out += [
+        "",
+        "## 구독자 (월별, KST)",
+        "",
+        "| 월 | 월초 활성 | 신규 | 해지 | 월말 활성 | 월 이탈률 |",
+        "|---|---|---|---|---|---|",
+    ]
+    for m, a0, new, ch, a1 in sub_rows:
+        rate = f"{ch / a0:.3f}" if a0 else "-"
+        out.append(f"| {m:%Y-%m} | {a0:,} | {new:,} | {ch:,} | {a1:,} | {rate} |")
+    view_by_venue: Counter[int] = Counter()
+    for (vid, _, _), n in views.items():
+        view_by_venue[vid] += n
+    region_of = {int(v["venue_id"]): v["region"] for v in venues}
+    ev_region = Counter(region_of[int(e["venue_id"])] for e in events)
+    view_region: Counter[str] = Counter()
+    for vid, n in view_by_venue.items():
+        view_region[region_of[vid]] += n
+    partner_region = Counter(region_of[int(c["venue_id"])] for c in contracts if c["status"] == "active")
+    total_views = sum(view_by_venue.values())
+    out += [
+        "",
+        "## 상권별 공간 (종료일 기준)",
+        "",
+        "| 상권 | 목표 비중 | 실측 비중 | 등록 | 파트너 | 행사 | 행사 비중 | 공간 상세 조회 비중 |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in regions:
+        n = r["name"]
+        out.append(
+            f"| {n} | {r['share']:.1%} | {region_cnt[n] / len(venues):.1%} | {region_cnt[n]:,} | {partner_region[n]} "
+            f"| {ev_region[n]:,} | {ev_region[n] / len(events):.1%} | {view_region[n] / total_views:.1%} |"
+        )
+    view_dev = {n: view_region[n] / total_views - region_cnt[n] / len(venues) for n in region_cnt}
+    ev_dev = {n: ev_region[n] / len(events) - region_cnt[n] / len(venues) for n in region_cnt}
+    for label, dev in (("공간 상세 조회", view_dev), ("행사 개최", ev_dev)):
+        worst = max(dev, key=lambda k: abs(dev[k]))
+        check(
+            f"상권별 {label} 비중 - 공간 수 비중 ±{REGION_ACTIVITY_TOLERANCE:.0%}p 이내",
+            abs(dev[worst]) <= REGION_ACTIVITY_TOLERANCE,
+            f"최대 {worst} {dev[worst] * 100:+.2f}%p",
+        )
+    tiers = Counter(e["price_tier"] for e in events)
+    disc_total = sum(int(p["discount_amount"]) for p in tickets)
+    out += [
+        "",
+        "## 시나리오 2.0 규모",
+        "",
+        "| 항목 | 값 |",
+        "|---|---|",
+        f"| 등록 공간 / 폐업 | {len(venues):,} / {sum(v['status'] == 'closed' for v in venues)} |",
+        f"| 파트너 계약 (누적 / 진행) | {len(contracts)} / {partner_end} |",
+        f"| 행사 / 파트너 공간 개최 | {len(events):,} / {partner_events:.1%} |",
+        "| 가격대 free / standard / premium / package | "
+        + " / ".join(f"{tiers[t] / len(events):.1%}" for t in ("free", "standard", "premium", "package"))
+        + " |",
+        f"| 티켓 결제 (완료 / 환불) | {len(paid_tickets):,} / {len(tickets) - len(paid_tickets):,} |",
+        f"| 티켓 객단가 / 연 티켓 매출 | {ticket_rev / len(paid_tickets):,.0f} / {ticket_rev:,} |",
+        f"| 할인 결제 비중 / 할인액 합 | {n_disc / len(tickets):.1%} / {disc_total:,} |",
+        f"| 구독 (누적 / 활성 / 해지) | {len(subs):,} / {active_end:,} / {len(canceled):,} |",
+        f"| 구독 결제 건 / 매출 | {sum(len(v) for v in sub_pays.values()):,} / {sum(s_month.values()):,} |",
+        f"| B2B 매출 (일할) | {round(sum(b2b.values())):,} |",
+        f"| 광고비 / 티켓 매출 | {spend:,} / {spend / ticket_rev:.1%} |",
+        f"| 구독 월 이탈률 (월초 활성 100명 이상인 완결 월 합산) | {churn:.3f} |",
+        f"| 파트너 계약 월 해지율 | {contract_churn:.4f} |",
+    ]
+    return out
 
 
 def _is_auto(s: Sess) -> bool:
@@ -388,7 +836,7 @@ def _summary(
         f"| 기기 / 사람 | {n_clients:,} / {n_persons:,} |",
         f"| 회원 (가입) | {len(members):,} ({len(members) / n_persons:.1%}) |",
         f"| 신청 / 결제 / 취소 | {len(apps):,} / {len(pays):,} / {sum(a['status'] == 'canceled' for a in apps):,} |",
-        f"| 결제 금액 합 (원) | {sum(int(p['amount']) for p in pays):,} |",
+        f"| 티켓 결제 금액 합 (원, 환불 포함) | {sum(int(p['amount']) for p in pays):,} |",
         f"| 일 방문 사람 p10 / p50 / p90 | {daily[len(daily) // 10]} / {daily[len(daily) // 2]} / "
         f"{daily[len(daily) * 9 // 10]} |",
         f"| 방문 세션 중 회원 세션 | {member_sessions / visit_sessions:.3f} |",

@@ -1,0 +1,94 @@
+# 시나리오 2.0 — 공간 두 층 · 구독 · B2B 계약 (2026-09-23 결정)
+
+런칭 1년차 서울 나이트라이프 플랫폼 NightPulse. 1.0(탐색 → 행사 신청 → 결제)에 **공간 등록/파트너 계약**, **소비자 구독**, **B2B 계약 매출** 축을 더한다. 모든 수치는 가상 시나리오와 분포 규칙으로 생성한다. 실제 서울 상권 이름·좌표는 공개 지리 정보이며, 상호·브랜드는 전부 가상이다.
+
+## 1. 한 해의 이야기 (성장 곡선)
+
+기간 2025-09-22(런칭) ~ 2026-09-20. 4구간 시나리오는 유지하고 아래 축을 얹는다.
+
+| 구간 | 주 | 공간 등록 | 파트너 계약 | 구독 | 행사·매출 |
+|---|---|---|---|---|---|
+| 런칭 | 1~10 | 300 → 600 (초기 일괄 등록 후 완만) | 8 → 30 | 없음 | 주 15~25건, 월 티켓 매출 0.3억 |
+| 광고 집행 | 11~24 | 600 → 1,000 | 30 → 80 | **12/01 출시**, 0 → 500 | 주 30~45건, 월 0.7억 |
+| 안정 | 25~40 | 1,000 → 1,400 | 80 → 130 | 500 → 1,300 | 주 45~55건, 월 1.2억 |
+| 피크(여름) + 9월 캠페인 | 41~52 | 1,400 → 1,800 | 130 → 180 | 1,300 → 2,000 | 주 55~65건, 월 2억 |
+
+- 등록 공간은 S자 곡선, 파트너 계약은 등록 공간의 약 10%로 수렴. 계약 해지는 월 1.5~2.5%.
+- 구독은 회원만 가능, 월 이탈 6%, 연말 구독자 2,000명(회원 약 7,700명의 26%).
+- 광고 캠페인 7개: 기존 6개 + `np_c07_autumn`(2026-09-01 ~ 09-20). 예산은 매출 규모에 맞춰 상향(연 광고비 ≈ 연 티켓 매출의 8~12%).
+
+## 2. 공간 (venues) — 실제 서울 상권
+
+등록 공간 1,800곳. 상권(`region`)은 실제 서울 나이트라이프 상권이고 비중·좌표 중심은 아래 표(가중치는 이 프로젝트가 정한 값). 좌표는 중심에서 반경 300~600m 정규 분포 지터, 같은 상권 안에서도 골목 단위로 뭉치게 2~4개 부중심을 둔다.
+
+| region | 구(district) | 비중 | 중심 (lat, lng) | 주요 장르 경향 |
+|---|---|---|---|---|
+| 홍대·합정·연남 | 마포구 | 22% | 37.5563, 126.9236 | 힙합·라이브·펍 |
+| 이태원·한남 | 용산구 | 18% | 37.5345, 126.9946 | 하우스/테크노·라운지 |
+| 강남·역삼·논현 | 강남구 | 15% | 37.4979, 127.0276 | EDM·클럽 |
+| 성수·건대 | 성동구·광진구 | 12% | 37.5445, 127.0561 / 37.5404, 127.0693 | 라운지/재즈·루프탑 |
+| 압구정·청담 | 강남구 | 8% | 37.5270, 127.0286 | 라운지·하우스 |
+| 신촌·마포 | 서대문구·마포구 | 5% | 37.5551, 126.9368 | 펍·라이브 |
+| 종로·을지로 | 종로구·중구 | 6% | 37.5663, 126.9910 | 재즈·라이브·펍 |
+| 잠실·송파 | 송파구 | 4% | 37.5133, 127.1001 | 펍·라운지 |
+| 여의도·영등포 | 영등포구 | 3% | 37.5219, 126.9245 | 라운지·루프탑 |
+| 기타 | 그 외 | 7% | 서울 전역 랜덤(위 상권 밖) | 혼합 |
+
+- `genre`(6): 힙합 · 하우스/테크노 · EDM · 라운지/재즈 · K-pop/믹스 · 라이브. 상권별 경향 가중.
+- `venue_type`(6): 클럽 · 라운지바 · 펍 · 루프탑 · 라이브홀 · 파티룸.
+- `capacity_band`: S(~80) · M(~200) · L(~500) · XL(500+). 클럽·라이브홀이 L·XL 비중 높음.
+- `registered_at`: 런칭일 초기 일괄 300곳 + 이후 S자 곡선. 상권 비중은 시간에 따라 고정.
+- 상호(`name`)는 가상 조합(영문·한글 혼합, 실존 상호 회피). 로그의 공간 상세 조회는 이 목록의 인기도(상권 비중 × 파트너 가중 × 개별 인기 지수 파레토)를 따른다 — **행동 로그와 원장이 같은 목록을 쓴다**.
+
+## 3. 원장 표 (raw, RDB 스냅샷)
+
+기존 `db_members`·`db_events`·`db_applications`는 유지하고 열을 더한다. 전부 `snapshot_date` 포함.
+
+| 표 | 1행 | 열 |
+|---|---|---|
+| `db_venues` | 공간 1곳 | `venue_id, name, region, district, lat, lng, genre, venue_type, capacity_band, registered_at, status(active/closed)` |
+| `db_venue_contracts` | 계약 1건 | `contract_id, venue_id, plan(basic/pro), monthly_fee(99000/299000), started_at, ended_at(null=진행), status(active/ended)` |
+| `db_events` | 행사 1건 | 기존 + `capacity, price_tier(free/standard/premium/package), price, is_partner_venue(BOOL, 개최 시점 기준)` |
+| `db_subscriptions` | 구독 1건 | `subscription_id, member_id, started_at, ended_at(null=진행), status(active/canceled), price(9900)` |
+| `db_payments` | 결제 1건 | `order_id, member_id, kind(ticket/subscription), event_id(null 가능), subscription_id(null 가능), amount, discount_amount, paid_at, status(paid/refunded), method` |
+| `db_applications` | 신청 1건 | 기존 그대로 |
+| `ads_spend` | 캠페인 × 일 | 기존 + 캠페인 7개 |
+
+- 티켓 결제: 구독자가 파트너 공간 행사를 결제하면 `discount_amount = round(price × 0.15)`.
+- 구독 결제: 매월 시작일 기준 반복(`kind='subscription'`, amount 9,900). 해지 후 미청구.
+- B2B 매출은 결제 표가 아니라 계약 표에서 월 이용료로 계산(월별 활성 계약 × 요금). `ops`가 아니라 마트에서 산출.
+- 행사 2,400건: 파트너 공간 개최 75%, 비파트너 25%. 가격대 무료 20% / 1.5~3만 45% / 4~8만 30% / 10만 이상 5%. 결제 약 4만 건, 객단가 약 3.8만, 연 티켓 매출 약 15억, 구독 매출 약 1.0억, B2B 약 1.6억.
+
+## 4. 행동 로그 추가 (GA4형)
+
+- 화면 `subscribe`(구독 안내), 이벤트 `subscribe_view` · `subscribe`(구독 결제 완료) · `subscription_cancel`.
+- 공간 상세 `screen_view`에 `venue_id` 파라미터(기존)와 `is_partner`(문자열 "1"/"0") 파라미터.
+- 회원 속성 `user_properties.subscriber`("1"/"0", 그 시점 기준).
+
+## 5. 마트 추가 (marts)
+
+| 표 | 1행 | 열 |
+|---|---|---|
+| `daily_revenue` | 일 × 종류 | `kst_date, kind(ticket/subscription/b2b), partner_flag(BOOL, 티켓만·나머지 NULL), pay_count, gross_amount, discount_amount, net_amount, payers` |
+| `daily_subscription` | 일 | `kst_date, active_subscribers, new_subscribers, churned_subscribers, mrr, subscriber_ticket_payers, subscriber_ticket_amount` |
+| `daily_venue_registry` | 일 × 상권 | `kst_date, region, registered_total, partner_total, new_registered, new_contracts, churned_contracts, mrr_basic, mrr_pro` |
+| `venue_registry` | 공간 1곳 (기준일 스냅샷) | `venue_id, name, region, district, lat, lng, genre, venue_type, capacity_band, registered_at, is_partner, plan, contract_started_at, contract_ended_at, events_365d, ticket_amount_365d, detail_viewers_28d` |
+| `monthly_summary` | 월 (기존 확장) | + `ticket_amount, subscription_amount, b2b_amount, active_subscribers_eom, partner_total_eom, registered_total_eom` |
+
+기존 `daily_metrics`에 `subscribers`(그날 활성 구독자 중 방문 사람), `sub_payers`(구독 결제 사람) 열 추가. `person_day` 플래그에 `32768 subscribed`(그날 구독 활성) 추가.
+
+대조 추가: C9 티켓 결제 합 = `db_payments(kind=ticket)` 합, C10 일별 활성 구독자 = 구독 표 재집계, C11 등록 공간 누적 = `db_venues` 등록일 누적.
+
+## 6. 화면 (탭 7개)
+
+- **개요**: 스코어보드에 `총 매출 · 티켓 · 구독 · B2B` 타일 행 추가(전기 대비). 추이 카드에 `매출 구성`(스택: 티켓·구독·B2B) 추가. 기준일 현황: 누적 회원 · 등록 공간 · 파트너 공간 · 구독자.
+- **행사·결제**: 보기 `흐름 / 행사별 / 공간별 / 매출 구성`. 매출 구성 = 월별 스택 막대(티켓·구독·B2B) + 객단가·할인액 추이 + 파트너/비파트너 티켓 매출 비교.
+- **회원**: 보기 `회원 / 구독`. 구독 = 스코어보드(구독자·신규·해지·MRR·이탈률) → 추이(구독자·MRR) → 구독자 vs 비구독 회원의 티켓 결제 비교 표.
+- **공간**(신설, 회원 옆): 스코어보드(등록 공간·파트너 공간·이달 신규 계약·해지·B2B MRR) → 추이(등록·파트너 누적, 주별) → **서울 분포 지도**(인라인 SVG: 서울 외곽선 근사 + 상권별 점 산포, 점 크기 = 28일 조회, 색 = 파트너 여부, hover 상호·상권·장르) → 상권별 표(등록·파트너·행사·매출) → 파트너 공간 표(상호·상권·장르·플랜·계약일·행사·매출, 정렬).
+- **지표 가이드**(헤더 4번째): 원본 `dashboard/public/metrics.json` — `tabs[]`(탭·답하는 질문 한 줄·주 사용자 역할·핵심 지표 3개) + `metrics[]`(id·이름·탭·정의·산식·단위·분모·마트 열·의의 한 줄). 화면은 탭별 표 + 지표 표(검색·탭 필터). 타일 이름 옆 `?`는 같은 원본의 정의를 툴팁으로. `docs/metrics.md`는 이 JSON에서 생성.
+
+## 7. 완료 기준
+
+- 생성기 단언: 기존 30개 + 등록 공간 연말 1,700~1,900 · 파트너 160~200 · 구독자 연말 1,800~2,200 · 월 이탈 4~8% · 객단가 3.2~4.4만 · 연 티켓 매출 12~18억 · 상권 비중 오차 ±3%p · 파트너 공간 행사 비중 70~80%.
+- 파이프라인 검사 C1~C11 통과, 카탈로그 실물 대조 0.
+- 화면: 탭 7개, 필터 4축 적용, 공간 탭 지도가 실제 서울 상권 위치에 점이 뭉친 모양으로 보일 것. 지표 가이드의 지표 수 = 화면 타일 수 이상.

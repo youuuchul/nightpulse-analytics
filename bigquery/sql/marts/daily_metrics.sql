@@ -10,6 +10,8 @@
 -- 세션 열은 자동 로드를 뺀 방문 세션이다. 자동 로드는 auto_load_sessions 로 따로 둔다.
 -- 건수·금액(applies·pay_count·pay_amount·cancels)은 로그 이벤트 기준이며 원장과의 일치는 검사 C1·C2 가 확인한다.
 -- 비율은 저장하지 않는다. 분자·분모 열을 화면에서 나눈다.
+-- subscribers = 그날 활성 구독 회원 중 방문 사람(구독 원장 상태). sub_payers = 구독 결제 완료 이벤트 사람(로그, 신규·재구독 결제).
+-- 기간 구독자 수·구독 매출은 이 마트가 아니라 daily_subscription·daily_revenue 에서 센다.
 
 CREATE OR REPLACE TABLE marts.daily_metrics (
   kst_date DATE OPTIONS(description='날짜 (KST). 일 파티션'),
@@ -34,7 +36,9 @@ CREATE OR REPLACE TABLE marts.daily_metrics (
   searchers INT64 OPTIONS(description='검색 사람 수'),
   multi_session_persons INT64 OPTIONS(description='방문 세션 2개 이상인 사람 수'),
   auto_load_sessions INT64 OPTIONS(description='자동 로드 세션 수'),
-  engagement_msec INT64 OPTIONS(description='체류 합 (ms, 자동 로드 제외)')
+  engagement_msec INT64 OPTIONS(description='체류 합 (ms, 자동 로드 제외)'),
+  subscribers INT64 OPTIONS(description='그날 활성 구독 회원 중 방문 사람 수'),
+  sub_payers INT64 OPTIONS(description='구독 결제 완료 이벤트 사람 수 (로그)')
 )
 PARTITION BY kst_date
 CLUSTER BY channel1, device_platform, member_seg
@@ -63,7 +67,9 @@ SELECT
   COUNTIF(did_search) AS searchers,
   COUNTIF(is_multi_session) AS multi_session_persons,
   SUM(auto_load_sessions) AS auto_load_sessions,
-  SUM(engagement_msec) AS engagement_msec
+  SUM(engagement_msec) AS engagement_msec,
+  COUNTIF(is_visit AND subscribed) AS subscribers,
+  COUNTIF(sub_paid) AS sub_payers
 FROM staging.int_person_day
 WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
 GROUP BY kst_date, channel1, device_platform, member_seg;

@@ -19,14 +19,14 @@
 -- 1행: 공간 1곳
 -- 키: venue_id
 -- 파티션·클러스터: 없음 / 없음
--- 원천: data/raw/db_venues.csv (생성기 출력)
--- 소비: staging.dim_event·dim_venue
+-- 원천: data/raw/db_venues.csv (생성기 출력). 상권·구·좌표·등록일·상태 포함
+-- 소비: staging.dim_event·dim_venue, ops.reconciliation
 
 -- 표: raw.db_events — 서비스 RDB 행사 스냅샷 (합성)
 -- 1행: 행사 1건
 -- 키: event_id
 -- 파티션·클러스터: 없음 / 없음
--- 원천: data/raw/db_events.csv (생성기 출력)
+-- 원천: data/raw/db_events.csv (생성기 출력). 정원·가격대·가격·개최 시점 파트너 여부 포함
 -- 소비: staging.dim_event·dim_venue·fct_order
 
 -- 표: raw.db_applications — 서비스 RDB 신청 원장 스냅샷 (합성)
@@ -40,8 +40,22 @@
 -- 1행: 결제 1건
 -- 키: order_id
 -- 파티션·클러스터: 없음 / 없음
--- 원천: data/raw/db_payments.csv (생성기 출력)
--- 소비: staging.fct_order, ops.reconciliation
+-- 원천: data/raw/db_payments.csv (생성기 출력). kind = ticket / subscription, 할인액·구독 ID 포함
+-- 소비: staging.fct_order·dim_subscription, ops.reconciliation
+
+-- 표: raw.db_venue_contracts — 서비스 RDB 파트너 계약 스냅샷 (합성)
+-- 1행: 계약 1건
+-- 키: contract_id
+-- 파티션·클러스터: 없음 / 없음
+-- 원천: data/raw/db_venue_contracts.csv (생성기 출력). ended_at NULL = 진행 중
+-- 소비: staging.dim_contract
+
+-- 표: raw.db_subscriptions — 서비스 RDB 소비자 구독 스냅샷 (합성)
+-- 1행: 구독 1건
+-- 키: subscription_id
+-- 파티션·클러스터: 없음 / 없음
+-- 원천: data/raw/db_subscriptions.csv (생성기 출력). ended_at NULL = 진행 중
+-- 소비: staging.dim_subscription, ops.reconciliation
 
 -- 표: raw.ads_spend — 광고 플랫폼 일별 집행 리포트 (합성)
 -- 1행: 캠페인 × 일

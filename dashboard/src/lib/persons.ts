@@ -17,6 +17,7 @@ export const F = {
   shared: 4096,
   multi_session: 8192,
   first_visit: 16384,
+  subscribed: 32768,
 } as const
 
 export interface SegState {
@@ -34,7 +35,7 @@ export interface PersonRow {
 
 /**
  * person_day.bin 한 행의 비트 배치(extract.py PD_BITS 와 같다).
- * w0 = pk(0..19) | d(20..28) | c(29) | p(30..31), w1 = m(0) | f(1..15).
+ * w0 = pk(0..19) | d(20..28) | c(29) | p(30..31), w1 = m(0) | f(1..16).
  */
 export const pdKey = (w0: number) => w0 & 0xfffff
 export const pdDay = (w0: number) => (w0 >>> 20) & 0x1ff

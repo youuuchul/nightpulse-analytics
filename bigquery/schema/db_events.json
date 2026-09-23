@@ -9,7 +9,7 @@
     "name": "venue_id",
     "type": "INTEGER",
     "mode": "NULLABLE",
-    "description": "공간 ID"
+    "description": "개최 공간 ID"
   },
   {
     "name": "name",
@@ -33,13 +33,25 @@
     "name": "price_tier",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "free / standard / premium"
+    "description": "free / standard(1.5~3만) / premium(4~8만) / package(10만 이상)"
   },
   {
     "name": "price",
     "type": "INTEGER",
     "mode": "NULLABLE",
-    "description": "가격 (원)"
+    "description": "정가 (원)"
+  },
+  {
+    "name": "capacity",
+    "type": "INTEGER",
+    "mode": "NULLABLE",
+    "description": "정원. 신청(결제 대기 제외)은 정원을 넘지 않는다"
+  },
+  {
+    "name": "is_partner_venue",
+    "type": "BOOLEAN",
+    "mode": "NULLABLE",
+    "description": "개최 공간이 개최일(KST)에 파트너 계약 중인가"
   },
   {
     "name": "snapshot_date",

@@ -48,10 +48,11 @@ function PageLink({
   )
 }
 
-const NAV: { page: Page; label: string }[] = [
-  { page: '', label: '대시보드' },
-  { page: 'about', label: '프로젝트 개요' },
-  { page: 'data', label: '데이터' },
+const NAV: { page: Page; label: string; short: string }[] = [
+  { page: '', label: '대시보드', short: '대시보드' },
+  { page: 'about', label: '프로젝트 개요', short: '개요' },
+  { page: 'metrics', label: '지표 가이드', short: '지표' },
+  { page: 'data', label: '데이터', short: '데이터' },
 ]
 
 export default function Header({
@@ -97,7 +98,8 @@ export default function Header({
                   on ? 'bg-wash font-semibold text-ink' : 'text-ink2 hover:text-ink'
                 }`}
               >
-                {it.label}
+                <span className="sm:hidden">{it.short}</span>
+                <span className="hidden sm:inline">{it.label}</span>
               </PageLink>
             )
           })}

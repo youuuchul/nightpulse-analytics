@@ -3,12 +3,15 @@
 -- 키: month
 -- 파티션·클러스터: DATE_TRUNC(month, MONTH) / 없음
 -- 원천: staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장),
---       marts.weekly_cohort (W1 리텐션 — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다)
+--       marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry (W1 리텐션·매출 구성·월말 구독자·월말 공간
+--       — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다)
 -- 소비: 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다.
 --       예외: w1_retention 은 화면 계약상 비율(0~1)로도 둔다. 분자·분모는 w1_retained·w1_cohort_size
 --
 -- 원장 열(applies·pay_count·pay_amount·cancels)은 신청일이 속한 달 기준. W1 은 첫 방문 주(월요일)가 그 달에 속한 코호트의 합.
 -- top_channel = 방문 세션이 가장 많은 세션 채널 2단계 값.
+-- 매출 구성 열(ticket·subscription·b2b_amount)은 daily_revenue net_amount 의 월 합(결제일·계약 활성일 기준)이라
+-- 신청일 기준인 pay_amount·net_amount 와 월 경계에서 다를 수 있다. *_eom 은 그 달 마지막 관측일 값.
 
 CREATE OR REPLACE TABLE marts.monthly_summary (
   month DATE OPTIONS(description='월 (1일). 월 파티션'),
@@ -29,10 +32,16 @@ CREATE OR REPLACE TABLE marts.monthly_summary (
   net_amount INT64 OPTIONS(description='순매출 (원)'),
   w1_cohort_size INT64 OPTIONS(description='W1 분모: 그 달 시작 주 코호트 크기 합 (W1 관측 완료분)'),
   w1_retained INT64 OPTIONS(description='W1 분자: 그 코호트 중 다음 주 방문자 합'),
-  top_channel_sessions INT64 OPTIONS(description='top_channel 의 방문 세션 수')
+  top_channel_sessions INT64 OPTIONS(description='top_channel 의 방문 세션 수'),
+  ticket_amount INT64 OPTIONS(description='티켓 순매출 (원, 결제일 기준)'),
+  subscription_amount INT64 OPTIONS(description='구독 순매출 (원, 결제일 기준)'),
+  b2b_amount INT64 OPTIONS(description='B2B 계약 매출 (원, 활성일 안분)'),
+  active_subscribers_eom INT64 OPTIONS(description='월말 활성 구독 회원 수'),
+  partner_total_eom INT64 OPTIONS(description='월말 활성 파트너 공간 수'),
+  registered_total_eom INT64 OPTIONS(description='월말 등록 공간 누적')
 )
 PARTITION BY DATE_TRUNC(month, MONTH)
-OPTIONS(description='월간 브리핑 표. 1행 = 월. 원천 staging.int_person_day·int_session·dim_member·fct_order, marts.weekly_cohort')
+OPTIONS(description='월간 브리핑 표. 1행 = 월. 원천 staging.int_person_day·int_session·dim_member·fct_order, marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry')
 AS
 WITH pd AS (
   SELECT person_id, kst_date, is_visit, is_first_visit_day
@@ -85,7 +94,38 @@ orders AS (
     SUM(net_amount) AS net_amount
   FROM staging.fct_order
   WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    AND kind = 'ticket'
   GROUP BY 1
+),
+rev AS (
+  SELECT
+    DATE_TRUNC(kst_date, MONTH) AS month,
+    SUM(IF(kind = 'ticket', net_amount, 0)) AS ticket_amount,
+    SUM(IF(kind = 'subscription', net_amount, 0)) AS subscription_amount,
+    SUM(IF(kind = 'b2b', net_amount, 0)) AS b2b_amount
+  FROM marts.daily_revenue
+  WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+  GROUP BY 1
+),
+sub_eom AS (
+  SELECT DATE_TRUNC(kst_date, MONTH) AS month, active_subscribers AS active_subscribers_eom
+  FROM marts.daily_subscription
+  WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY DATE_TRUNC(kst_date, MONTH) ORDER BY kst_date DESC) = 1
+),
+venue_eom AS (
+  SELECT month, partner_total_eom, registered_total_eom
+  FROM (
+    SELECT
+      kst_date,
+      DATE_TRUNC(kst_date, MONTH) AS month,
+      SUM(partner_total) AS partner_total_eom,
+      SUM(registered_total) AS registered_total_eom
+    FROM marts.daily_venue_registry
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    GROUP BY 1, 2
+  )
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY month ORDER BY kst_date DESC) = 1
 ),
 w1 AS (
   SELECT
@@ -115,10 +155,19 @@ SELECT
   COALESCE(o.net_amount, 0) AS net_amount,
   COALESCE(w.w1_cohort_size, 0) AS w1_cohort_size,
   COALESCE(w.w1_retained, 0) AS w1_retained,
-  c.top_channel_sessions
+  c.top_channel_sessions,
+  COALESCE(r.ticket_amount, 0) AS ticket_amount,
+  COALESCE(r.subscription_amount, 0) AS subscription_amount,
+  COALESCE(r.b2b_amount, 0) AS b2b_amount,
+  COALESCE(se.active_subscribers_eom, 0) AS active_subscribers_eom,
+  COALESCE(ve.partner_total_eom, 0) AS partner_total_eom,
+  COALESCE(ve.registered_total_eom, 0) AS registered_total_eom
 FROM visit AS v
 LEFT JOIN sess AS s USING (month)
 LEFT JOIN chan AS c USING (month)
 LEFT JOIN signup AS su USING (month)
 LEFT JOIN orders AS o USING (month)
-LEFT JOIN w1 AS w USING (month);
+LEFT JOIN w1 AS w USING (month)
+LEFT JOIN rev AS r USING (month)
+LEFT JOIN sub_eom AS se USING (month)
+LEFT JOIN venue_eom AS ve USING (month);

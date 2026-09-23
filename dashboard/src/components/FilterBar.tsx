@@ -206,7 +206,7 @@ export function SegmentLine({
       {views && view && onView && (
         <>
           <Segmented options={views} value={view} onChange={onView} />
-          <Divider />
+          {children && <Divider />}
         </>
       )}
       {children}

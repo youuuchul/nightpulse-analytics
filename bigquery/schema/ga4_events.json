@@ -113,7 +113,7 @@
     "name": "user_properties",
     "type": "RECORD",
     "mode": "REPEATED",
-    "description": "사용자 속성 (first_channel, device_platform)",
+    "description": "사용자 속성 (first_channel, device_platform, subscriber '1'/'0' = 그 시점 구독 활성)",
     "fields": [
       {
         "name": "key",
@@ -133,7 +133,7 @@
     "name": "event_params",
     "type": "RECORD",
     "mode": "REPEATED",
-    "description": "이벤트 파라미터",
+    "description": "이벤트 파라미터. 공간 상세 screen_view 는 venue_id·is_partner('1'/'0', 조회일 계약 상태), subscribe 는 order_id·subscription_id·value(9,900)·currency, subscription_cancel 은 subscription_id",
     "fields": [
       {
         "name": "key",

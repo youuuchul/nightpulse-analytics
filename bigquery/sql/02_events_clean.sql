@@ -3,7 +3,7 @@
 -- 키: (client_id, session_id, event_at, event_name)
 -- 파티션·클러스터: kst_date / event_name, client_id
 -- 원천: raw.ga4_events
--- 소비: staging.int_session, marts.daily_event·daily_venue·weekly_path, ops.reconciliation
+-- 소비: staging.int_session, marts.daily_event·daily_venue·weekly_path·venue_registry, ops.reconciliation
 -- 검사: C1a·C1b·C2·I3
 --
 -- 처리: 식별자 이름 정리(user_pseudo_id→client_id, user_id→member_id, ga_session_id→session_id),
@@ -22,6 +22,7 @@ CREATE OR REPLACE TABLE staging.events_clean (
   page_path STRING OPTIONS(description='화면 경로 (도메인·쿼리 제외)'),
   screen_name STRING OPTIONS(description='화면 이름 (screen_view 만)'),
   venue_id INT64 OPTIONS(description='공간 ID 파라미터'),
+  is_partner BOOL OPTIONS(description='공간 상세 조회 시점 파트너 공간 여부 파라미터 (원천 문자열 1/0). 공간 상세 외 NULL'),
   event_id INT64 OPTIONS(description='행사 ID 파라미터'),
   order_id STRING OPTIONS(description='주문 ID 파라미터 (신청·결제·취소)'),
   amount INT64 OPTIONS(description='금액 파라미터 value (원). 결제=결제액, 취소=환불액'),
@@ -35,6 +36,7 @@ CREATE OR REPLACE TABLE staging.events_clean (
   operating_system STRING OPTIONS(description='기기 OS'),
   device_platform STRING OPTIONS(description='기기 플랫폼 사용자 속성 ios / android / desktop'),
   first_channel STRING OPTIONS(description='첫 유입 사용자 속성 paid / non_paid'),
+  subscriber BOOL OPTIONS(description='구독자 사용자 속성 (이벤트 시점 기준, 원천 문자열 1/0). 속성 없으면 NULL'),
   source STRING OPTIONS(description='세션 라스트클릭 소스'),
   medium STRING OPTIONS(description='세션 라스트클릭 매체'),
   campaign STRING OPTIONS(description='세션 라스트클릭 캠페인 ID'),
@@ -87,6 +89,7 @@ SELECT
   REGEXP_EXTRACT(page_location, r'^https?://[^/]+(/[^?#]*)') AS page_path,
   (SELECT string_value FROM UNNEST(event_params) WHERE key = 'screen_name') AS screen_name,
   (SELECT int_value FROM UNNEST(event_params) WHERE key = 'venue_id') AS venue_id,
+  (SELECT COALESCE(string_value, CAST(int_value AS STRING)) FROM UNNEST(event_params) WHERE key = 'is_partner') = '1' AS is_partner,
   (SELECT int_value FROM UNNEST(event_params) WHERE key = 'event_id') AS event_id,
   (SELECT string_value FROM UNNEST(event_params) WHERE key = 'order_id') AS order_id,
   (SELECT int_value FROM UNNEST(event_params) WHERE key = 'value') AS amount,
@@ -100,6 +103,7 @@ SELECT
   operating_system,
   (SELECT string_value FROM UNNEST(user_properties) WHERE key = 'device_platform') AS device_platform,
   (SELECT string_value FROM UNNEST(user_properties) WHERE key = 'first_channel') AS first_channel,
+  (SELECT string_value FROM UNNEST(user_properties) WHERE key = 'subscriber') = '1' AS subscriber,
   traffic_source.source AS source,
   traffic_source.medium AS medium,
   traffic_source.campaign AS campaign,

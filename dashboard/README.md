@@ -25,7 +25,7 @@ cd dashboard
 npm ci
 npm run dev          # 개발 서버
 npm run build        # tsc + vite build → dist/
-npm run capture      # dist 를 preview 로 띄워 탭 6개 라이트 캡처 → captures/ (gitignore)
+npm run capture      # dist 를 preview 로 띄워 탭 7개·페이지 3개 캡처 → captures/ (gitignore)
 npm run capture -- --all   # + 보기 전환·1일·1년·다크·폰 폭
 ```
 
@@ -44,7 +44,7 @@ src/
   lib/agg.ts           기간 해석·세그먼트 필터·합산·일/주 버킷
   lib/labels.ts        채널·가격대·퍼널 라벨, 색 슬롯
   components/          Header(페이지 이동·기준일·테마) · FilterBar · ui(타일·카드·범례) · charts(추이·히트맵·퍼널) · DataTable · ReachTable(도달률 히트맵 표) · PathSankey(경로 생키)
-  tabs/                탭 6개 (각 탭 = 스코어보드 → 추이 → 표)
+  tabs/                탭 7개 (각 탭 = 스코어보드 → 추이 → 표)
 scripts/
   make_sample_data.py  합성 샘플(합친 JSON 한 파일)
   extract.py           BigQuery 마트(또는 --from-json) → public/data/ 분할

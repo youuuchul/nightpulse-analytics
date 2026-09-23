@@ -1,0 +1,58 @@
+import { useEffect, useState } from 'react'
+
+export interface MetricDef {
+  id: string
+  name: string
+  tab: string
+  group: string
+  definition: string
+  formula: string
+  unit: string
+  denominator: string
+  mart_columns: string[]
+  why: string
+}
+
+export interface TabGuide {
+  id: string
+  name: string
+  question: string
+  users: string[]
+  key_metrics: string[]
+}
+
+export interface MetricSpec {
+  groups: { id: string; name: string }[]
+  tabs: TabGuide[]
+  metrics: MetricDef[]
+}
+
+type Loaded = MetricSpec | 'error' | null
+
+let cache: Loaded = null
+let job: Promise<void> | null = null
+const subs = new Set<() => void>()
+
+function load(): Promise<void> {
+  if (!job)
+    job = fetch(`${import.meta.env.BASE_URL}metrics.json`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(
+        (j: MetricSpec) => void (cache = Array.isArray(j?.metrics) ? j : 'error'),
+        () => void (cache = 'error'),
+      )
+      .then(() => subs.forEach((f) => f()))
+  return job
+}
+
+/** metrics.json 을 한 번만 받아 공유한다. 받는 중 null, 실패 'error'. */
+export function useMetricSpec(): Loaded {
+  const [, bump] = useState(0)
+  useEffect(() => {
+    const f = () => bump((x) => x + 1)
+    subs.add(f)
+    if (!cache) load()
+    return () => void subs.delete(f)
+  }, [])
+  return cache
+}

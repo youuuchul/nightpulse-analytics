@@ -121,27 +121,31 @@ function Weekly({ data, s }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow>
-        <Tile label={`WAU · ${md(wk)} 주`} value={num(cur.wau)} unit="명" delta={rel(cur.wau, prev.wau, vs)} />
-        <Tile label="신규" value={num(cur.new_persons)} unit="명" delta={rel(cur.new_persons, prev.new_persons, vs)} />
+        <Tile metricId="V03" label={`WAU · ${md(wk)} 주`} value={num(cur.wau)} unit="명" delta={rel(cur.wau, prev.wau, vs)} />
+        <Tile metricId="V16" label="신규" value={num(cur.new_persons)} unit="명" delta={rel(cur.new_persons, prev.new_persons, vs)} />
         <Tile
+          metricId="V17"
           label="재방문"
           value={num(cur.returning_persons)}
           unit="명"
           delta={rel(cur.returning_persons, prev.returning_persons, vs)}
         />
         <Tile
+          metricId="V05"
           label="재방문 비중"
           value={pct(ratio(cur.returning_persons, cur.wau))}
           sub={`WAU ${num(cur.wau)} 중`}
           delta={rel(ratio(cur.returning_persons, cur.wau), ratio(prev.returning_persons, prev.wau), vs, true, true)}
         />
         <Tile
+          metricId="V06"
           label="주 2일+ 방문"
           value={pct(ratio(cur.two_plus_days, cur.wau))}
           sub={`WAU ${num(cur.wau)} 중`}
           delta={rel(ratio(cur.two_plus_days, cur.wau), ratio(prev.two_plus_days, prev.wau), vs, true, true)}
         />
         <Tile
+          metricId="R01"
           label={`W1 리텐션 · ${md(w1Cohort)} 코호트`}
           value={pct(w1(w1Cohort))}
           sub={`코호트 ${num(cohorts.get(w1Cohort)?.size ?? 0)}명`}
@@ -159,7 +163,7 @@ function Weekly({ data, s }: TabProps) {
         />
       </Card>
 
-      <Card title="주간 코호트 리텐션" meta="첫 방문 주 기준 · 최근 12개 코호트 · %">
+      <Card title="주간 코호트 리텐션" metricId="R01" meta="첫 방문 주 기준 · 최근 12개 코호트 · %">
         <Heatmap
           cols={Array.from({ length: 12 }, (_, k) => `W${k + 1}`)}
           rows={heatRows}
@@ -235,22 +239,25 @@ function Monthly({ data, s }: TabProps) {
   return (
     <div className="flex flex-col gap-4">
       <TileRow>
-        <Tile label={`방문자 · ${mo}`} value={num(cur?.persons)} unit="명" delta={rel(cur?.persons ?? null, prev?.persons ?? null, vs)} />
-        <Tile label="신규" value={num(cur?.new_persons)} unit="명" delta={rel(cur?.new_persons ?? null, prev?.new_persons ?? null, vs)} />
-        <Tile label="가입" value={num(cur?.signups)} unit="명" delta={rel(cur?.signups ?? null, prev?.signups ?? null, vs)} />
+        <Tile metricId="V04" label={`방문자 · ${mo}`} value={num(cur?.persons)} unit="명" delta={rel(cur?.persons ?? null, prev?.persons ?? null, vs)} />
+        <Tile metricId="V02" label="신규" value={num(cur?.new_persons)} unit="명" delta={rel(cur?.new_persons ?? null, prev?.new_persons ?? null, vs)} />
+        <Tile metricId="C10" label="가입" value={num(cur?.signups)} unit="명" delta={rel(cur?.signups ?? null, prev?.signups ?? null, vs)} />
         <Tile
+          metricId="C13"
           label="결제 금액"
           value={won(cur?.pay_amount)}
           unit="원"
           delta={rel(cur?.pay_amount ?? null, prev?.pay_amount ?? null, vs)}
         />
         <Tile
+          metricId="C06"
           label="취소율"
           value={pct(cancel(cur))}
           sub={`신청 ${num(cur?.applies)}건 중`}
           delta={rel(cancel(cur), cancel(prev), vs, false, true)}
         />
         <Tile
+          metricId="R02"
           label="W1 리텐션"
           value={pct(cur?.w1_retention)}
           sub="이달 첫 방문 코호트"
@@ -268,7 +275,7 @@ function Monthly({ data, s }: TabProps) {
             height={240}
           />
         </Card>
-        <Card title="월간 코호트 리텐션" meta="첫 방문 월 기준 · %">
+        <Card title="월간 코호트 리텐션" metricId="R03" meta="첫 방문 월 기준 · %">
           <Heatmap
             cols={Array.from({ length: 6 }, (_, k) => `M${k + 1}`)}
             rows={heatRows}

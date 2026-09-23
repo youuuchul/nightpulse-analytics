@@ -36,9 +36,9 @@ const AXES: { id: Axis; label: string; field: keyof Seg; values: { v: string; la
   },
 ]
 
-const GRAIN_LABEL: Record<Exclude<Grain, 'auto'>, string> = { hour: '시간별', day: '일별', week: '주별', month: '월별' }
+export const GRAIN_LABEL: Record<Exclude<Grain, 'auto'>, string> = { hour: '시간별', day: '일별', week: '주별', month: '월별' }
 
-interface Bucket {
+export interface Bucket {
   from: string
   to: string
   label: string
@@ -54,14 +54,14 @@ function spanTitle(a: string, b: string): string {
   return a === b ? dayTitle(a) : `${md(a)}~${md(b)}`
 }
 
-function autoGrain(range: Range): Exclude<Grain, 'auto'> {
+export function autoGrain(range: Range): Exclude<Grain, 'auto'> {
   if (range.oneDay) return 'hour'
   if (range.days <= 14) return 'day'
   if (range.days <= 120) return 'week'
   return 'month'
 }
 
-function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
+export function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
   const shift = (d: string) => addDays(d, -range.days)
   if (g === 'day')
     return eachDay(range.from, range.to).map((d) => ({
@@ -90,11 +90,11 @@ function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
   return out
 }
 
-function change(cur: number, prev: number | null): number | null {
+export function change(cur: number, prev: number | null): number | null {
   return prev == null || prev === 0 ? null : cur / prev - 1
 }
 
-function DeltaMark({ v, suffix }: { v: number | null; suffix?: string }) {
+export function DeltaMark({ v, suffix }: { v: number | null; suffix?: string }) {
   if (v == null || !Number.isFinite(v)) return <span className="text-muted">—{suffix ? ` ${suffix}` : ''}</span>
   const flat = Math.abs(v) < 0.0005
   const color = flat ? 'var(--muted)' : v > 0 ? 'var(--good)' : 'var(--bad)'
@@ -109,7 +109,7 @@ function DeltaMark({ v, suffix }: { v: number | null; suffix?: string }) {
   )
 }
 
-function MiniSeg<T extends string>({
+export function MiniSeg<T extends string>({
   value,
   options,
   onChange,

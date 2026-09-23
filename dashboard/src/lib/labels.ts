@@ -21,7 +21,7 @@ export function channel2Color(k: string): string {
   return S(i < 0 ? 8 : i + 1)
 }
 
-export const PRICE_TIER: Record<string, string> = { free: '무료', standard: '일반', premium: '프리미엄' }
+export const PRICE_TIER: Record<string, string> = { free: '무료', standard: '일반', premium: '프리미엄', package: '패키지' }
 
 export const FUNNEL_LABEL: Record<string, string> = {
   landing: '랜딩',
@@ -76,3 +76,11 @@ export function screenColor(k: string): string {
   if (k === EXIT_NODE) return 'var(--exit)'
   return SCREEN_GROUPS.find((g) => g.screens.includes(k))?.color ?? 'var(--muted)'
 }
+
+export const REVENUE_KINDS: { key: 'ticket' | 'subscription' | 'b2b'; label: string; color: string }[] = [
+  { key: 'ticket', label: '티켓', color: S(1) },
+  { key: 'subscription', label: '구독', color: S(2) },
+  { key: 'b2b', label: 'B2B', color: S(3) },
+]
+
+export const PLAN_LABEL: Record<string, string> = { basic: '베이직', pro: '프로' }

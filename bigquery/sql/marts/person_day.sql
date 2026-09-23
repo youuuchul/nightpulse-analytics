@@ -1,5 +1,5 @@
 -- 표: marts.person_day — 사람 × 일 행동 플래그 마트 (기간 고유 사람 수 계산용)
--- 1행: 사람 × 일(KST). 플래그가 하나도 없는 날(자동 로드만 있는 날)은 뺀다
+-- 1행: 사람 × 일(KST). 행동 플래그(비트 1~16384)가 하나도 없는 날(자동 로드만 있는 날)은 뺀다. 상태 비트 32768 만 있는 날도 뺀다
 -- 키: (person_key, kst_date)
 -- 파티션·클러스터: kst_date / person_key
 -- 원천: staging.int_person_day
@@ -14,7 +14,7 @@
 --   8 detail_any(did_view_detail) · 16 signed_up(did_sign_up, 그날) · 32 logged_in(is_logged_in)
 --   64 apply_view(did_view_apply) · 128 applied(did_apply) · 256 paid(did_pay) · 512 cancelled(did_cancel)
 --   1024 searched(did_search) · 2048 banner(did_select_promotion) · 4096 shared(did_share)
---   8192 multi_session(is_multi_session) · 16384 first_visit(is_first_visit_day)
+--   8192 multi_session(is_multi_session) · 16384 first_visit(is_first_visit_day) · 32768 subscribed(subscribed, 그날 활성 구독)
 
 CREATE OR REPLACE TABLE marts.person_day (
   kst_date DATE OPTIONS(description='날짜 (KST). 일 파티션'),
@@ -49,7 +49,8 @@ WITH f AS (
       + IF(did_select_promotion, 2048, 0)
       + IF(did_share, 4096, 0)
       + IF(is_multi_session, 8192, 0)
-      + IF(is_first_visit_day, 16384, 0) AS flags
+      + IF(is_first_visit_day, 16384, 0)
+      + IF(subscribed, 32768, 0) AS flags
   FROM staging.int_person_day
   WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
 )
@@ -61,4 +62,4 @@ SELECT
   member_seg,
   flags
 FROM f
-WHERE flags > 0;
+WHERE flags & 32767 > 0;

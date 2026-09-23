@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { Wait } from '../lib/source'
+import MetricHelp from './MetricHelp'
 
 export function Segmented<T extends string>({
   options,
@@ -83,6 +84,7 @@ export function Tile({
   sub,
   delta,
   wait = null,
+  metricId,
 }: {
   label: string
   value: string
@@ -90,10 +92,14 @@ export function Tile({
   sub?: string
   delta?: Delta
   wait?: Wait
+  metricId?: string
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1 px-4 py-3.5">
-      <div className="truncate text-[13px] text-ink2">{label}</div>
+      <div className="flex min-w-0 items-center text-[13px] text-ink2">
+        <span className="truncate">{label}</span>
+        {metricId && <MetricHelp id={metricId} />}
+      </div>
       {wait ? (
         <div className="flex h-[33px] items-center">
           <Pending wait={wait} h={22} w="w-24" />
@@ -158,6 +164,7 @@ export function Card({
   className = '',
   wait = null,
   waitH = 240,
+  metricId,
 }: {
   title: string
   meta?: string
@@ -166,12 +173,16 @@ export function Card({
   className?: string
   wait?: Wait
   waitH?: number
+  metricId?: string
 }) {
   return (
     <section className={`card flex min-w-0 flex-col p-4 sm:p-5 ${className}`}>
       <header className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+          <h2 className="flex items-center text-[15px] font-semibold text-ink">
+            {title}
+            {metricId && <MetricHelp id={metricId} />}
+          </h2>
           {meta && !wait && <span className="truncate text-xs text-muted">{meta}</span>}
         </div>
         {!wait && right}

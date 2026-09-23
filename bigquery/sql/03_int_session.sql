@@ -4,7 +4,7 @@
 -- 파티션·클러스터: session_date / person_id
 -- 원천: staging.events_clean, staging.map_channel
 -- 소비: staging.int_person_day·dim_member,
---       marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path,
+--       marts.hourly_metrics·daily_channel·daily_ad·daily_event·daily_venue·monthly_summary·weekly_audience_funnel·weekly_path·venue_registry,
 --       ops.reconciliation
 -- 검사: I1·I2·R7·R8
 --
@@ -57,6 +57,7 @@ CREATE OR REPLACE TABLE staging.int_session (
   searches INT64 OPTIONS(description='검색 이벤트 수'),
   promo_clicks INT64 OPTIONS(description='배너 선택 수'),
   shares INT64 OPTIONS(description='공유 수'),
+  subscribes INT64 OPTIONS(description='구독 결제 완료 이벤트(subscribe) 수'),
   applications INT64 OPTIONS(description='신청 이벤트 수'),
   purchases INT64 OPTIONS(description='결제 이벤트 수'),
   purchase_amount INT64 OPTIONS(description='결제 금액 합 (원)'),
@@ -105,6 +106,7 @@ sess AS (
     COUNTIF(event_name = 'search') AS searches,
     COUNTIF(event_name = 'select_promotion') AS promo_clicks,
     COUNTIF(event_name = 'share') AS shares,
+    COUNTIF(event_name = 'subscribe') AS subscribes,
     COUNTIF(event_name = 'apply_event') AS applications,
     COUNTIF(event_name = 'purchase') AS purchases,
     SUM(IF(event_name = 'purchase', amount, 0)) AS purchase_amount,
@@ -164,6 +166,7 @@ SELECT
   j.searches,
   j.promo_clicks,
   j.shares,
+  j.subscribes,
   j.applications,
   j.purchases,
   j.purchase_amount,

@@ -3,7 +3,7 @@
 -- 키: event_id
 -- 파티션·클러스터: 없음 / event_id
 -- 원천: raw.db_events, raw.db_venues, staging.fct_order
--- 소비: marts.daily_event (행사 속성), 행사 리스트
+-- 소비: marts.daily_event·venue_registry (행사 속성·365일 개최 행사), 행사 리스트
 
 CREATE OR REPLACE TABLE staging.dim_event (
   event_id INT64 OPTIONS(description='행사 ID'),
@@ -38,6 +38,7 @@ WITH o AS (
     SUM(net_amount) AS net_amount
   FROM staging.fct_order
   WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    AND kind = 'ticket'
   GROUP BY event_id
 )
 SELECT
