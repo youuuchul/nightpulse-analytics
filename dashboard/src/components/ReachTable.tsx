@@ -59,7 +59,7 @@ export function ReachTable({
                   <td className="tnum whitespace-nowrap py-1 pr-3 text-right text-ink">{num(r.base)}</td>
                   {rates[ri].map((v, ci) => {
                     const [lo, hi] = bounds[ci]
-                    const t = v == null ? 0 : hi > lo ? (v - lo) / (hi - lo) : 0.5
+                    const t = v == null ? 0 : hi > lo ? (v - lo) / (hi - lo) : hi > 0 ? 0.5 : 0
                     const p = Math.round(12 + t * 88)
                     return (
                       <td key={ci} className="px-0.5 py-0.5">

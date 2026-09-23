@@ -234,7 +234,7 @@ function FlowWide() {
       ))}
       <Box x={(xs[2] + xs[3]) / 2} y={184} w={W} h={H} n={OPS} />
       <Arrow m="np-arrow-w" d={`M${xs[2] + W / 2},${mid + H} L${xs[2] + W / 2},${184 + H / 2} L${(xs[2] + xs[3]) / 2 - 2},${184 + H / 2}`} dashed />
-      <Arrow m="np-arrow-w" d={`M${xs[3] + W / 2},${mid + H} L${xs[3] + W / 2},${182}`} dashed />
+      <Arrow m="np-arrow-w" d={`M${xs[3] + W / 2},${mid + H} L${xs[3] + W / 2},${184 + H / 2} L${(xs[2] + xs[3]) / 2 + W + 2},${184 + H / 2}`} dashed />
       {OUT.map((n, i) => (
         <Box key={n.id} x={xs[4 + i]} y={mid} w={W} h={H} n={n} />
       ))}

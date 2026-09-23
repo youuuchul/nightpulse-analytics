@@ -43,7 +43,7 @@ export const DEFAULTS: State = {
   wk: '',
   mo: '',
   mr: '6',
-  aud: 'new,returning,paid_inflow',
+  aud: 'new,returning,past_payer',
   page: '',
 }
 

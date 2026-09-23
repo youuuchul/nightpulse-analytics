@@ -19,7 +19,7 @@ export interface Series {
   color: string
 }
 
-type Row = Record<string, number | string>
+type Row = Record<string, number | string | null>
 
 function TipBox({
   title,
@@ -107,7 +107,7 @@ export function TimeChart({
               const rows = series.map((s) => ({
                 label: s.label,
                 color: s.color,
-                value: valueFormat(Number((payload[0].payload as Row)[s.key] ?? 0)),
+                value: (payload[0].payload as Row)[s.key] == null ? '—' : valueFormat(Number((payload[0].payload as Row)[s.key])),
               }))
               const total =
                 kind === 'stack' && series.length > 1

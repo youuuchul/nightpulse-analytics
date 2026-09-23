@@ -34,7 +34,6 @@ LAYER_TITLE = {
 }
 FIELDS = ["표", "1행", "키", "파티션·클러스터", "원천", "소비", "검사"]
 REQUIRED = FIELDS[:6]
-REGION = "asia-northeast3"
 TOKEN = re.compile(r"\b(raw|staging|marts|ops)\.([a-z][a-z0-9_]*(?:·[a-z][a-z0-9_]*)*)")
 CHECK_ID = re.compile(r"^[CRI]\d+[a-z]?$")
 
@@ -235,14 +234,16 @@ def validate(tables: dict[str, Table], checks: list[dict[str, str]], steps, erro
             declared = tokens(t.fields["원천"])
             if declared != read:
                 errors.append(
-                    f"{t.rel}: 원천 주석 ≠ 본문 참조. 주석만 {sorted(declared - read)}, 본문만 {sorted(read - declared)}"
+                    f"{t.rel}: 원천 주석 ≠ 본문 참조. "
+                    f"주석만 {sorted(declared - read)}, 본문만 {sorted(read - declared)}"
                 )
     for t in tables.values():
         consumers = {u.name for u in tables.values() if t.name in tokens(u.fields["원천"])}
         declared = tokens(t.fields["소비"])
         if declared != consumers:
             errors.append(
-                f"{t.rel}: {t.name} 소비 주석 ≠ 다른 표의 원천. 주석만 {sorted(declared - consumers)}, 빠짐 {sorted(consumers - declared)}"
+                f"{t.rel}: {t.name} 소비 주석 ≠ 다른 표의 원천. "
+                f"주석만 {sorted(declared - consumers)}, 빠짐 {sorted(consumers - declared)}"
             )
     for p in sql_files():
         rel = p.relative_to(BQ_DIR).as_posix()
@@ -269,20 +270,22 @@ def validate(tables: dict[str, Table], checks: list[dict[str, str]], steps, erro
 
 def live(tables: dict[str, Table], errors: list[str]) -> tuple[list[dict], list[dict]]:
     """실물 표·파티션 대조와 마지막 실행 기록 조회."""
-    datasets = ", ".join(f"'{d}'" for d in LAYERS)
     rows = bq_select(
-        f"SELECT table_schema, table_name FROM `region-{REGION}`.INFORMATION_SCHEMA.TABLES "
-        f"WHERE table_schema IN ({datasets})"
+        " UNION ALL ".join(f"SELECT table_schema, table_name FROM {d}.INFORMATION_SCHEMA.TABLES" for d in LAYERS)
     )
     actual = {f"{r['table_schema']}.{r['table_name']}" for r in rows}
     if actual != set(tables):
         errors.append(
-            f"INFORMATION_SCHEMA.TABLES ≠ 카탈로그. 실물만 {sorted(actual - set(tables))}, 카탈로그만 {sorted(set(tables) - actual)}"
+            f"INFORMATION_SCHEMA.TABLES ≠ 카탈로그. "
+            f"실물만 {sorted(actual - set(tables))}, 카탈로그만 {sorted(set(tables) - actual)}"
         )
     cols = bq_select(
-        f"SELECT table_schema, table_name, column_name, is_partitioning_column, clustering_ordinal_position "
-        f"FROM `region-{REGION}`.INFORMATION_SCHEMA.COLUMNS WHERE table_schema IN ({datasets}) "
-        f"AND (is_partitioning_column = 'YES' OR clustering_ordinal_position IS NOT NULL)"
+        " UNION ALL ".join(
+            "SELECT table_schema, table_name, column_name, is_partitioning_column, clustering_ordinal_position "
+            f"FROM {d}.INFORMATION_SCHEMA.COLUMNS "
+            "WHERE is_partitioning_column = 'YES' OR clustering_ordinal_position IS NOT NULL"
+            for d in LAYERS
+        )
     )
     part: dict[str, str] = {}
     clus: dict[str, list[tuple[int, str]]] = {}
@@ -301,7 +304,8 @@ def live(tables: dict[str, Table], errors: list[str]) -> tuple[list[dict], list[
         p_ok = (p_decl == "없음") if p_real is None else re.search(rf"\b{p_real}\b", p_decl) is not None
         if not p_ok or norm(c_decl) != c_real:
             errors.append(
-                f"{t.rel}: {t.name} 파티션·클러스터 주석 {t.fields['파티션·클러스터']!r} ≠ 실물 ({p_real or '없음'} / {c_real})"
+                f"{t.rel}: {t.name} 파티션·클러스터 주석 {t.fields['파티션·클러스터']!r} "
+                f"≠ 실물 ({p_real or '없음'} / {c_real})"
             )
     build = bq_select(
         "SELECT step, step_name, run_id, FORMAT_TIMESTAMP('%Y-%m-%d %H:%M', ended_at, 'Asia/Seoul') AS ended_kst, "
@@ -363,13 +367,14 @@ def render(tables: dict[str, Table], checks, steps, build, recon, offline: bool)
         for t in rows:
             f = t.fields
             w(
-                f"| **{t.short}**<br>{cell(t.desc)} | {cell(f['1행'])} | {cell(f['키'])} | {cell(f['파티션·클러스터'])} "
+                f"| **{t.short}**<br>{cell(t.desc)} | {cell(f['1행'])} | {cell(f['키'])} "
+                f"| {cell(f['파티션·클러스터'])} "
                 f"| {cell(f['원천'])} | {cell(f['소비'])} | {cell(f.get('검사', ''))} | [{t.file.name}]({t.rel}) |"
             )
         w("")
 
     w("## 계보\n")
-    w("원천 주석에서 뽑은 간선. 점선은 검사(ops.reconciliation)로 가는 읽기.\n")
+    w("원천 주석에서 뽑은 간선. 점선은 검사(ops.reconciliation)가 읽는 층 — 표별 대상은 검사 절의 대상 표 열.\n")
     w("```mermaid")
     w("flowchart LR")
     for layer in LAYERS:
@@ -378,9 +383,13 @@ def render(tables: dict[str, Table], checks, steps, build, recon, offline: bool)
             w(f'    {node(t.name)}["{t.short}"]')
         w("  end")
     for t in tables.values():
-        for src in sorted(tokens(t.fields["원천"])):
-            arrow = "-.->" if t.layer == "ops" else "-->"
-            w(f"  {node(src)} {arrow} {node(t.name)}")
+        srcs = sorted(tokens(t.fields["원천"]))
+        if t.layer == "ops":
+            for layer in sorted({s.split(".")[0] for s in srcs}, key=LAYERS.index):
+                w(f"  {layer} -.-> {node(t.name)}")
+            continue
+        for src in srcs:
+            w(f"  {node(src)} --> {node(t.name)}")
     w("```\n")
 
     w("## 실행 순서\n")
@@ -393,7 +402,8 @@ def render(tables: dict[str, Table], checks, steps, build, recon, offline: bool)
 
     w("## 검사\n")
     w(
-        "[checks/reconciliation.sql](checks/reconciliation.sql) — 8단계. 하나라도 통과하지 못하면 `load_all.sh` 가 exit 1.\n"
+        "[checks/reconciliation.sql](checks/reconciliation.sql) — 8단계. "
+        "하나라도 통과하지 못하면 `load_all.sh` 가 exit 1.\n"
     )
     by_check: dict[str, list[str]] = {}
     for t in tables.values():
@@ -405,11 +415,12 @@ def render(tables: dict[str, Table], checks, steps, build, recon, offline: bool)
     if last:
         head += " 최근 관측 | 통과 |"
     w(head)
-    w("|---" * head.count("|")[:-1] if False else "|" + "---|" * (head.count("|") - 1))
+    w("|" + "---|" * (head.count("|") - 1))
     kind = {"reconcile": "대조", "range": "범위", "integrity": "무결성"}
     for c in checks:
         crit = f"{c['lo']} ~ {c['hi']}" if c["category"] == "range" else "0"
-        row = f"| {c['id']} | {kind.get(c['category'], c['category'])} | {cell(c['name'])} | {crit} | {', '.join(by_check.get(c['id'], []))} |"
+        targets = ", ".join(by_check.get(c["id"], []))
+        row = f"| {c['id']} | {kind.get(c['category'], c['category'])} | {cell(c['name'])} | {crit} | {targets} |"
         if last:
             r = last.get(c["id"], {})
             row += f" {r.get('observed', '')} | {'통과' if r.get('passed') == 'true' else ('실패' if r else '')} |"

@@ -17,22 +17,13 @@ bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 
 ## 단계
 
-| 단계 | 파일 | 만드는 표 | 방식 |
-|---|---|---|---|
-| 0 | `sql/00_ops_tables.sql` | `ops.build_log` `ops.reconciliation` `ops.freshness` | 없을 때만 생성 (매 실행 앞) |
-| 1 | `load_all.sh` 안 적재 | `raw.ga4_events` `raw.db_*` 5개 `raw.ads_spend` | 전체 교체 |
-| 2 | `sql/01_map_channel.sql` | `staging.map_channel` | 전체 교체 |
-| 3 | `sql/02_events_clean.sql` | `staging.events_clean` | 전체 교체 |
-| 4 | `sql/03_int_session.sql` | `staging.int_session` | 전체 교체 |
-| 5 | `sql/04_int_person_day.sql` | `staging.int_person_day` | 전체 교체 |
-| 6 | `sql/05_dim_member.sql` `06_fct_order.sql` `06_dim_event.sql` `06_dim_venue.sql` `06_ad_spend.sql` | 차원·원장 정리 5개 | 전체 교체, `fct_order` → `dim_event` 순서 |
-| 7 | `sql/marts/*.sql` 13개 | `marts.*` | 전체 교체, `weekly_cohort` → `monthly_summary` 순서 |
-| 8 | `checks/reconciliation.sql` | `ops.reconciliation` 에 20행 추가 | 누적. 실패 1건 이상이면 exit 1 |
-| 9 | `sql/09_freshness.sql` | `ops.freshness` | 전체 교체 |
+단계별 파일·표·실행 순서와 표 카탈로그(그레인·키·파티션·원천·소비)는 [bigquery/README.md](../bigquery/README.md). 그 문서는 SQL 머리 주석에서 생성되고, 생성할 때 주석·SQL 본문·BigQuery 실물을 대조한다.
 
-모든 단계가 멱등이다. 같은 입력이면 같은 표가 나오고, `ops.build_log`·`ops.reconciliation` 만 실행마다 누적된다.
+```bash
+python3 bigquery/build_catalog.py      # 카탈로그 재생성 (어긋나면 exit 1)
+```
 
-모든 SQL 파일 머리에 그레인·키·원천·소비 화면을 적었고, 표·열 description 도 SQL 안에서 만든다. BigQuery 콘솔에서 표를 열면 같은 설명이 보인다.
+모든 단계가 멱등이다. 같은 입력이면 같은 표가 나오고, `ops.build_log`·`ops.reconciliation` 만 실행마다 누적된다. 0단계(`ops` 표 준비)는 매 실행 앞에 없을 때만 만든다.
 
 ## 재실행
 
@@ -53,7 +44,7 @@ bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 | `[1]` 적재 오류 (스키마·형식) | 오류 메시지의 열 이름 | `bigquery/schema/*.json` 과 CSV 헤더 대조 |
 | `[n] … 실패: … bytesBilled` | `NP_MAX_BYTES` (기본 500MB) | 날짜 필터·열 선택을 먼저 줄인다. 상한을 올리는 건 마지막 |
 | `… Cannot replace a table with a different partitioning spec` 류 | 표의 파티션·클러스터 설정을 바꿨다 | `CREATE OR REPLACE` 는 설정 변경을 거부한다. `scripts/bq.sh rm -f -t <데이터셋>.<표>` 로 그 표만 지우고 해당 단계를 다시 돌린다 |
-| `[8] 검사 실패 k건` | 아래 쿼리 | C(대조)는 SQL 버그, R(범위)은 생성기 보정, I(무결성)는 원천 문제일 가능성이 크다 |
+| `[8] 검사 실패 k건` | 아래 첫 쿼리 | C(대조)는 SQL 버그, R(범위)은 생성기 보정, I(무결성)는 원천 문제일 가능성이 크다 |
 
 ```sql
 -- 마지막 실행의 실패 항목
@@ -74,22 +65,7 @@ ORDER BY started_at;
 
 ## 검사 (8단계)
 
-| ID | 종류 | 내용 | 통과 |
-|---|---|---|---|
-| C1a · C1b | 대조 | 결제 건수·금액: 로그 `purchase` vs `raw.db_payments` | 차이 0 |
-| C2 | 대조 | 신청 건수: 로그 `apply_event` vs `raw.db_applications` | 차이 0 |
-| C3 | 대조 | 일 방문 사람: `daily_metrics` 합 vs `int_person_day` 재집계 (날짜별) | 차이 0, 불일치 날짜 0 |
-| C4 | 대조 | 주간 코호트 크기: `weekly_cohort` 0주차 vs 첫 방문 사람 (코호트 주별) | 차이 0 |
-| C5 | 대조 | 채널 합: `daily_channel` 의 `sessions + auto_load_sessions` 합 vs `int_session` 행 수 (날짜별) | 차이 0 |
-| C6 | 대조 | 오디언스 퍼널: `weekly_audience_funnel` 의 `new` + `returning` `landing` 합 vs `weekly_activity.wau` (주 × 세그먼트별) | 차이 0, 불일치 키 0 |
-| C7 | 대조 | 경로: `weekly_path` `step = 1` 세션 합 vs `weekly_activity.valid_sessions` (주 × 세그먼트별) | 차이 0, 불일치 키 0 |
-| R1~R8 | 범위 | architecture.md §6 의 8개 지표 | 범위 안 |
-| I1 | 무결성 | 기기당 회원 1명 | 위반 0 |
-| I2 | 무결성 | 채널 매핑 누락 세션 | 0 |
-| I3 | 무결성 | `event_date` = 이벤트 시각의 KST 날짜 | 0 |
-| I4 | 무결성 | 행사 원장에 없는 신청 | 0 |
-
-범위 검사(R)의 분자·분모 정의는 [metrics.md](metrics.md) 의 해당 지표와 같다.
+검사 20개의 ID·통과 기준·대상 표·최근 관측값은 [bigquery/README.md § 검사](../bigquery/README.md#검사). 하나라도 통과하지 못하면 `load_all.sh` 가 exit 1. 범위 검사(R)의 분자·분모 정의는 [metrics.md](metrics.md) 의 해당 지표와 같다.
 
 ## 비용
 

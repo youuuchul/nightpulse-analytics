@@ -39,10 +39,14 @@ export default function Members({ data, s, range }: TabProps) {
     const first = mondayOf(range.from) < range.from ? addDays(mondayOf(range.from), 7) : range.from
     const size = new Map<number, [number, number]>()
     const weeks = new Set<string>()
+    const all = new Set<string>()
+    const at4 = new Set<string>()
     for (const r of data.weekly_cohort) {
       if (r.cohort_week < first || r.cohort_week > range.to || !seg(r)) continue
+      all.add(r.cohort_week)
       if (addDays(r.cohort_week, 7 * r.week_offset) > lastFullWeek) continue
       if (r.week_offset >= 1) weeks.add(r.cohort_week)
+      if (r.week_offset === 4) at4.add(r.cohort_week)
       const z = size.get(r.week_offset) ?? [0, 0]
       z[0] += r.cohort_size
       z[1] += r.retained
@@ -57,8 +61,12 @@ export default function Members({ data, s, range }: TabProps) {
       const z = size.get(k)
       return z && z[0] > 0 ? { rate: z[1] / z[0], n: z[0] } : null
     }
-    const ws = [...weeks].sort()
-    return { curve, w1: at(1), w4: at(4), span: ws.length ? `${md(ws[0])}~${md(ws[ws.length - 1])} 주` : '' }
+    const span = (v: Set<string>) => {
+      const ws = [...v].sort()
+      if (!ws.length) return ''
+      return ws.length === 1 ? `${md(ws[0])} 주` : `${md(ws[0])}~${md(ws[ws.length - 1])} 주`
+    }
+    return { curve, w1: at(1), w4: at(4), span: span(weeks.size ? weeks : all), span4: span(at4.size ? at4 : all) }
   }, [data, range.from, range.to, s.ch, s.pf, s.ms, lastFullWeek])
 
   const series = [
@@ -89,14 +97,14 @@ export default function Members({ data, s, range }: TabProps) {
           delta={ptDelta(data, range, ratio(memCur, cur.persons), ratio(memPrev, prev.persons))}
         />
         <Tile
-          label="W1 리텐션"
+          label={cohort.span ? `W1 리텐션 · ${cohort.span}` : 'W1 리텐션'}
           value={pct(cohort.w1?.rate)}
-          sub={cohort.w1 ? `코호트 ${num(cohort.w1.n)}명 · ${cohort.span}` : '완결 코호트 없음'}
+          sub={cohort.w1 ? `코호트 ${num(cohort.w1.n)}명` : '1주 경과 전'}
         />
         <Tile
-          label="W4 리텐션"
+          label={cohort.span4 ? `W4 리텐션 · ${cohort.span4}` : 'W4 리텐션'}
           value={pct(cohort.w4?.rate)}
-          sub={cohort.w4 ? `코호트 ${num(cohort.w4.n)}명` : '완결 코호트 없음'}
+          sub={cohort.w4 ? `코호트 ${num(cohort.w4.n)}명` : '4주 경과 전'}
         />
       </TileRow>
 

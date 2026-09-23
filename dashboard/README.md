@@ -10,10 +10,10 @@
 
 | 경로 | 명령 | 언제 |
 |---|---|---|
-| 합성 샘플 | `uv run dashboard/scripts/make_sample_data.py` | 마트 완성 전 화면 개발. 시드 고정(20260923)·사람 3,500명·52주, 같은 인자면 같은 파일 |
-| BigQuery 마트 | `uv run dashboard/scripts/extract.py` | 마트 적재 후. `scripts/bq.sh`(개인 GCP 래퍼)로 `marts.*` 11개를 SELECT 해 같은 계약으로 쓴다 |
+| 합성 샘플 | `uv run dashboard/scripts/make_sample_data.py --out /tmp/sample.json` | 마트 완성 전 화면 개발. 시드 고정(20260923)·사람 3,500명·52주, 같은 인자면 같은 파일 |
+| BigQuery 마트 | `uv run dashboard/scripts/extract.py` | 마트 적재 후. `scripts/bq.sh`(개인 GCP 래퍼)로 `marts.*` 13개를 SELECT 해 같은 계약으로 쓴다 |
 
-둘 다 저장소 루트에서 실행하고 기본 출력은 `dashboard/public/data.json`(gitignore)이다. `meta.source` 가 `sample` / `bigquery` 로 구분된다.
+둘 다 저장소 루트에서 실행한다. 추출의 기본 출력은 `dashboard/public/data.json`, 샘플의 기본 출력은 `/tmp/nightpulse_sample_data.json` 이다. 정적 배포가 이 파일을 그대로 쓰므로 커밋한다(현재 BigQuery 추출본). 샘플은 `--out /tmp/…` 로 따로 뽑아 덮어쓰지 않는다. `meta.source` 가 `sample` / `bigquery` 로 구분된다.
 
 ## 실행
 
@@ -33,10 +33,11 @@ npm run capture -- --all   # + 보기 전환·1일·1년·다크·폰 폭
 ```
 src/
   App.tsx              탭·보기 정의, 필터 바 조립
+  About.tsx            소개 페이지 (?page=about)
   lib/state.ts         URL 쿼리 ↔ 필터 상태
   lib/agg.ts           기간 해석·세그먼트 필터·합산·일/주 버킷
   lib/labels.ts        채널·가격대·퍼널 라벨, 색 슬롯
-  components/          FilterBar · ui(타일·카드·범례) · charts(추이·히트맵·퍼널) · DataTable
+  components/          FilterBar · ui(타일·카드·범례) · charts(추이·히트맵·퍼널) · DataTable · ReachTable(도달률 히트맵 표) · PathSankey(경로 생키)
   tabs/                탭 6개 (각 탭 = 스코어보드 → 추이 → 표)
 scripts/
   make_sample_data.py  합성 샘플 data.json

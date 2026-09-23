@@ -621,7 +621,7 @@ def main() -> None:
     ap.add_argument("--to-date", default="2026-09-20")
     ap.add_argument("--weeks", type=int, default=52)
     ap.add_argument("--persons", type=int, default=3500)
-    ap.add_argument("--out", default=str(ROOT / "dashboard" / "public" / "data.json"))
+    ap.add_argument("--out", default="/tmp/nightpulse_sample_data.json")
     a = ap.parse_args()
     data = build(a.seed, date.fromisoformat(a.to_date), a.weeks, a.persons)
     path = Path(a.out)

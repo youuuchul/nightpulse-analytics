@@ -121,8 +121,8 @@ function Audience({ data, s, set, range }: TabProps) {
       z[r.audience_id][r.step] += r.persons
     }
     return [...m.entries()].map(([date, z]) => {
-      const o: Record<string, number | string> = { date }
-      for (const id of sel) o[id] = ratio(z[id]?.payment ?? 0, z[id]?.landing ?? 0) ?? 0
+      const o: Record<string, number | string | null> = { date }
+      for (const id of sel) o[id] = ratio(z[id]?.payment ?? 0, z[id]?.landing ?? 0)
       return o
     })
   }, [rows, weeks, s.aud])
@@ -272,8 +272,8 @@ export default function FunnelTab(p: TabProps) {
     }
     return [...b.entries()].map(([date, t]) => ({
       date,
-      a: ratio(t.apply_view, t.detail) ?? 0,
-      b: ratio(t.payment, t.apply_view) ?? 0,
+      a: ratio(t.apply_view, t.detail),
+      b: ratio(t.payment, t.apply_view),
     }))
   }, [f, range.from, range.to, weekly])
   const series = [
@@ -316,12 +316,14 @@ export default function FunnelTab(p: TabProps) {
           delta={drop.i ? ptDelta(data, range, drop.v, prevDrop, false) : undefined}
         />
         <Tile
-          label="직전 대비 가장 크게 변한 단계"
+          label="가장 크게 변한 단계"
           value={moved.i ? FUNNEL_LABEL[STEPS[moved.i]] : '—'}
           sub={
             moved.i
               ? `${FUNNEL_LABEL[STEPS[moved.i - 1]]} → ${FUNNEL_LABEL[STEPS[moved.i]]} ${pct(stepRate(cur, moved.i))}`
-              : undefined
+              : hasPrev
+                ? undefined
+                : '직전 기간 없음'
           }
           delta={moved.i ? ptDelta(data, range, stepRate(cur, moved.i), stepRate(prev, moved.i)) : undefined}
         />

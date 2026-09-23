@@ -53,9 +53,9 @@
 - **왜**: 포트폴리오 방문자가 30초 안에 "무슨 서비스의 무슨 데이터를 어떻게 다뤘는지" 잡게. 대시보드 안에 설명 문장을 넣지 않기 위한 자리.
 - **완료 기준**: 폰 폭에서 읽히고, 대시보드 헤더 링크 왕복이 URL 상태를 잃지 않는다.
 
-## 5. SQL 카탈로그·문서화 (결정 2026-09-23)
+## 5. SQL 카탈로그·문서화 (결정 2026-09-23, **완료 09-23**)
 
-- **무엇을**: `bigquery/` 를 GitHub에서 읽히는 형태로 정돈한다. ① 폴더 규약 — `sql/NN_<층>_<표>.sql`(staging), `sql/marts/<표>.sql`, `checks/`, `schema/`; ② 모든 SQL 머리 주석을 같은 틀로(표 · 1행 = · 키 · 파티션/클러스터 · 원천 · 소비 · 검사); ③ `bigquery/build_catalog.py` 가 그 머리 주석을 읽어 `bigquery/README.md` 를 생성 — 표 카탈로그(층·표·그레인·키·원천·소비·파일 링크), mermaid 계보 도식(raw → staging → marts → ops), 실행 순서·검사 목록, 마지막 실행 결과(`ops.build_log` 최신 run 요약).
+- **무엇을**: `bigquery/` 를 GitHub에서 읽히는 형태로 정돈한다. ① 폴더 규약 — `sql/NN_<표>.sql`(staging·ops 준비), `sql/marts/<표>.sql`, `checks/`, `schema/`; ② 모든 SQL 머리 주석을 같은 틀로(표 · 1행 = · 키 · 파티션/클러스터 · 원천 · 소비 · 검사); ③ `bigquery/build_catalog.py` 가 그 머리 주석을 읽어 `bigquery/README.md` 를 생성 — 표 카탈로그(층·표·그레인·키·원천·소비·파일 링크), mermaid 계보 도식(raw → staging → marts → ops), 실행 순서·검사 목록, 마지막 실행 결과(`ops.build_log` 최신 run 요약).
 - **왜**: SQL 파일 30개를 폴더만 보고는 흐름을 못 읽는다. 카탈로그가 곧 인수인계 문서이고, 주석에서 생성하므로 코드와 문서가 갈라지지 않는다.
 - **어디에**: `bigquery/build_catalog.py`(표준 라이브러리만), `bigquery/README.md`(생성물, 수동 편집 금지), `docs/pipeline.md` 는 절차만 남기고 표 목록은 카탈로그로 링크.
 - **완료 기준**: 머리 주석이 틀에 안 맞는 파일이 있으면 생성기가 exit 1. README 의 표 목록 = BigQuery `INFORMATION_SCHEMA.TABLES` 실물(표 이름 집합 일치, 생성기가 대조).

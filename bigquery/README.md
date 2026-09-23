@@ -81,7 +81,7 @@ python3 bigquery/build_catalog.py        # 이 문서 재생성 (주석·본문�
 
 ## 계보
 
-원천 주석에서 뽑은 간선. 점선은 검사(ops.reconciliation)로 가는 읽기.
+원천 주석에서 뽑은 간선. 점선은 검사(ops.reconciliation)가 읽는 층 — 표별 대상은 검사 절의 대상 표 열.
 
 ```mermaid
 flowchart LR
@@ -176,19 +176,9 @@ flowchart LR
   staging_events_clean --> marts_weekly_path
   staging_int_person_day --> marts_weekly_path
   staging_int_session --> marts_weekly_path
-  marts_daily_channel -.-> ops_reconciliation
-  marts_daily_metrics -.-> ops_reconciliation
-  marts_weekly_activity -.-> ops_reconciliation
-  marts_weekly_audience_funnel -.-> ops_reconciliation
-  marts_weekly_cohort -.-> ops_reconciliation
-  marts_weekly_path -.-> ops_reconciliation
-  raw_db_applications -.-> ops_reconciliation
-  raw_db_payments -.-> ops_reconciliation
-  staging_ad_spend -.-> ops_reconciliation
-  staging_events_clean -.-> ops_reconciliation
-  staging_fct_order -.-> ops_reconciliation
-  staging_int_person_day -.-> ops_reconciliation
-  staging_int_session -.-> ops_reconciliation
+  raw -.-> ops_reconciliation
+  staging -.-> ops_reconciliation
+  marts -.-> ops_reconciliation
 ```
 
 ## 실행 순서
@@ -234,30 +224,60 @@ flowchart LR
 
 [checks/reconciliation.sql](checks/reconciliation.sql) — 8단계. 하나라도 통과하지 못하면 `load_all.sh` 가 exit 1.
 
-| ID | 종류 | 이름 | 통과 기준 | 대상 표 |
-|---|---|---|---|---|
-| C1a | 대조 | 결제 건수: 로그 vs 원장 | 0 | events_clean |
-| C1b | 대조 | 결제 금액: 로그 vs 원장 | 0 | events_clean |
-| C2 | 대조 | 신청 건수: 로그 vs 원장 | 0 | events_clean |
-| C3 | 대조 | 일 방문 사람: 마트 합 vs 중간 표 | 0 | daily_metrics |
-| C4 | 대조 | 주간 코호트 크기: 0주차 vs 첫 방문 | 0 | weekly_cohort |
-| C5 | 대조 | 채널 합: 세션 채널 마트 vs 세션 표 | 0 | daily_channel |
-| C6 | 대조 | 오디언스 퍼널: 신규 + 재방문 vs WAU | 0 | weekly_audience_funnel |
-| C7 | 대조 | 경로 1단계 세션 vs 주간 방문 세션 | 0 | weekly_path |
-| R1 | 범위 | 신규 방문자 W1 리텐션 | 0.15 ~ 0.30 | weekly_cohort |
-| R2 | 범위 | W4 리텐션 | 0.08 ~ 0.18 | weekly_cohort |
-| R3 | 범위 | 방문 → 가입 전환 (기간 누적 사람) | 0.06 ~ 0.12 | int_person_day |
-| R4 | 범위 | 행사 상세 조회 → 신청 (사람 × 일) | 0.03 ~ 0.08 | daily_metrics |
-| R5 | 범위 | 신청 → 결제 완료 (유료 행사) | 0.55 ~ 0.75 | fct_order |
-| R6 | 범위 | 취소율 (신청 대비) | 0.05 ~ 0.12 | fct_order |
-| R7 | 범위 | 광고 세션 비중 (집행일, 자동 로드 제외) | 0.10 ~ 0.30 | int_session |
-| R8 | 범위 | 자동 로드 세션 비중 | 0.05 ~ 0.10 | int_session |
-| I1 | 무결성 | 기기당 회원 1명 | 0 | int_session |
-| I2 | 무결성 | 채널 매핑 누락 세션 | 0 | int_session |
-| I3 | 무결성 | event_date = KST 날짜 | 0 | events_clean |
-| I4 | 무결성 | 행사 원장에 없는 신청 | 0 | fct_order |
+| ID | 종류 | 이름 | 통과 기준 | 대상 표 | 최근 관측 | 통과 |
+|---|---|---|---|---|---|---|
+| C1a | 대조 | 결제 건수: 로그 vs 원장 | 0 | events_clean | 0.0 | 통과 |
+| C1b | 대조 | 결제 금액: 로그 vs 원장 | 0 | events_clean | 0.0 | 통과 |
+| C2 | 대조 | 신청 건수: 로그 vs 원장 | 0 | events_clean | 0.0 | 통과 |
+| C3 | 대조 | 일 방문 사람: 마트 합 vs 중간 표 | 0 | daily_metrics | 0.0 | 통과 |
+| C4 | 대조 | 주간 코호트 크기: 0주차 vs 첫 방문 | 0 | weekly_cohort | 0.0 | 통과 |
+| C5 | 대조 | 채널 합: 세션 채널 마트 vs 세션 표 | 0 | daily_channel | 0.0 | 통과 |
+| C6 | 대조 | 오디언스 퍼널: 신규 + 재방문 vs WAU | 0 | weekly_audience_funnel | 0.0 | 통과 |
+| C7 | 대조 | 경로 1단계 세션 vs 주간 방문 세션 | 0 | weekly_path | 0.0 | 통과 |
+| R1 | 범위 | 신규 방문자 W1 리텐션 | 0.15 ~ 0.30 | weekly_cohort | 0.2147 | 통과 |
+| R2 | 범위 | W4 리텐션 | 0.08 ~ 0.18 | weekly_cohort | 0.0985 | 통과 |
+| R3 | 범위 | 방문 → 가입 전환 (기간 누적 사람) | 0.06 ~ 0.12 | int_person_day | 0.0892 | 통과 |
+| R4 | 범위 | 행사 상세 조회 → 신청 (사람 × 일) | 0.03 ~ 0.08 | daily_metrics | 0.0566 | 통과 |
+| R5 | 범위 | 신청 → 결제 완료 (유료 행사) | 0.55 ~ 0.75 | fct_order | 0.6687 | 통과 |
+| R6 | 범위 | 취소율 (신청 대비) | 0.05 ~ 0.12 | fct_order | 0.0848 | 통과 |
+| R7 | 범위 | 광고 세션 비중 (집행일, 자동 로드 제외) | 0.10 ~ 0.30 | int_session | 0.2001 | 통과 |
+| R8 | 범위 | 자동 로드 세션 비중 | 0.05 ~ 0.10 | int_session | 0.0729 | 통과 |
+| I1 | 무결성 | 기기당 회원 1명 | 0 | int_session | 0.0 | 통과 |
+| I2 | 무결성 | 채널 매핑 누락 세션 | 0 | int_session | 0.0 | 통과 |
+| I3 | 무결성 | event_date = KST 날짜 | 0 | events_clean | 0.0 | 통과 |
+| I4 | 무결성 | 행사 원장에 없는 신청 | 0 | fct_order | 0.0 | 통과 |
 
 ## 마지막 실행
 
-오프라인 생성 — 실행 기록을 조회하지 않았다.
+검사 run `20260923T103223Z` (2026-09-23 19:32 KST): 20/20 통과
+
+단계별 마지막 기록 (`ops.build_log`, 시각 KST):
+
+| 단계 | 표 | run | 종료 | 초 | 행 | 처리 바이트 | 상태 |
+|---|---|---|---|---:|---:|---:|---|
+| 1 | raw | 20260923T074121Z | 2026-09-23 16:42 | 69 | 862,750 | 0 | ok |
+| 2 | staging.map_channel | 20260923T074121Z | 2026-09-23 16:42 | 5 | 20 | 23,104,471 | ok |
+| 3 | staging.events_clean | 20260923T074121Z | 2026-09-23 16:42 | 8 | 856,072 | 211,416,244 | ok |
+| 4 | staging.int_session | 20260923T074121Z | 2026-09-23 16:43 | 8 | 137,738 | 133,959,018 | ok |
+| 5 | staging.int_person_day | 20260923T074121Z | 2026-09-23 16:43 | 8 | 73,197 | 21,989,411 | ok |
+| 6 | staging.dim_member | 20260923T074121Z | 2026-09-23 16:43 | 5 | 712 | 13,483,743 | ok |
+| 6 | staging.fct_order | 20260923T074121Z | 2026-09-23 16:43 | 8 | 3,692 | 277,468 | ok |
+| 6 | staging.dim_event | 20260923T074121Z | 2026-09-23 16:43 | 5 | 250 | 182,560 | ok |
+| 6 | staging.dim_venue | 20260923T074121Z | 2026-09-23 16:43 | 6 | 60 | 5,378 | ok |
+| 6 | staging.ad_spend | 20260923T074121Z | 2026-09-23 16:43 | 7 | 133 | 9,856 | ok |
+| 7 | marts.daily_metrics | 20260923T081504Z | 2026-09-23 17:15 | 9 | 3,988 | 7,618,333 | ok |
+| 7 | marts.hourly_metrics | 20260923T081504Z | 2026-09-23 17:15 | 8 | 48,709 | 11,484,017 | ok |
+| 7 | marts.daily_channel | 20260923T081504Z | 2026-09-23 17:15 | 9 | 11,853 | 14,987,190 | ok |
+| 7 | marts.daily_ad | 20260923T081504Z | 2026-09-23 17:15 | 7 | 133 | 3,990,248 | ok |
+| 7 | marts.daily_event | 20260923T081504Z | 2026-09-23 17:15 | 10 | 4,290 | 61,630,738 | ok |
+| 7 | marts.daily_venue | 20260923T081504Z | 2026-09-23 17:16 | 15 | 14,050 | 58,681,696 | ok |
+| 7 | marts.funnel_daily | 20260923T081504Z | 2026-09-23 17:16 | 13 | 19,940 | 2,494,543 | ok |
+| 7 | marts.weekly_cohort | 20260923T081504Z | 2026-09-23 17:16 | 10 | 4,183 | 3,004,028 | ok |
+| 7 | marts.monthly_cohort | 20260923T081504Z | 2026-09-23 17:17 | 10 | 140 | 2,002,593 | ok |
+| 7 | marts.weekly_activity | 20260923T081504Z | 2026-09-23 17:17 | 9 | 584 | 3,809,195 | ok |
+| 7 | marts.monthly_summary | 20260923T081504Z | 2026-09-23 17:17 | 7 | 13 | 4,918,105 | ok |
+| 7 | marts.weekly_audience_funnel | 20260923T081504Z | 2026-09-23 17:17 | 6 | 10,035 | 7,030,151 | ok |
+| 7 | marts.weekly_path | 20260923T081504Z | 2026-09-23 17:17 | 9 | 42,095 | 67,835,419 | ok |
+| 8 | ops.reconciliation | 20260923T103223Z | 2026-09-23 19:32 | 6 | 0 | 57,023,199 | ok |
+| 9 | ops.freshness | 20260923T074121Z | 2026-09-23 16:46 | 8 | 27 | 31,458,894 | ok |
 
