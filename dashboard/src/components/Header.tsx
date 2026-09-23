@@ -65,7 +65,7 @@ export default function Header({
   toDate?: string
   onTheme: () => void
 }) {
-  const items = s.page === '' ? NAV.slice(1) : NAV
+  const items = NAV
   return (
     <header className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-x-4 gap-y-2 px-4 pb-2 pt-5 sm:px-6">
       <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -110,15 +110,7 @@ export default function Header({
             <span className="tnum shrink-0 text-xs text-muted sm:hidden">기준일 {md(toDate)}</span>
           </>
         )}
-        <PageLink
-          s={s}
-          set={set}
-          page="about"
-          anchor={DATA_NOTE_ID}
-          className="min-w-0 truncate text-xs text-muted underline decoration-[var(--axis)] underline-offset-[3px] hover:text-ink2"
-        >
-          가상 서비스 시나리오로 생성한 데이터
-        </PageLink>
+        <span className="shrink-0 text-xs text-muted">시나리오 생성 데이터</span>
         <button
           type="button"
           onClick={onTheme}
