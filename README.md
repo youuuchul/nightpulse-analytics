@@ -18,6 +18,19 @@
 
 탭 7개(개요 / 퍼널 / 행사·결제 / 회원 / 공간 / 유입·광고 / 주간·월간)와 프로젝트 개요·지표 가이드·데이터 페이지. 필터(기간·채널·플랫폼·회원)는 마트에 그 축이 있는 카드에만 붙이고, 상태는 전부 URL에 남는다. 탭별 구성과 산식은 [docs/dashboard.md](docs/dashboard.md).
 
+## 시나리오 2.0
+
+런칭 1년차(2025-09-22~2026-09-20) 서울 나이트라이프 플랫폼. 1.0(탐색 → 신청 → 결제)에 **공간 등록·파트너 계약(B2B)**, **소비자 구독**, **실제 서울 상권 좌표** 축을 더했다. 상권 이름·구·중심 좌표는 공개 지리 정보이고, 상호·행사·회원·매출은 전부 가상 분포로 생성한다. 설계 근거는 [docs/scenario_v2.md](docs/scenario_v2.md).
+
+| 항목 | 값 |
+|---|---|
+| 사람 / 회원 | 80,000명 / 7,462명 |
+| 등록 공간 / 파트너 공간 | 1,800곳 / 180곳 |
+| 활성 구독자 | 2,002명 |
+| 행사 | 2,402건 |
+| 이벤트 로그 | 826만 행 |
+| 연 티켓 매출 | 14.8억 원 |
+
 ## 무엇을 보여주는가
 
 - **층 설계와 그레인.** 원천을 `raw`에 그대로 두고, 정제·세션 판정·신원 해소는 `staging`에서 한 번만, 화면이 읽는 집계는 `marts`, 실행 기록과 대조는 `ops`. 모든 표에 "1행 = 무엇"과 키를 적었다.
@@ -45,14 +58,14 @@ scripts/     bq.sh — 개인 GCP 전용 래퍼 (설정 폴더·프로젝트·�
 
 ```bash
 # 1. 생성 — 합성 로그·원장·광고 리포트를 data/ 에 쓴다 (같은 시드면 같은 결과)
-uv run generator/generate.py --seed 20260923 --weeks 52 --persons 8000 --end-date 2026-09-20 --out data/
+uv run generator/generate.py --seed 20260923 --weeks 52 --persons 80000 --end-date 2026-09-20 --out data/
 uv run generator/validate.py --data data/ --weeks 52 --end-date 2026-09-20
 
 # 2. 적재 — raw 적재 → staging → marts → ops 검사·기록 (개인 GCP 프로젝트)
 scripts/bq.sh login            # 최초 1회
 bigquery/load_all.sh
 
-# 3. 추출 — marts 13개를 dashboard/public/data.json 한 파일로
+# 3. 추출 — marts 18개를 dashboard/public/data/ 로 분할 추출(index.json + 표별 지연 파일)
 uv run dashboard/scripts/extract.py
 
 # 4. 빌드 — 정적 웹 (dist/ 를 어느 정적 호스트에든 올린다)
@@ -66,6 +79,7 @@ BigQuery 없이 화면만 보려면 1~3 대신 `uv run dashboard/scripts/make_sa
 
 | 문서 | 내용 |
 |---|---|
+| [docs/scenario_v2.md](docs/scenario_v2.md) | 시나리오 2.0 설계 — 공간 등록·파트너 계약·구독·B2B, 서울 상권 |
 | [docs/architecture.md](docs/architecture.md) | 원천·층·표·그레인·신원 규칙 |
 | [docs/metrics.md](docs/metrics.md) | 지표 정의 — 단위·분자·분모·제외 규칙, 마트 열 기준 |
 | [docs/dashboard.md](docs/dashboard.md) | 탭·필터 원칙, 화면 산식, `data.json` 데이터 계약, 개요·데이터 페이지 |

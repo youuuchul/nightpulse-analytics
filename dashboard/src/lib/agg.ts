@@ -140,7 +140,9 @@ export function bucketed<T extends { kst_date: string }, K extends keyof T>(
  * 기간·세그먼트 안에서 마스크별 고유 사람 수를 그룹별로 한 번에 센다.
  *
  * 마스크의 비트를 같은 날 모두 가진 사람만 센다(누적 퍼널 단계용). 비트 하나짜리 마스크는
- * `uniquePersons` 와 같다.
+ * `uniquePersons` 와 같다. 세그먼트 귀속도 `uniquePersons` 와 같다 — 'last'(기본)는 사람마다
+ * 기간 안에서 마스크 하나라도 맞는 마지막 날의 세그먼트 값 하나로 귀속하므로 세그먼트 값별 수의 합이
+ * 전체와 같고, 'day' 는 그날 행의 값으로 센다.
  *
  * Args:
  *   pd: person_day.bin 을 읽은 것.
@@ -149,6 +151,7 @@ export function bucketed<T extends { kst_date: string }, K extends keyof T>(
  *   masks: 비트 마스크 목록(F 값의 OR).
  *   seg: 세그먼트 필터 상태.
  *   groups: 행 → 그룹 키 목록. 기본은 '' 하나(기간 전체).
+ *   by: 세그먼트 귀속 규칙.
  *
  * Returns:
  *   그룹 키 → 마스크 순서대로의 고유 사람 수.
@@ -160,21 +163,26 @@ export function uniqueByMasks(
   masks: number[],
   seg: SegState,
   groups: (r: PersonRow) => string[] = () => [''],
+  by: 'last' | 'day' = 'last',
 ): Map<string, number[]> {
   const lo = diffDays(pd.base_date, from)
   const hi = diffDays(pd.base_date, to)
   const [i0, i1] = pdSpan(pd, lo, hi)
   const w = pd.w
+  const hit = (f: number) => masks.some((m) => (f & m) === m)
+  const last = new Map<number, number>()
+  if (by === 'last') for (let i = i0; i < i1; i++) if (hit(pdFlags(w[2 * i + 1]))) last.set(pdKey(w[2 * i]), i)
   const sets = new Map<string, Set<number>[]>()
   const row: PersonRow = { off: 0, channel1: '', device_platform: '', member_seg: '' }
   for (let i = i0; i < i1; i++) {
     const a = w[2 * i]
     const b = w[2 * i + 1]
     const f = pdFlags(b)
-    if (!masks.some((m) => (f & m) === m)) continue
-    row.channel1 = pd.codes.c[pdCh(a)]
-    row.device_platform = pd.codes.p[pdPf(a)]
-    row.member_seg = pd.codes.m[pdMs(b)]
+    if (!hit(f)) continue
+    const j = by === 'last' ? last.get(pdKey(a))! : i
+    row.channel1 = pd.codes.c[pdCh(w[2 * j])]
+    row.device_platform = pd.codes.p[pdPf(w[2 * j])]
+    row.member_seg = pd.codes.m[pdMs(w[2 * j + 1])]
     if (seg.ch !== 'all' && row.channel1 !== seg.ch) continue
     if (seg.pf !== 'all' && row.device_platform !== seg.pf) continue
     if (seg.ms !== 'all' && row.member_seg !== seg.ms) continue

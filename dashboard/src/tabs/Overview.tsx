@@ -183,7 +183,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
 
       <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />
       <TrendCard title="활성 세션" metrics={ENGAGED} {...card} />
-      <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} />
+      <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} axes={['ch', 'pf']} />
       <TrendCard title="신청 · 결제" metrics={APPLY_PAY} {...card} />
       <TrendCard title="결제 금액" metrics={AMOUNT} {...card} />
       {!segOn && (

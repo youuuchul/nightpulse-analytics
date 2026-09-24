@@ -57,7 +57,9 @@ RETURN_BASE = 0.025  # 일반층 재방문 일 확률 척도
 CASUAL_SIGMA = 0.5  # 일반층 재방문 성향의 개인차 (로그정규 sigma). 클수록 생존 편향으로 긴 꼬리가 두꺼워진다
 CASUAL_TAIL = (0.5, 0.3, 0.2, 0.1)  # seed 곡선 W2·W4·8주·이후 바닥에 곱하는 보정 (개인차 생존 편향 상쇄)
 CORE_SHARE = (0.15, 0.08)  # 단골층 비중 (비광고, 광고 유입). W4 이후 리텐션의 바닥을 만든다
-CORE_DAILY = 0.55  # 단골층 일 방문 확률 척도. 전체 규모 보정용 손잡이
+CORE_DAILY = (
+    0.15  # 단골층 일 방문 확률 척도. 전체 규모 보정용 손잡이 (자연 유입 신규 하루 400~700명 규모에서 행 수 유지)
+)
 CORE_LIFE_WEEKS = 35.0  # 단골 유지 기간 평균(지수분포). 이후는 일반층 곡선의 바닥값을 따른다
 CORE_SESSIONS_PER_DAY = ([1, 2, 3, 4], [0.4, 0.3, 0.2, 0.1])  # 단골층 방문일의 세션 수
 POPULARITY_TEMPER = 0.6  # seed 조회 집중도 지수 완화 (1위 행사 쏠림이 주 단위 지표를 흔들지 않게)
@@ -68,9 +70,9 @@ AD_BUDGET_SCALE = 70.0  # names.json 캠페인 일 예산 배수. 집행 구간 
 SIGNUP_INTENT = (0.5, 0.09)  # 가입 의향 비중 (단골층, 일반층). 실현 가입률은 방문 횟수에 따라 더 낮다
 SECOND_DEVICE = 0.5  # 가입 의향자 중 2번째 기기 보유 비중 (실현 비중은 가입 후 재방문에 달림)
 DEVICE2_USE = 0.5  # 가입 이후 방문에서 2번째 기기를 쓸 확률
-CANCEL_PER_SESSION = 0.012  # 보유 신청 1건당 이후 세션에서 취소할 확률
+CANCEL_PER_SESSION = 0.03  # 보유 신청 1건당 이후 세션에서 취소할 확률
 PAY_SUCCESS = 0.71  # 유료 행사 신청 후 결제 완료 비율
-MEMBER_APPLY_NUDGE = 0.17  # 로그인 회원이 행사 상세에서 신청 화면으로 바로 가는 추가 확률 (연 티켓 매출 규모 보정)
+MEMBER_APPLY_NUDGE = 0.10  # 로그인 회원이 행사 상세에서 신청 화면으로 바로 가는 추가 확률 (연 티켓 매출 규모 보정)
 APPLY_MULT = 2.2  # 신청 화면 도달 후 신청 확률 = seed 단계 비율 x 구간 배수 x 이 값
 PROMO_SELECT = 0.3  # 배너 노출 대비 선택 비율
 SESSIONS_PER_DAY = ([1, 2, 3], [0.93, 0.05, 0.02])
@@ -93,6 +95,7 @@ VENUE_CLOSE_SHARE = 0.03  # 기간 안 폐업 공간 비중
 VENUE_PARETO = 1.3  # 공간 개별 인기 지수 파레토 모양
 PARTNER_VIEW_MULT = 2.5  # 파트너 공간 상세 조회 가중
 PARTNER_EVENT_SHARE = 0.75  # 파트너 공간 개최 비중
+EVENT_FUTURE_WEEKS = 6  # 관측 종료 후 예정 행사 생성 주 수 (원장에 미래 개최 행사 포함)
 HOST_POP_TEMPER = 0.5  # 개최 공간 추첨 시 인기 지수 완화 (파트너 선정에 이미 인기가 반영돼 이중 쏠림 방지)
 # 가격대: (이름, 비중, 가격 하한, 상한, 단위, 신청 확률 배수)
 PRICE_TIERS = (
@@ -665,7 +668,8 @@ class Generator:
         self.events: list[EventItem] = []
         venue_count: dict[int, int] = {}
         eid = 5001
-        for w in range(1, self.weeks + 1):
+        # 관측 종료 후 EVENT_FUTURE_WEEKS 주까지 예정 행사를 만든다 (마지막 주에도 신청 가능한 행사가 충분하게)
+        for w in range(1, self.weeks + EVENT_FUTURE_WEEKS + 1):
             k = max(1, int(rng.poisson(self._events_per_week(w))))
             for j in range(k):
                 if w == self.weeks and j == 0:
@@ -676,10 +680,11 @@ class Generator:
                 hour = int(rng.choice([20, 21, 22, 23], p=[0.25, 0.3, 0.3, 0.15]))
                 starts = self.day0 + d * 86400 + hour * 3600
                 lead = int(rng.integers(10, 29))
-                dp = max(d - lead, 0)
+                dp = min(max(d - lead, 0), self.n_days - 1)
+                pday = self.partner_day[min(d, self.n_days - 1)]  # 관측 후 개최는 종료일 계약 상태
                 elig = self._visible(reg, dp) & (close > d)
-                partner = elig & self.partner_day[d]
-                pool = partner if partner.any() and rng.random() < PARTNER_EVENT_SHARE else elig & ~self.partner_day[d]
+                partner = elig & pday
+                pool = partner if partner.any() and rng.random() < PARTNER_EVENT_SHARE else elig & ~pday
                 if not pool.any():
                     pool = elig
                 cand = np.nonzero(pool)[0]
@@ -712,7 +717,7 @@ class Generator:
                     price,
                     float(rng.choice(self.s.event_popularity)) * (1.6 if self._phase(w)[0] == "peak" else 1),
                     capacity,
-                    bool(self.partner_day[d, vi]),
+                    bool(pday[vi]),
                     mult,
                 )
                 self.events.append(ev)

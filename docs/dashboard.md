@@ -18,18 +18,18 @@
 | 탭 | 보기 | 세그먼트 줄 | 스코어보드 | 메인 차트 | 표 | 마트 |
 |---|---|---|---|---|---|---|
 | 개요 | — | 채널·플랫폼·회원 | 기준일 현황(누적 회원·등록 공간·파트너 공간·구독자, 필터 미적용) + 방문자·세션·활성 세션 비율·신규 방문자·가입·신청·결제·결제 금액 + 매출 행(총·티켓·구독·B2B, 세그먼트 필터 시 숨김) | 추이 카드 5개: 방문자 → 활성 세션 → 신규 방문자·가입 → 신청·결제 → 결제 금액 (§3b) + 매출 구성 카드(§3c, 세그먼트 필터 시 숨김) | — | daily_metrics, hourly_metrics, person_day, daily_venue, daily_revenue, daily_subscription, daily_venue_registry |
-| 퍼널 | — | 채널·플랫폼·회원 | 전체 전환율(랜딩→결제)·최대 이탈 단계·가장 크게 변한 단계·탐색 도달률 | 단계 전환율 추이(상세→신청 화면, 신청 화면→결제. 28일 이상 주별, 미만 일별, 1일은 단계 막대) + 세그먼트별 퍼널 히트맵 표 | 드릴다운 ① 오디언스별 퍼널(오디언스 칩 → 도달률 표 + 주별 전환율) ② 경로 탐색 생키 · 보조 요일×시간대 (1일: 시간별 세션) | person_day, funnel_daily, daily_metrics, hourly_metrics, weekly_audience_funnel, weekly_path |
+| 퍼널 | — | 채널·플랫폼·회원 | 전체 전환율(랜딩→결제)·최대 이탈 단계·가장 크게 변한 단계·탐색 도달률 | 단계 전환율 추이(상세→신청 화면, 신청 화면→결제. 28일 이상 주별, 미만 일별, 1일은 단계 막대) + 세그먼트별 퍼널 히트맵 표 | 드릴다운 ① 오디언스별 퍼널(오디언스 칩 → 도달률 표 + 주별 전환율. 기간·세그먼트 안 랜딩 0인 오디언스는 칩 비활성, 예: 회원 필터의 `신규`) ② 경로 탐색 생키 · 보조 요일×시간대 (1일: 시간별 세션) | person_day, funnel_daily, daily_metrics, hourly_metrics, weekly_audience_funnel, weekly_path |
 | 행사·결제 | 흐름 | 채널·플랫폼·회원 | 신청·결제·결제 금액·결제자당 금액·취소율 | 신청·결제 추이 + 결제 퍼널(행사 상세 → 신청 화면 → 결제) | — | daily_metrics, hourly_metrics, person_day |
-| 행사·결제 | 행사별 | 유형·가격대 | 조회된 행사·신청·결제 금액·취소율 | 결제 금액 추이 | 행사별 성과 | daily_event |
+| 행사·결제 | 행사별 | 유형·가격대 | 조회된 행사·신청·결제 금액·신청분 취소율 | 결제 금액 추이 | 행사별 성과 | daily_event |
 | 행사·결제 | 공간별 | 지역·장르 | 조회된 공간·신청·결제 | 공간 상세 조회 추이 | 공간 순위 | daily_venue |
 | 행사·결제 | 매출 구성 | (없음 — 매출 마트에 세그먼트 축 없음) | 총 매출·티켓 객단가·구독 할인액·파트너 티켓 매출 비중 | 매출 구성 누적 막대(티켓·구독·B2B, 31일 이하 일별·120일 이하 주별·그 이상 월별) + 객단가 / 할인액 두 차트 + 파트너·비파트너 티켓 매출 누적 | 개최 공간별 티켓(파트너·비파트너) | daily_revenue |
 | 회원 | 회원 | 채널·플랫폼·회원 | 가입·신규 방문자 대비 가입·회원 방문자·방문자 중 회원 비중·W1·W4 | 방문자 회원/비회원 누적 + 리텐션 곡선 W1~W12 | — | daily_metrics, hourly_metrics, weekly_cohort, person_day |
 | 회원 | 구독 | (없음 — 구독 마트에 세그먼트 축 없음) | 구독자·신규 구독·해지·구독 MRR·월 이탈률 | 구독자 / 구독 MRR 두 차트(120일 이하 일별, 그 이상 주 마지막 날) | 구독자 vs 비구독 회원 티켓 결제(방문 회원·결제자·방문 대비 결제·티켓 순매출·결제자당 금액·구독 할인) | daily_subscription, daily_revenue, person_day |
-| 공간 | — | 상권 선택(세그먼트 줄 대체) | 등록 공간·파트너 공간·파트너 비중·신규 계약·계약 해지·B2B MRR | 등록 공간 / 파트너 공간 / 신규 계약·해지 세 차트(31일 이하 일별, 그 이상 주별) → 서울 분포 지도(카드 안 장르·파트너 여부 선택) | 상권별(기준일 스냅샷) · 파트너 공간(상위 50, 정렬) | daily_venue_registry, venue_registry |
-| 유입·광고 | 채널 | 채널·플랫폼·회원 | 세션·광고 세션 비중·신규 방문자·가입·결제 금액 | 유입 유형별 세션 누적 (1일: 막대 목록) | 채널별 성과 | daily_channel |
+| 공간 | — | 상권 선택(세그먼트 줄 대체) | 등록 공간·파트너 공간·파트너 비중·신규 계약·계약 해지·B2B MRR | 등록 공간 / 파트너 공간 / 신규 계약·해지 세 차트(31일 이하 일별, 그 이상 주별) → 서울 분포 지도(영업 중 공간, 카드 안 장르·파트너 여부 선택) | 상권별(기준일 스냅샷, 등록 수는 폐업 포함 — 등록 공간 타일과 같은 기준) · 파트너 공간(상위 50, 정렬) | daily_venue_registry, venue_registry |
+| 유입·광고 | 채널 | 채널·플랫폼·회원 | 세션·광고 세션 비중·신규 방문자·가입·결제 금액 | 유입 유형별 세션 누적 (1일: 막대 목록) | 채널별 성과(유입 유형 · 소스 = `channel2` · `channel3`) | daily_channel |
 | 유입·광고 | 캠페인 | 캠페인 선택 | 집행(지출·노출·클릭, CTR) → 유입(세션·신규 방문자) → 행동(가입 + CAC·신청·결제 금액 + ROAS) | 지출 / 광고 세션 (두 차트, 이중 축 없음) | 캠페인 비교(행 클릭 = 선택) | daily_ad |
 | 주간·월간 | 주간 | 채널·플랫폼·회원 · 기간 줄 → 주차 | WAU·신규·재방문·재방문 비중·주 2일+ 방문·W1(직전 주 코호트) | 주간 방문자 12주(신규/재방문) + 코호트 히트맵 W1~W12(12개 코호트 + 가중 평균) | — | weekly_activity, weekly_cohort |
-| 주간·월간 | 월간 | 범위 6/12개월 · 기간 줄 → 월 | 방문자·신규·가입·결제 금액·취소율·W1 (전월 대비) | 월간 방문자(신규/재방문) + 월 코호트 M1~M6 | 월간 브리핑 | monthly_summary, monthly_cohort |
+| 주간·월간 | 월간 | 범위 6/12개월 · 기간 줄 → 월 | 방문자·신규·가입·결제 금액·신청분 취소율·W1 (전월 대비) | 월간 방문자(신규/재방문) + 월 코호트 M1~M6 | 월간 브리핑 | monthly_summary, monthly_cohort |
 
 탭 순서는 도메인 탭 → 성격이 다른 주간·월간 탭(끝). 공간 탭은 회원 옆. 공간 탭의 장르·파트너 여부 선택은 필터 줄이 아니라 지도 카드 머리에 둔다 — `daily_venue_registry` 의 축이 상권 하나라 스코어보드·추이가 그 선택을 받을 수 없기 때문이다(URL `sr`·`sg`·`sp`). 퍼널 탭은 표 열에 드릴다운 카드를 적었다. 옛 링크 `tab=explore` 는 퍼널 탭으로, `tab=explore&view=venue` 는 행사·결제 공간별로 연결된다.
 
@@ -38,16 +38,18 @@
 | 지표 | 산식 | 단위 |
 |---|---|---|
 | 방문자 (개요·회원 탭) | 기간·세그먼트 안 `visited` 비트를 가진 고유 `pk` 수(`person_day`). 키가 없으면 Σ persons 로 폴백 | 명 |
-| 사람 지표 공통 | 방문자·회원 방문자·탐색·행사 상세·신청 화면·결제자·퍼널 단계는 전부 `person_day` 기간 고유 사람 수(마스크의 비트를 같은 날 모두 가진 고유 `pk`, `uniqueByMasks`). 건수(세션·신청·결제·금액)는 합, 신규·가입은 합(사람당 1회). 키가 없으면 마트 합으로 폴백 | 명 |
+| 사람 지표 공통 | 방문자·회원 방문자·탐색·행사 상세·신청 화면·결제자·퍼널 단계는 전부 `person_day` 기간 고유 사람 수(마스크의 비트를 같은 날 모두 가진 고유 `pk`, `uniqueByMasks`). 세그먼트 필터·분해는 사람마다 기간 안 마지막 해당일의 세그먼트 값 하나로 귀속한다(§4 사람 단위 수의 세그먼트 귀속 — `uniqueByMasks` 도 같은 규칙, 마스크 하나라도 맞는 마지막 날). 그래서 세그먼트별 퍼널 표의 값별 랜딩 합 = 전체. 건수(세션·신청·결제·금액)는 합, 신규·가입은 합(사람당 1회). 키가 없으면 마트 합으로 폴백 | 명 |
 | 기준일 현황 (개요 탭) | 누적 회원 = `meta.to_date` 까지 Σ signups(전체, 필터 미적용) · 공간 = `daily_venue` 고유 venue_id | 명 · 곳 |
 | 활성 세션 비율 | Σ engaged_sessions ÷ Σ sessions | 세션 |
 | 탐색 도달률 (퍼널 탭) | 고유(visited ∧ explored) ÷ 고유(visited) | 명 |
 | 단계 막대 (퍼널 탭 1일) | 누적 단계별 고유 사람, 막대 = 이전 단계 대비, 오른쪽 열 = 첫 단계 대비 | 명 |
 | 결제 퍼널 (행사·결제) | 누적 조건 고유 사람: event_detail → event_detail ∧ apply_view → event_detail ∧ apply_view ∧ paid(같은 날 비트 AND). 뒤 단계가 앞 단계에 포함된다. 결제자당 금액의 결제자는 누적 조건 없이 고유(paid). `person_day` 가 없으면 daily_metrics 열 합(비누적)으로 폴백 | 명 |
 | 결제자당 금액 | Σ pay_amount ÷ 고유(paid) | 원 |
-| 취소율 | Σ cancels ÷ Σ applies | 건 |
+| 취소율 (흐름 보기) | `daily_metrics` Σ cancels ÷ Σ applies. 분자는 취소일 기준 로그라 기간 이전 신청분의 취소도 들어간다 | 건 |
+| 신청분 취소율 (행사별 보기·월간) | `daily_event`·`monthly_summary` Σ cancels ÷ Σ applies. 기간(월)에 신청한 건 중 지금까지 취소된 건(신청일 코호트). 최근 신청분은 취소될 시간이 짧아 흐름 보기 취소율보다 낮게 나온다(28일: 7.4% vs 9.5%) | 건 |
+| 날짜 귀속 (신청·결제 건수) | 개요·흐름·회원·퍼널은 `daily_metrics`(로그, 세션 시작일), 행사별·공간별·매출은 원장(`daily_event` 신청일, `daily_revenue` 결제일). 자정을 넘긴 세션의 신청(전체의 0.5%)은 두 쪽 날짜가 달라 기간 경계에서 1~수 건 어긋난다(28일 신청 11,347 vs 11,348). 전 기간 합은 같다(검사 C12a·C12b) | 건 |
 | 신규 방문자 대비 가입 | Σ signups ÷ Σ new_persons | 사람 |
-| 회원 방문자 · 방문자 중 회원 비중 | member_seg = member 인 날 visited 가 있는 고유 사람 ÷ 고유 방문자. 기간 중 가입한 사람은 가입 전(비회원)·후(회원) 양쪽에 나타나므로 회원 + 비회원 ≥ 방문자. 차트 일 버킷은 마트 값, 주 버킷(120일 초과)은 주 고유 | 명 |
+| 회원 방문자 · 방문자 중 회원 비중 | 기간 안 마지막 방문일이 member 인 고유 사람 ÷ 고유 방문자(회원 + 비회원 = 방문자). 차트 일 버킷은 마트 값, 주 버킷(120일 초과)은 주마다 따로 센 주 고유(그 주 마지막 방문일로 귀속) | 명 |
 | 상세 조회 표 열 (공간별·행사별) | `daily_venue`·`daily_event` 의 detail_viewers(그날 그 대상 상세를 본 고유 사람) 기간 합. 마트가 일 × 대상 집계라 기간 고유가 아니므로 열 이름 `조회 사람(일 합)`, 타일에는 두지 않는다. 공간 추이 차트도 같은 값의 버킷 합 | 사람(일 합) |
 | 광고 탭 유입 | 세션 + 신규 방문자(Σ daily_ad.new_persons, 광고 세션이 첫 방문인 사람 — 사람당 1회라 합 = 고유). 열이 없으면 신규 타일을 숨긴다. 캠페인 귀속은 세션 라스트클릭이라 `person_day` 로 기간 고유를 낼 수 없어 방문자·활성 방문자 타일은 두지 않는다 | 세션 · 명 |
 | W1 · W4 (회원 탭) | 기간 안에 시작한 코호트 중 해당 경과 주가 완결된 것만, Σ retained ÷ Σ cohort_size. 라벨에 쓰인 코호트 주 범위를 적고, 완결 코호트가 없으면 기간 안 코호트 범위와 `—` | 사람 |
@@ -81,12 +83,12 @@
 | 구독자 · 구독 MRR | 기간 끝일 이하 마지막 날의 `active_subscribers` · `mrr`(합산하지 않음) | 명 · 원 |
 | 신규 구독 · 해지 | 기간 Σ new_subscribers · churned_subscribers | 건 |
 | 월 이탈률 | Σ churned ÷ 기간 시작일 active_subscribers × 30 ÷ 기간 일수 | % |
-| 구독자 vs 비구독 회원 | `person_day` 에서 member 코드인 행만, 비트 32768(`subscribed`) 유무로 나눠 visited·paid 고유 pk. 티켓 순매출은 구독자 = Σ subscriber_ticket_amount, 비구독 = 티켓 순매출 − 그 값. 구독 할인은 전부 구독자 몫 | 명 · 원 |
+| 구독자 vs 비구독 회원 | `person_day` 에서 member 코드인 행만, 사람마다 기간 안 마지막 회원 행(방문 또는 결제)의 비트 32768(`subscribed`) 유무로 귀속해 visited·paid 고유 pk(두 행 합 = 기간 회원 방문자). 티켓 순매출은 구독자 = Σ subscriber_ticket_amount, 비구독 = 티켓 순매출 − 그 값. 구독 할인은 전부 구독자 몫 | 명 · 원 |
 | 등록 공간 · 파트너 공간 · B2B MRR | 기간 끝일 이하 마지막 날의 상권 합 `registered_total` · `partner_total` · `mrr_basic + mrr_pro`(`*_total` 은 기간으로 더하지 않는다) | 곳 · 원 |
 | 신규 계약 · 계약 해지 | 기간 Σ new_contracts · churned_contracts | 건 |
 | 공간 추이 (주별) | `*_total` 은 주 마지막 날 값, 계약 수는 주 합 | 곳 · 건 |
 | 서울 분포 지도 | `venue_registry` 중 `status ≠ closed`. 좌표는 위경도를 등장방형 근사(경도 × cos 37.55°)로 투영, 서울 외곽선·한강은 근사 다각형. 점 반지름 = 3 + 9·√(28일 조회 ÷ 최댓값), 색 = `is_partner`. hover 는 가장 가까운 점(14px 이내) | 곳 |
-| 상권별 · 파트너 공간 표 | `venue_registry` 스냅샷 그대로(파트너 판정은 `is_partner` 만), 행사·매출은 365일, 조회는 28일 | 곳 · 건 · 원 |
+| 상권별 · 파트너 공간 표 | `venue_registry` 스냅샷 그대로(파트너 판정은 `is_partner` 만), 행사·매출은 365일, 조회는 28일. 상권별 등록 수는 폐업 포함(합 = 등록 공간 타일 1,800), 지도·파트너 공간 표는 `status ≠ closed` | 곳 · 건 · 원 |
 
 ### 3a. 퍼널 탭 산식
 
@@ -98,8 +100,8 @@
 | 최대 이탈 단계 | 랜딩 대비 도달률 r(k) = n(k) ÷ n(landing) 에서 r(k−1) − r(k) 가 가장 큰 k. 값은 그 차(%p) | 명 |
 | 가장 크게 변한 단계 | 직전 단계 대비 전환율 c(k) = n(k) ÷ n(k−1) 의 직전 동일 길이 기간 대비 차가 절댓값 최대인 k. 직전 기간이 데이터 범위 밖이면 비운다 | %p |
 | 단계 전환율 추이 | 기간 28일 이상 주(월요일) 버킷, 미만 일 버킷마다 버킷 고유 사람으로 c(apply_view), c(payment). 분모 0인 버킷은 선을 끊는다 | 명 |
-| 세그먼트별 퍼널 | 행 = 전체 + 세그먼트 값(선택한 축의 다른 값은 숨김), 칸 = r(k)(행마다 그 세그먼트의 고유 사람). 색은 열 안 최소~최대 명도 | 명 |
-| 오디언스 도달률 | 기간과 겹치는 주(`week_start ∈ [기간 시작의 월요일, 기간 끝]`)를 합산해 오디언스별 Σ step_k ÷ Σ landing | 사람·주 |
+| 세그먼트별 퍼널 | 행 = 전체 + 세그먼트 값(선택한 축의 다른 값은 숨김), 칸 = r(k)(행마다 그 세그먼트의 고유 사람, 사람은 기간 안 마지막 해당일의 값 하나로 귀속 — 축마다 값별 랜딩 합 = 전체). 색은 열 안 최소~최대 명도 | 명 |
+| 오디언스 도달률 | 기간과 겹치는 주(`week_start ∈ [기간 시작의 월요일, 기간 끝]`)를 합산해 오디언스별 Σ step_k ÷ Σ landing. 랜딩 합이 0인 오디언스(회원 필터의 `신규` — 첫 방문 주에는 회원일 수 없다)는 칩을 비활성으로 두고 표·차트에서 뺀다 | 사람·주 |
 | 오디언스 주별 전환율 | 주마다 Σ payment ÷ Σ landing (주 2개 이상일 때만 그림) | 사람·주 |
 | 경로 비중 | 링크 세션 ÷ 출발 노드 세션(그 화면 세션 중), 링크 세션 ÷ step 1 세션 합(전체 세션 대비). 노드는 기간 안 세션 상위 12개 화면만 이름을 두고 나머지는 `(기타)` | 세션 |
 
@@ -119,11 +121,11 @@
 | `daily_venue.<해시>.json` | 행 배열 | 개요 상단 공간 수, 행사·결제 탭 공간별 보기 |
 | `daily_event.<해시>.json` | 행 배열 | 행사·결제 탭 행사별 보기(유형 선택 옵션도 이 표에서, 도착 전엔 `전체`만) |
 | `weekly_path.<해시>.json` | 행 배열 | 퍼널 탭 경로 탐색 |
-| `person_day.<해시>.bin` + `person_day.meta.<해시>.json` | 사람×일 행동 비트(아래) | 사람 단위 지표가 있는 탭(개요·퍼널·행사 흐름·회원) |
+| `person_day.<해시>.pdz`(gzip) 또는 `person_day.<해시>.bin` + `person_day.meta.<해시>.json` | 사람×일 행동 비트(아래) | 사람 단위 지표가 있는 탭(개요·퍼널·행사 흐름·회원) |
 
-- `files` = `{표 이름: 파일 이름}`(`person_day` 는 `.bin`, `person_day_meta` 는 메타 JSON). 이름의 8자리는 내용 SHA-256 앞자리라 내용이 바뀌면 이름이 바뀐다(캐시 무효화). `files` 에 없는 표는 추출되지 않은 것으로 본다.
-- 화면은 `index.json` 도착 후 스코어보드를 그리고, 지연 표에 의존하는 타일·카드는 받는 동안 값 자리에 회색 바, 실패하면 `불러오지 못함` 한 줄. 같은 파일은 한 번만 받아 메모리에 둔다.
-- 기준 크기(2026-09-24 추출, 사람 80,000명·52주): `index.json` 8.2MB(gzip 0.44MB), `person_day.bin` 5.1MB(gzip 2.5MB), 지연 JSON 5개 합 71.0MB(gzip 4.0MB).
+- `files` = `{표 이름: 파일 이름}`(`person_day` 는 `.bin`, `person_day_gz` 는 같은 바이너리의 gzip -9 `.pdz`, `person_day_meta` 는 메타 JSON). 로더는 `DecompressionStream('gzip')` 이 있으면 `.pdz` 를 받아 풀고, 없으면 `.bin` 을 받는다. 받은 본문이 gzip 머리(`1f 8b`)로 시작하지 않으면(서버가 `Content-Encoding` 으로 이미 풀어 보냈으면) 그대로 쓴다. 확장자를 `.gz` 로 두지 않는 이유: 정적 서버 일부(vite preview 의 sirv 등)가 `.gz` 를 `Content-Encoding: gzip` 으로 내보내 브라우저가 먼저 풀어 버린다. 이름의 8자리는 내용 SHA-256 앞자리라 내용이 바뀌면 이름이 바뀐다(캐시 무효화). `files` 에 없는 표는 추출되지 않은 것으로 본다.
+- 화면은 `index.json` 도착 후 스코어보드를 그리고, 지연 표에 의존하는 타일·카드는 받는 동안 값 자리에 회색 바. 실패하면 0.5초·1.5초 뒤 두 번 더 받아 보고, 그래도 실패하면 `불러오지 못함` 과 `다시 시도` 버튼(누르면 실패한 표 전부를 다시 받는다). 같은 파일은 한 번만 받아 메모리에 둔다.
+- 기준 크기(2026-09-24 추출, 사람 80,000명·52주): `index.json` 8.2MB(gzip 0.44MB), `person_day.bin` 5.1MB(`.pdz` 2.5MB — 전송은 `.pdz` 쪽), 지연 JSON 5개 합 71.0MB(gzip 4.0MB).
 
 **표 열.** 아래 키 = 마트 이름, 값 = 행 배열(`index.json` 의 키 또는 지연 JSON 파일 전체). 열 이름은 `docs/architecture.md` §2 마트 열과 같다. 날짜는 `YYYY-MM-DD`(KST), 월은 `YYYY-MM`, 금액은 정수 원.
 
@@ -147,9 +149,11 @@
 | `daily_subscription` | `kst_date, active_subscribers, new_subscribers, churned_subscribers, mrr, subscriber_ticket_payers, subscriber_ticket_amount` — 첫 구독일 ~ 기준일 모든 날, 이탈률 = 기간 churned ÷ 기간 시작일 active |
 | `daily_venue_registry` | `kst_date, region, registered_total, partner_total, new_registered, new_contracts, churned_contracts, mrr_basic, mrr_pro` — 모든 날 × 모든 상권, 전체 = 상권 합, `*_total` 은 그날 값(기간 합산 금지) |
 | `venue_registry` | `venue_id, name, region, district, lat, lng, genre, venue_type, capacity_band, registered_at, is_partner(bool), plan, contract_started_at, contract_ended_at, events_365d, ticket_amount_365d, detail_viewers_28d, status, as_of_date` — 기준일 고정(기간·세그먼트 필터 없음), 날짜 열은 `YYYY-MM-DD` |
-| `person_day` | 바이너리 `person_day.<해시>.bin`: 행당 8바이트, 리틀엔디언 Uint32 2개. word0 = `pk`(비트 0–19) \| `d`(20–28) \| `c`(29) \| `p`(30–31), word1 = `m`(0) \| `f`(1–16), 나머지 비트 0. 행은 날짜·사람 키 순. 메타 `person_day.meta.<해시>.json` = `{base_date, codes, rows, row_bytes, layout}`. 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. 폭을 넘는 값이 나오면 `extract.py` 가 중단한다(`PD_BITS` 를 늘리고 `persons.ts` 를 같이 고친다). `meta.tables.person_day` 는 행 수 |
+| `person_day` | 바이너리 `person_day.<해시>.bin`(전송용 gzip 사본 `.pdz`): 행당 8바이트, 리틀엔디언 Uint32 2개. word0 = `pk`(비트 0–19) \| `d`(20–28) \| `c`(29) \| `p`(30–31), word1 = `m`(0) \| `f`(1–16), 나머지 비트 0. 행은 날짜·사람 키 순. 메타 `person_day.meta.<해시>.json` = `{base_date, codes, rows, row_bytes, layout}`. 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. 폭을 넘는 값이 나오면 `extract.py` 가 중단한다(`PD_BITS` 를 늘리고 `persons.ts` 를 같이 고친다). `meta.tables.person_day` 는 행 수 |
 
-세그먼트 값: `channel1` ∈ {paid, non_paid}, `device_platform` ∈ {ios, android, web}, `member_seg` ∈ {member, guest}. 세그먼트 속성은 행마다 1개라 조합의 합이 전체다. `channel2` 는 `staging.map_channel` 의 2단계 값(direct·organic_search·organic_social·influencer·paid_social·referral·ai_referral·other), `top_channel` 도 같은 값을 쓴다. `price_tier` ∈ {free, standard, premium}.
+**사람 단위 수의 세그먼트 귀속.** `person_day` 로 세는 고유 사람 수(`persons.ts` `uniquePersons`)는 사람마다 기간 안에서 해당 행동이 있었던 마지막 날의 세그먼트 값 하나로 귀속한다. 세그먼트 필터와 분해(회원/비회원·채널·플랫폼)가 모두 이 값을 쓰므로 값별 수의 합이 전체와 같다. 기간 중 가입한 사람은 회원으로 센다. 채널1·플랫폼은 사람 속성이라 날마다 같다. 전기는 전기 안의 마지막 날로 따로 귀속하고, 추이 차트의 주·월 버킷은 기간 전체의 마지막 날 기준으로 귀속한다(버킷별로 다시 귀속하지 않는다). 날마다의 값으로 세려면 마지막 인자에 `'day'` 를 넘기는데, 이 경우 한 사람이 양쪽에 모두 세어질 수 있다. 일 마트 `persons` 열의 합은 행 단위라 이 규칙과 다르다.
+
+세그먼트 값: `channel1` ∈ {paid, non_paid}, `device_platform` ∈ {ios, android, web}, `member_seg` ∈ {member, guest}. 세그먼트 속성은 행마다 1개라 조합의 합이 전체다. `channel2` 는 `staging.map_channel` 의 2단계 값(direct·organic_search·organic_social·influencer·paid_social·referral·ai_referral·other), `top_channel` 도 같은 값을 쓴다. `price_tier` ∈ {free, standard, premium, package}.
 
 **`docs/architecture.md` 와 다른 점**: `hourly_metrics` 에 세그먼트 축 3개가 있다. 시간대 히트맵과 1일 시간별 차트가 세그먼트 필터를 받아야 하므로 마트에 축을 추가한다.
 
@@ -167,7 +171,7 @@
 
 **프로젝트 개요** — 대시보드 안에 설명 문장을 넣지 않기 위한 자리.
 
-1. 한 문장 요약 + 데이터 설명 절(`#data-note`, 저톤 문단): 시나리오·분포 규칙으로 생성했고 실제 데이터를 포함하지 않음, 방문자 80,000명·회원 약 7,700명·52주·이벤트 약 880만 건 규모
+1. 한 문장 요약 + 데이터 설명 절(`#data-note`, 저톤 문단): 시나리오·분포 규칙으로 생성했고 실제 데이터를 포함하지 않음, 방문자 80,000명·회원 약 7,500명·52주·이벤트 약 880만 건 규모
 2. 가상 프로덕트 배경 한 단락(공간·행사 탐색 → 신청 → 결제, 회원·비회원, 앱·웹, 광고 유입)
 3. 핵심 퍼널 5화면 와이어프레임(홈·지도 → 행사 상세 → 로그인·가입 → 신청 화면 → 결제 완료)과 화면별 이벤트 이름
 4. 데이터 흐름 도식(행동 로그·서비스 DB·광고 리포트 → raw → staging → marts, ops → JSON 추출 → 정적 웹). 폭 768px 미만은 세로 도식

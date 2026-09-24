@@ -55,10 +55,11 @@ export default function Spaces({ data, s, set, range }: TabProps) {
     () => (data.daily_venue_registry ?? []).filter((r) => s.sr === 'all' || r.region === s.sr),
     [data, s.sr],
   )
-  const venues = useMemo(
-    () => (data.venue_registry ?? []).filter((v) => v.status !== 'closed' && (s.sr === 'all' || v.region === s.sr)),
+  const registered = useMemo(
+    () => (data.venue_registry ?? []).filter((v) => s.sr === 'all' || v.region === s.sr),
     [data, s.sr],
   )
+  const venues = useMemo(() => registered.filter((v) => v.status !== 'closed'), [registered])
   const mapVenues = useMemo(
     () =>
       venues.filter(
@@ -98,7 +99,7 @@ export default function Spaces({ data, s, set, range }: TabProps) {
 
   const regions = useMemo(() => {
     const m = new Map<string, RegionRow>()
-    for (const v of venues) {
+    for (const v of registered) {
       const z = m.get(v.region) ?? { region: v.region, registered: 0, partners: 0, amount: 0 }
       z.registered++
       z.partners += v.is_partner ? 1 : 0
@@ -106,7 +107,7 @@ export default function Spaces({ data, s, set, range }: TabProps) {
       m.set(v.region, z)
     }
     return [...m.values()]
-  }, [venues])
+  }, [registered])
 
   if (!data.daily_venue_registry && !data.venue_registry)
     return (
@@ -252,7 +253,7 @@ export default function Spaces({ data, s, set, range }: TabProps) {
         <Card
           title="서울 분포"
           metricId="P07"
-          meta={`${md(asOf)} 기준 · ${num(mapVenues.length)}곳 · 점 크기 28일 조회`}
+          meta={`${md(asOf)} 기준 · 영업 중 ${num(mapVenues.length)}곳 · 점 크기 28일 조회`}
           right={
             <div className="flex flex-wrap items-center gap-2">
               <Select

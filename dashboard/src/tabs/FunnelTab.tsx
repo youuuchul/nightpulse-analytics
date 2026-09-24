@@ -88,22 +88,28 @@ const SEG_ROWS: { key: string; group: string; label: string; test: (r: Seg) => b
   { key: 'guest', group: '회원', label: '비회원', test: (r) => r.member_seg === 'guest', hide: (s) => s.ms === 'member' },
 ]
 
-function Chips({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+function Chips({ value, empty, onChange }: { value: string[]; empty: Set<string>; onChange: (v: string[]) => void }) {
   return (
     <div className="flex flex-wrap gap-1.5" role="group" aria-label="오디언스">
       {AUDIENCES.map((a, i) => {
-        const on = value.includes(a.id)
+        const off = empty.has(a.id)
+        const on = !off && value.includes(a.id)
         return (
           <button
             key={a.id}
             type="button"
             aria-pressed={on}
+            disabled={off}
             onClick={() => {
               if (on && value.length === 1) return
               onChange(on ? value.filter((x) => x !== a.id) : AUDIENCES.map((x) => x.id).filter((x) => x === a.id || value.includes(x)))
             }}
             className={`inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[13px] transition-colors ${
-              on ? 'bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--axis)]' : 'bg-wash text-muted hover:text-ink'
+              on
+                ? 'bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--axis)]'
+                : off
+                  ? 'cursor-not-allowed bg-wash text-muted opacity-40'
+                  : 'bg-wash text-muted hover:text-ink'
             }`}
           >
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: on ? S(i + 1) : 'var(--axis)' }} />
@@ -119,12 +125,16 @@ function Audience({ data, s, set, range }: TabProps) {
   const all = data.weekly_audience_funnel ?? []
   const seg = segFilter(s)
   const weeks = useMemo(() => weeksIn(range, all.map((r) => r.week_start)), [all, range.from, range.to])
-  const picked = s.aud.split(',').filter((x) => AUDIENCES.some((a) => a.id === x))
-  const sel = picked.length ? picked : ['new']
   const rows = useMemo(() => {
     const ws = new Set(weeks)
     return all.filter((r) => ws.has(r.week_start) && seg(r))
   }, [all, weeks, s.ch, s.pf, s.ms])
+  const empty = useMemo(() => {
+    const has = new Set<string>(rows.filter((r) => r.step === 'landing' && r.persons > 0).map((r) => r.audience_id))
+    return new Set(AUDIENCES.map((a) => a.id).filter((id) => !has.has(id)))
+  }, [rows])
+  const picked = s.aud.split(',').filter((x) => AUDIENCES.some((a) => a.id === x) && !empty.has(x))
+  const sel = picked.length ? picked : AUDIENCES.map((a) => a.id).filter((id) => !empty.has(id)).slice(0, 1)
 
   const table: ReachRow[] = sel.map((id) => {
     const i = AUDIENCES.findIndex((a) => a.id === id)
@@ -151,7 +161,7 @@ function Audience({ data, s, set, range }: TabProps) {
       for (const id of sel) o[id] = ratio(z[id]?.payment ?? 0, z[id]?.landing ?? 0)
       return o
     })
-  }, [rows, weeks, s.aud])
+  }, [rows, weeks, sel.join(',')])
 
   const series = sel.map((id) => {
     const i = AUDIENCES.findIndex((a) => a.id === id)
@@ -164,7 +174,7 @@ function Audience({ data, s, set, range }: TabProps) {
         <NoData />
       ) : (
         <div className="flex flex-col gap-4">
-          <Chips value={sel} onChange={(v) => set({ aud: v.join(',') })} />
+          <Chips value={sel} empty={empty} onChange={(v) => set({ aud: v.join(',') })} />
           {!weeks.length ? (
             <NoData />
           ) : (
@@ -183,7 +193,7 @@ function Audience({ data, s, set, range }: TabProps) {
                     data={trend}
                     kind="line"
                     series={series}
-                    yFormat={(v) => pct(v, 0)}
+                    yFormat={(v) => `${+(v * 100).toFixed(1)}%`}
                     valueFormat={(v) => pct(v)}
                     tipTitle={weekTip(true)}
                     decimals
@@ -419,7 +429,7 @@ export default function FunnelTab(p: TabProps) {
               data={trend}
               kind="line"
               series={series}
-              yFormat={(v) => pct(v, 0)}
+              yFormat={(v) => `${+(v * 100).toFixed(1)}%`}
               valueFormat={(v) => pct(v)}
               tipTitle={weekTip(weekly)}
               decimals

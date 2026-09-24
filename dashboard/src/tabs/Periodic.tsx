@@ -231,7 +231,7 @@ function Monthly({ data, s }: TabProps) {
     { key: 'applies', label: '신청', value: (r) => r.applies, render: (r) => num(r.applies), num: true },
     { key: 'pay_count', label: '결제', value: (r) => r.pay_count, render: (r) => num(r.pay_count), num: true },
     { key: 'pay_amount', label: '결제 금액', value: (r) => r.pay_amount, render: (r) => won(r.pay_amount), num: true },
-    { key: 'cancel', label: '취소율', value: (r) => cancel(r), render: (r) => pct(cancel(r)), num: true },
+    { key: 'cancel', label: '신청분 취소율', value: (r) => cancel(r), render: (r) => pct(cancel(r)), num: true },
     { key: 'w1', label: 'W1', value: (r) => r.w1_retention, render: (r) => pct(r.w1_retention), num: true },
     { key: 'top', label: '상위 유입', value: (r) => channel2Label(r.top_channel) },
   ]
@@ -250,8 +250,8 @@ function Monthly({ data, s }: TabProps) {
           delta={rel(cur?.pay_amount ?? null, prev?.pay_amount ?? null, vs)}
         />
         <Tile
-          metricId="C06"
-          label="취소율"
+          metricId="C21"
+          label="신청분 취소율"
           value={pct(cancel(cur))}
           sub={`신청 ${num(cur?.applies)}건 중`}
           delta={rel(cancel(cur), cancel(prev), vs, false, true)}

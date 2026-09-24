@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Tile, TileRow } from '../components/ui'
-import { diffDays, mondayOf } from '../lib/date'
+import { diffDays, md, mondayOf } from '../lib/date'
 import { num, pct, ratio, won } from '../lib/format'
 import { S } from '../lib/labels'
 import { F, pdFlags, pdKey, pdMs, pdSpan } from '../lib/persons'
@@ -20,12 +20,21 @@ interface CompareRow {
   discount: number
 }
 
-/** 기간 안 회원인 날의 방문·결제 고유 사람을 구독 여부로 나눠 센다. */
+/**
+ * 기간 안 회원인 날의 방문·결제 고유 사람을 구독 여부로 나눠 센다.
+ * 사람마다 기간 안 마지막 회원 행(방문 또는 결제)의 구독 여부 하나로 귀속한다 — 구독자 + 비구독 = 회원 전체.
+ */
 function compare(pd: PersonDay, from: string, to: string): Record<'sub' | 'non', { visitors: number; payers: number }> {
   const lo = diffDays(pd.base_date, from)
   const hi = diffDays(pd.base_date, to)
   const [i0, i1] = pdSpan(pd, lo, hi)
   const member = pd.codes.m.indexOf('member')
+  const any = F.visited | F.paid
+  const last = new Map<number, number>()
+  for (let i = i0; i < i1; i++) {
+    const b = pd.w[2 * i + 1]
+    if (pdMs(b) === member && pdFlags(b) & any) last.set(pdKey(pd.w[2 * i]), pdFlags(b))
+  }
   const v = { sub: new Set<number>(), non: new Set<number>() }
   const p = { sub: new Set<number>(), non: new Set<number>() }
   for (let i = i0; i < i1; i++) {
@@ -33,8 +42,8 @@ function compare(pd: PersonDay, from: string, to: string): Record<'sub' | 'non',
     const b = pd.w[2 * i + 1]
     if (pdMs(b) !== member) continue
     const f = pdFlags(b)
-    const g = f & F.subscribed ? 'sub' : 'non'
     const k = pdKey(a)
+    const g = (last.get(k) ?? 0) & F.subscribed ? 'sub' : 'non'
     if (f & F.visited) v[g].add(k)
     if (f & F.paid) p[g].add(k)
   }
@@ -140,7 +149,7 @@ export default function Subscription({ data, range }: TabProps) {
           label="구독자"
           value={num(end?.active_subscribers)}
           unit="명"
-          sub={end ? `${end.kst_date.slice(5).replace('-', '/')} 기준` : undefined}
+          sub={end ? `${md(end.kst_date)} 기준` : undefined}
           delta={delta(data, range, end?.active_subscribers ?? null, endPrev?.active_subscribers ?? null)}
         />
         <Tile metricId="S02" label="신규 구독" value={num(w.fresh)} unit="건" delta={delta(data, range, w.fresh, wp.fresh)} />

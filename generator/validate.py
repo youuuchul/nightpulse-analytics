@@ -329,6 +329,33 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
         f"{last_day_visitors} vs 직전 7일 평균 {prev_avg:.1f}",
     )
 
+    apply_day = Counter(datetime.fromtimestamp(_epoch(a["applied_at"]), KST).date() for a in apps)
+    last7 = sum(apply_day[end_date - timedelta(days=i)] for i in range(7)) / 7
+    prev28 = sum(apply_day[end_date - timedelta(days=i)] for i in range(7, 35)) / 28
+    check(
+        "마지막 7일 일평균 신청 >= 직전 4주 일평균의 70%",
+        last7 >= 0.7 * prev28,
+        f"{last7:.1f} vs {prev28:.1f} ({last7 / prev28:.2f})",
+    )
+    first_day: dict[str, str] = {}
+    for s_ in visit:
+        pid = person_of.get(s_.client, s_.client)
+        if pid not in first_day or s_.date < first_day[pid]:
+            first_day[pid] = s_.date
+    new_by_day = Counter(first_day.values())
+    camp_week = {week_of_date(date.fromisoformat(d), start_date) for d in ad_days}
+    wk_new: dict[bool, list[int]] = {True: [], False: []}
+    for i in range(weeks * 7):
+        d = start_date + timedelta(days=i)
+        wk_new[week_of_date(d, start_date) in camp_week].append(new_by_day[d.isoformat()])
+    avg_on = sum(wk_new[True]) / max(len(wk_new[True]), 1)
+    avg_off = sum(wk_new[False]) / max(len(wk_new[False]), 1)
+    check(
+        "캠페인 없는 주 일평균 신규 >= 캠페인 있는 주의 40%",
+        avg_off >= 0.4 * avg_on,
+        f"{avg_off:.0f} vs {avg_on:.0f} ({avg_off / avg_on:.2f})",
+    )
+
     values = {
         "신규 방문자 W1 리텐션": ret[1],
         "W4 리텐션": ret[4],
@@ -731,6 +758,11 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         f"| 파트너 계약 월 해지율 | {contract_churn:.4f} |",
     ]
     return out
+
+
+def week_of_date(d: date, start_date: date) -> int:
+    """관측 시작일 기준 주 번호(0부터)."""
+    return (d - start_date).days // 7
 
 
 def _is_auto(s: Sess) -> bool:

@@ -10,12 +10,14 @@ marts 데이터셋의 표 18개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 �
     index.json                     meta + files + 첫 화면 표(고정 이름)
     <표>.<해시8>.json              지연 표(행 배열)
     person_day.<해시8>.bin         행당 8바이트 고정 바이너리
+    person_day.<해시8>.pdz         위 바이너리의 gzip -9(전송용, 로더가 브라우저에서 푼다)
     person_day.meta.<해시8>.json   base_date·codes·rows·비트 배치
 """
 
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import re
@@ -36,7 +38,7 @@ LAZY = ["hourly_metrics", "daily_channel", "daily_venue", "daily_event", "weekly
 
 # person_day.bin 비트 배치: (필드, 워드, 시작 비트, 비트 수). 리틀엔디언 Uint32 2개 = 행당 8바이트.
 PD_BITS = [("pk", 0, 0, 20), ("d", 0, 20, 9), ("c", 0, 29, 1), ("p", 0, 30, 2), ("m", 1, 0, 1), ("f", 1, 1, 16)]
-HASHED = re.compile(r"^[a-z_]+(\.meta)?\.[0-9a-f]{8}\.(json|bin)$")
+HASHED = re.compile(r"^[a-z_]+(\.meta)?\.[0-9a-f]{8}\.(json|bin|pdz)$")
 
 # 표 이름 → (열 목록, 정렬 열). 열 이름은 docs/architecture.md §2 marts 와 docs/dashboard.md 계약을 따른다.
 TABLES: dict[str, tuple[list[str], list[str]]] = {
@@ -447,9 +449,12 @@ def split(data: dict, out_dir: Path) -> None:
     if data.get("person_day"):
         bin_body, pd_meta = pack_person_day(data["person_day"])
         meta_body = dump(pd_meta)
+        gz_body = gzip.compress(bin_body, compresslevel=9, mtime=0)
         files["person_day"] = hashed("person_day", bin_body, "bin")
+        files["person_day_gz"] = hashed("person_day", gz_body, "pdz")
         files["person_day_meta"] = hashed("person_day.meta", meta_body, "json")
         blobs[files["person_day"]] = bin_body
+        blobs[files["person_day_gz"]] = gz_body
         blobs[files["person_day_meta"]] = meta_body
 
     index = {"meta": data["meta"], "files": files}

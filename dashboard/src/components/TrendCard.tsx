@@ -19,7 +19,7 @@ export interface TrendMetric<D, H> {
 }
 
 type Grain = 'auto' | 'hour' | 'day' | 'week' | 'month'
-type Axis = 'ms' | 'ch' | 'pf'
+export type Axis = 'ms' | 'ch' | 'pf'
 
 const AXES: { id: Axis; label: string; field: keyof Seg; values: { v: string; label: string }[] }[] = [
   { id: 'ms', label: '회원', field: 'member_seg', values: [{ v: 'member', label: '회원' }, { v: 'guest', label: '비회원' }] },
@@ -36,6 +36,13 @@ const AXES: { id: Axis; label: string; field: keyof Seg; values: { v: string; la
   },
 ]
 
+const TILE_COLS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-4',
+}
+
 export const GRAIN_LABEL: Record<Exclude<Grain, 'auto'>, string> = { hour: '시간별', day: '일별', week: '주별', month: '월별' }
 
 export interface Bucket {
@@ -44,6 +51,8 @@ export interface Bucket {
   label: string
   title: string
   prevTitle: string
+  days: number
+  partial: boolean
 }
 
 function dayTitle(d: string): string {
@@ -70,12 +79,16 @@ export function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
       label: md(d),
       title: dayTitle(d),
       prevTitle: dayTitle(shift(d)),
+      days: 1,
+      partial: false,
     }))
   const out: Bucket[] = []
   if (g === 'week') {
     for (let a = range.from; a <= range.to; a = addDays(a, 7)) {
       const b = addDays(a, 6) < range.to ? addDays(a, 6) : range.to
-      out.push({ from: a, to: b, label: md(a), title: spanTitle(a, b), prevTitle: spanTitle(shift(a), shift(b)) })
+      const days = diffDays(a, b) + 1
+      const title = days < 7 ? `${spanTitle(a, b)} (${days}일)` : spanTitle(a, b)
+      out.push({ from: a, to: b, label: md(a), title, prevTitle: spanTitle(shift(a), shift(b)), days, partial: days < 7 })
     }
     return out
   }
@@ -84,8 +97,10 @@ export function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
     const end = addDays(`${addMonths(m, 1)}-01`, -1)
     const a = start < range.from ? range.from : start
     const b = end > range.to ? range.to : end
-    const title = a === start && b === end ? m : `${m} (${md(a)}~${md(b)})`
-    out.push({ from: a, to: b, label: ym(m), title, prevTitle: spanTitle(shift(a), shift(b)) })
+    const days = diffDays(a, b) + 1
+    const partial = a !== start || b !== end
+    const title = partial ? `${m} · ${md(a)}~${md(b)} (${days}일)` : m
+    out.push({ from: a, to: b, label: ym(m), title, prevTitle: spanTitle(shift(a), shift(b)), days, partial })
   }
   return out
 }
@@ -147,6 +162,7 @@ export function MiniSeg<T extends string>({
 interface Point {
   i: number
   x: string
+  partial?: boolean
   cur: number
   prev: number | null
   cur2?: number
@@ -166,6 +182,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   onDrill,
   personWait = null,
   hourWait = null,
+  axes,
 }: {
   title: string
   metrics: [TrendMetric<D, H>] | [TrendMetric<D, H>, TrendMetric<D, H>]
@@ -179,9 +196,11 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   onDrill: (p: { p: '1'; d: string } | { p: 'custom'; from: string; to: string }) => void
   personWait?: Wait
   hourWait?: Wait
+  axes?: Axis[]
 }) {
   const [pick, setPick] = useState<Grain>('auto')
-  const [axisPick, setAxis] = useState<Axis>('ms')
+  const shown = axes ? AXES.filter((a) => axes.includes(a.id)) : AXES
+  const [axisPick, setAxis] = useState<Axis>(shown[0].id)
   const hoverIdx = useRef<number | null>(null)
   const [main, second] = metrics
   const fmt = main.format ?? num
@@ -189,7 +208,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   const hasPrev = range.prevFrom >= dataFrom
 
   const fixed: Record<Axis, boolean> = { ms: seg.ms !== 'all', ch: seg.ch !== 'all', pf: seg.pf !== 'all' }
-  const axis = fixed[axisPick] ? AXES.find((a) => !fixed[a.id])?.id : axisPick
+  const axis = fixed[axisPick] || !shown.some((a) => a.id === axisPick) ? shown.find((a) => !fixed[a.id])?.id : axisPick
 
   const segOk = (r: Seg) =>
     (seg.ch === 'all' || r.channel1 === seg.ch) &&
@@ -253,9 +272,9 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
       bks.forEach((b, i) => {
         for (let k = diffDays(range.from, b.from); k <= diffDays(range.from, b.to); k++) at[k] = i
       })
-      uniq = uniquePersons(pd, range.prevFrom, range.to, main.flag!, seg, (r) =>
-        r.off < range.days ? [`p${at[r.off]}`] : [`c${at[r.off - range.days]}`],
-      )
+      const byBucket = (from: string, to: string, pre: string) =>
+        uniquePersons(pd, from, to, main.flag!, seg, (r) => [`${pre}${at[r.off]}`])
+      uniq = new Map([...byBucket(range.prevFrom, range.prevTo, 'p'), ...byBucket(range.from, range.to, 'c')])
     }
     const points = bks.map((b, i) => {
       let a = 0
@@ -281,6 +300,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
       return {
         i,
         x: b.label,
+        partial: b.partial,
         cur: a,
         prev: hasPrev ? pa : null,
         cur2: second ? b2 : undefined,
@@ -343,6 +363,16 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   const wait = (main.flag != null ? personWait : null) ?? (grain === 'hour' && main.hour ? hourWait : null)
   const clickable = grain !== 'hour'
   const dots = series.points.length <= 31
+  const dotOf =
+    (color: string, r: number) =>
+    ({ cx, cy, index, payload }: { cx?: number; cy?: number; index?: number; payload?: Point }) => {
+      if (cx == null || cy == null || (!payload?.partial && !dots)) return <g key={index} />
+      return payload?.partial ? (
+        <circle key={index} cx={cx} cy={cy} r={r} fill="var(--surface)" stroke={color} strokeWidth={2} />
+      ) : (
+        <circle key={index} cx={cx} cy={cy} r={r} fill={color} stroke="var(--surface)" strokeWidth={2} />
+      )
+    }
   const secondOn = !!second && (grain !== 'hour' || !!second.hour)
 
   const grainOptions: { value: Grain; label: string; disabled?: boolean }[] = [
@@ -370,9 +400,9 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
           )}
           <MiniSeg
             label="분해"
-            value={(axis ?? 'ms') as Axis}
+            value={(axis ?? shown[0].id) as Axis}
             onChange={setAxis}
-            options={AXES.map((a) => ({ value: a.id, label: a.label, disabled: fixed[a.id] }))}
+            options={shown.map((a) => ({ value: a.id, label: a.label, disabled: fixed[a.id] }))}
           />
         </div>
       </header>
@@ -504,7 +534,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
                       dataKey="cur2"
                       stroke={S(2)}
                       strokeWidth={2}
-                      dot={dots ? { r: 3, fill: S(2), stroke: 'var(--surface)', strokeWidth: 2 } : false}
+                      dot={dotOf(S(2), 3)}
                       activeDot={{ r: 5, fill: S(2), stroke: 'var(--surface)', strokeWidth: 2 }}
                       isAnimationActive={false}
                       strokeLinecap="round"
@@ -515,7 +545,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
                     dataKey="cur"
                     stroke={S(1)}
                     strokeWidth={2}
-                    dot={dots ? { r: 4, fill: S(1), stroke: 'var(--surface)', strokeWidth: 2 } : false}
+                    dot={dotOf(S(1), 4)}
                     activeDot={{ r: 7, fill: S(1), stroke: 'var(--surface)', strokeWidth: 2 }}
                     isAnimationActive={false}
                     strokeLinecap="round"
@@ -530,8 +560,8 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
         <div className="self-start overflow-hidden rounded-lg border border-line">
           <div
             className={`-mb-px -mr-px grid [&>*]:border-b [&>*]:border-r [&>*]:border-line ${
-              chartable ? 'grid-cols-2 lg:grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'
-            }`}
+              TILE_COLS[tiles.length] ?? TILE_COLS[4]
+            } ${chartable ? 'lg:grid-cols-1' : ''}`}
           >
           {tiles.map((t) => (
             <div key={t.label} className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">

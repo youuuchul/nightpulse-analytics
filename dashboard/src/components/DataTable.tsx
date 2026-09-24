@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
+import { num } from '../lib/format'
 
 export interface Col<T> {
   key: string
@@ -101,7 +102,7 @@ export function DataTable<T>({
       </div>
       {sorted.length > limit && (
         <button type="button" onClick={() => setAll(!all)} className="mt-3 text-xs text-muted hover:text-ink">
-          {all ? `상위 ${limit}개만` : `전체 ${sorted.length}개`}
+          {all ? `상위 ${limit}개만` : `전체 ${num(sorted.length)}개`}
         </button>
       )}
     </div>

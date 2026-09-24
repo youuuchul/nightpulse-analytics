@@ -63,7 +63,7 @@ function Channels({ data, s, range }: TabProps) {
         </span>
       ),
     },
-    { key: 'channel3', label: '플랫폼', value: (r) => r.channel3 },
+    { key: 'channel3', label: '소스', value: (r) => r.channel3 },
     { key: 'sessions', label: '세션', value: (r) => r.sessions, render: (r) => num(r.sessions), num: true },
     {
       key: 'share',
@@ -221,7 +221,7 @@ function Campaigns({ data, s, set, range }: TabProps) {
       <div className="card flex flex-col divide-y divide-line overflow-hidden lg:flex-row lg:divide-x lg:divide-y-0">
         <Stage title="집행">
           <Tile metricId="A08" label="지출" value={won(t.spend)} unit="원" />
-          <Tile metricId="A09" label="노출" value={num(t.impressions)} />
+          <Tile metricId="A09" label="노출" value={won(t.impressions)} />
           <Tile metricId="A04" label="클릭" value={num(t.clicks)} sub={`CTR ${pct(ratio(t.clicks, t.impressions), 2)}`} />
         </Stage>
         <Stage title="유입">

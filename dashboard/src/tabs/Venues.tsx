@@ -73,7 +73,7 @@ export default function Venues({ data, s, range }: TabProps) {
           />
         </Card>
       )}
-      <Card title="공간 순위" meta={`${list.length}곳`} wait={w}>
+      <Card title="공간 순위" meta={`${num(list.length)}곳`} wait={w}>
         <DataTable cols={cols} rows={list} sortKey="detail_viewers" rowKey={(r) => String(r.venue_id)} />
       </Card>
     </div>

@@ -4,7 +4,7 @@
 
 마트 열 기준 정의. 비율은 마트에 저장하지 않고 분자·분모 열을 화면에서 나눈다(예외: 화면 계약상 `monthly_summary.w1_retention`). 산식의 원본은 `bigquery/sql/` 의 마트 생성 SQL 이며, 이 문서는 그 열을 가리킨다. 대시보드의 `지표 가이드` 페이지와 타일 이름 옆 `?` 가 같은 원본을 보여준다.
 
-지표 83개 · 탭 7개.
+지표 84개 · 탭 7개.
 
 ## 탭이 답하는 질문
 
@@ -75,7 +75,7 @@
 | C03 | 행사 상세 → 신청 | 퍼널 | 사람 × 일 | 행사 상세를 본 사람 중 신청한 사람 | appliers ÷ detail_viewers | 행사 상세를 본 사람 | `daily_metrics.appliers`, `daily_metrics.detail_viewers` | 상세 화면의 설득력 |
 | C04 | 신청 화면 → 신청 | 퍼널 | 사람 × 일 | 신청 화면을 본 사람 중 신청한 사람 | appliers ÷ apply_viewers | 신청 화면을 본 사람 | `daily_metrics.appliers`, `daily_metrics.apply_viewers` | 신청 양식의 마찰 |
 | C05 | 신청 → 결제 완료 | 행사·결제 | 건 | 유료 행사 신청 중 결제 완료 | pay_count ÷ paid_tier_applies | 유료 행사 신청 | `daily_event.pay_count`, `daily_event.paid_tier_applies` | 결제 단계 이탈 |
-| C06 | 취소율 | 행사·결제 | 건 | 신청 중 취소된 신청 | Σ cancels ÷ Σ applies | 신청 | `daily_metrics.cancels`, `daily_metrics.applies`, `daily_event.cancels` | 노쇼·환불 위험 |
+| C06 | 취소율 | 행사·결제 | 건 | 기간 안에 일어난 취소 건을 기간 안 신청 건으로 나눈 값(취소일 기준 — 분자의 취소가 기간 이전 신청분일 수 있다) | Σ cancels ÷ Σ applies | 신청 | `daily_metrics.cancels`, `daily_metrics.applies` | 노쇼·환불 위험 |
 | C07 | 결제자당 금액 | 행사·결제 | 원 | 기간 결제 금액을 기간 고유 결제자로 나눈 값 | Σ pay_amount ÷ 고유(paid) | 결제한 사람(기간 고유) | `daily_metrics.pay_amount`, `person_day.flags(paid)` | 사람당 지출 크기 |
 | C08 | 방문 퍼널 단계 | 퍼널 | 사람 | 랜딩 → 행사 상세 → 로그인·가입 → 신청 화면 → 결제, 같은 날 누적 조건 | 단계별 고유 사람 (person_day 비트 AND) | 이전 단계 | `funnel_daily.persons`, `person_day.flags` | 퍼널 탭의 뼈대 |
 | C09 | 오디언스별 퍼널 단계 | 퍼널 | 사람 × 주 | 그 주 그 오디언스 중 그 단계까지 도달한 사람 | Σ step_k ÷ Σ landing | 그 오디언스의 랜딩 | `weekly_audience_funnel.persons` | 누구에게 어느 단계가 막히는가 |
@@ -90,6 +90,7 @@
 | C18 | 세그먼트별 퍼널 | 퍼널 | 사람 | 세그먼트 값마다 랜딩 대비 단계 도달률 | n_seg(k) ÷ n_seg(landing) | 그 세그먼트의 랜딩 | `person_day.flags` | 어느 집단이 어디서 막히는가 |
 | C19 | 조회 대비 신청 | 행사·결제 | 건 ÷ 사람(일 합) | 행사·공간별 상세 조회 대비 신청 | Σ applies ÷ Σ detail_viewers | 상세 조회 사람(일 합) | `daily_event.applies`, `daily_event.detail_viewers`, `daily_venue.applies` | 대상별 전환 효율 |
 | C20 | 누적 회원 | 개요 | 명 | 기준일까지 가입한 사람 수(필터 미적용) | Σ signups (전체 기간) | — | `daily_metrics.signups` | 회원 기반의 크기 |
+| C21 | 신청분 취소율 | 행사·결제 | 건 | 기간(월) 안에 신청한 건 중 지금까지 취소된 건(신청일 기준 코호트). 최근 신청분은 취소될 시간이 짧아 낮게 나온다 | Σ cancels ÷ Σ applies (daily_event·monthly_summary, 신청일 기준 원장) | 기간 신청(원장) | `daily_event.cancels`, `daily_event.applies`, `monthly_summary.cancels`, `monthly_summary.applies` | 행사·가격대별 취소 위험 비교. 흐름 보기 취소율(C06, 취소일 기준)과 분자 기준이 다르다 |
 
 `funnel_daily` 의 단계는 누적 조건이다. 방문 → +행사 상세 → +로그인 상태(회원 ID 가 실린 방문 세션, 그날 가입 포함) → +신청 화면 → +결제. 같은 날 안에서 판정하며 뒤 단계는 앞 단계보다 클 수 없다.
 
@@ -143,8 +144,8 @@ B2B 는 결제 표가 아니라 계약 표에서 월 이용료로 계산한다. 
 | S02 | 신규 구독 | 회원 | 건 | 기간 안 시작한 구독 건수 | Σ new_subscribers | — | `daily_subscription.new_subscribers` | 구독 획득 |
 | S03 | 구독 해지 | 회원 | 건 | 기간 안 끝난 구독 건수 | Σ churned_subscribers | — | `daily_subscription.churned_subscribers` | 구독 이탈 |
 | S04 | 구독 MRR | 회원 | 원 | 기간 마지막 날 활성 구독자 × 월 요금 | mrr (기간 끝일) | — | `daily_subscription.mrr` | 월 반복 매출 규모 |
-| S05 | 월 이탈률 | 회원 | 명 | 기간 해지를 기간 시작일 활성 구독자로 나눠 30일로 환산 | Σ churned_subscribers ÷ active_subscribers(기간 시작일) × 30 ÷ 기간 일수 | 기간 시작일 활성 구독자 | `daily_subscription.churned_subscribers`, `daily_subscription.active_subscribers` | 구독 유지력 — 시나리오 기준 월 6% |
-| S06 | 구독 회원 결제 전환 | 회원 | 사람 | 구독 중 방문한 회원 중 티켓을 결제한 사람(비구독 회원과 비교) | 고유(member ∧ subscribed ∧ paid) ÷ 고유(member ∧ subscribed ∧ visited) | 구독 중 방문한 회원 | `person_day.flags(subscribed)`, `person_day.flags(paid)` | 구독이 결제를 늘리는가 |
+| S05 | 월 이탈률 | 회원 | % | 기간 해지를 기간 시작일 활성 구독자로 나눠 30일로 환산 | Σ churned_subscribers ÷ active_subscribers(기간 시작일) × 30 ÷ 기간 일수 | 기간 시작일 활성 구독자 | `daily_subscription.churned_subscribers`, `daily_subscription.active_subscribers` | 구독 유지력 — 시나리오 기준 월 6% |
+| S06 | 구독자 vs 비구독 회원 결제 | 회원 | 사람 | 구독 중 방문한 회원 중 티켓을 결제한 사람(비구독 회원과 비교) | 고유(member ∧ subscribed ∧ paid) ÷ 고유(member ∧ subscribed ∧ visited) | 구독 중 방문한 회원 | `person_day.flags(subscribed)`, `person_day.flags(paid)` | 구독이 결제를 늘리는가 |
 | S07 | 구독자 티켓 결제 금액 | 회원 | 원 | 구독 중인 사람이 결제한 티켓 순매출 | Σ subscriber_ticket_amount | — | `daily_subscription.subscriber_ticket_amount` | 구독자의 거래 기여 |
 
 구독은 회원만 가능하며 2025-12-01 출시. `person_day` 의 비트 32768 `subscribed` 가 그날 구독 활성 여부다. 구독자 vs 비구독 회원 비교는 member 코드인 날만 센다(한 사람이 기간 중 구독을 시작하면 양쪽에 모두 나타난다).
@@ -165,7 +166,7 @@ B2B 는 결제 표가 아니라 계약 표에서 월 이용료로 계산한다. 
 
 `daily_venue_registry` 의 `*_total`·`mrr_*` 은 그날 값이라 기간으로 더하지 않고 기간 마지막 날 값을 쓴다. `new_*`·`churned_*` 만 기간 합.
 
-`venue_registry` 는 기준일(`as_of_date`) 스냅샷이다. 파트너 판정은 `is_partner` 로만 한다 — 활성 계약이 없는 공간도 `plan`·계약일 열에 가장 최근 계약 값이 남는다. `status = closed` 공간은 지도·표에서 뺀다.
+`venue_registry` 는 기준일(`as_of_date`) 스냅샷이다. 파트너 판정은 `is_partner` 로만 한다 — 활성 계약이 없는 공간도 `plan`·계약일 열에 가장 최근 계약 값이 남는다. `status = closed` 공간은 지도·파트너 공간 표에서 뺀다. 상권별 표의 등록 수는 등록 공간 타일(`registered_total`, 폐업 포함 누적)과 맞추려고 폐업 공간을 포함한다.
 
 `daily_venue_registry` 의 축은 상권(`region`) 하나라 공간 탭 스코어보드·추이는 상권 선택만 받는다. 장르·파트너 여부는 기준일 스냅샷 `venue_registry` 를 쓰는 지도 카드 안에서만 고른다.
 
@@ -175,11 +176,11 @@ B2B 는 결제 표가 아니라 계약 표에서 월 이용료로 계산한다. 
 |---|---|---|---|---|---|---|---|---|
 | A01 | 채널별 방문 세션 | 유입·광고 | 세션 | 세션 라스트클릭 채널별 방문 세션 | Σ sessions (channel1~3) | — | `daily_channel.sessions` | 유입 구성 |
 | A02 | 광고 세션 비중 | 유입·광고 | 세션 | 방문 세션 중 광고(paid) 세션 | Σ sessions(channel1 = paid) ÷ Σ sessions | 방문 세션 | `daily_channel.sessions`, `daily_channel.channel1` | 광고 의존도 |
-| A03 | 채널별 신규 유입 | 유입·광고 | 사람 | 그 채널 세션이 첫 방문인 사람 | Σ new_persons | — | `daily_channel.new_persons` | 새 사람을 데려오는 채널 |
+| A03 | 채널별 신규 방문자 | 유입·광고 | 사람 | 그 채널 세션이 첫 방문인 사람 | Σ new_persons | — | `daily_channel.new_persons` | 새 사람을 데려오는 채널 |
 | A04 | CTR | 유입·광고 | 건 | 노출 대비 클릭 | Σ clicks ÷ Σ impressions | 노출 | `daily_ad.clicks`, `daily_ad.impressions` | 소재 반응 |
 | A05 | 가입당 비용(CAC) | 유입·광고 | 원 | 광고비를 광고 세션 안 가입으로 나눈 값 | Σ spend ÷ Σ signups | 광고 세션 안 가입 | `daily_ad.spend`, `daily_ad.signups` | 회원 한 명을 사는 비용(보수적) |
-| A06 | ROAS | 유입·광고 | 배 | 광고 세션 안 결제 금액 ÷ 광고비 | Σ pay_amount ÷ Σ spend | 광고비 | `daily_ad.pay_amount`, `daily_ad.spend` | 광고비 회수 |
-| A07 | 캠페인 방문자 · 활성 방문자 | 유입·광고 | 사람(일 합) | 광고 방문 세션(활성 세션)을 가진 사람 | Σ persons, Σ active_persons | — | `daily_ad.persons`, `daily_ad.active_persons` | 캠페인 유입 품질 |
+| A06 | ROAS | 유입·광고 | % | 광고 세션 안 결제 금액 ÷ 광고비 | Σ pay_amount ÷ Σ spend | 광고비 | `daily_ad.pay_amount`, `daily_ad.spend` | 광고비 회수 |
+| A07 | 캠페인 비교 | 유입·광고 | 원 · 건 · % | 캠페인별 집행·유입·행동을 한 줄로 비교(행 클릭 = 캠페인 선택) | 캠페인별 Σ spend·clicks·sessions·signups·pay_amount, CTR = clicks ÷ impressions, CAC = spend ÷ signups, ROAS = pay_amount ÷ spend | — | `daily_ad.spend`, `daily_ad.impressions`, `daily_ad.clicks`, `daily_ad.sessions`, `daily_ad.signups`, `daily_ad.pay_amount` | 캠페인끼리 비용 효율을 같은 기간 기준으로 비교 |
 | A08 | 광고비 | 유입·광고 | 원 | 캠페인 집행 금액 | Σ spend | — | `daily_ad.spend` | 집행 규모 |
 | A09 | 노출 · 클릭 | 유입·광고 | 건 | 광고 리포트의 노출·클릭 | Σ impressions, Σ clicks | — | `daily_ad.impressions`, `daily_ad.clicks` | 집행 도달 |
 | A10 | 광고 세션 | 유입·광고 | 세션 | 캠페인 라스트클릭 방문 세션 | Σ sessions | 클릭(클릭 대비 세션) | `daily_ad.sessions` | 클릭이 방문으로 이어지는 정도 |
@@ -189,4 +190,4 @@ B2B 는 결제 표가 아니라 계약 표에서 월 이용료로 계산한다. 
 
 광고 귀속은 광고 세션 안에서 일어난 가입·결제만 센다. 이후 다른 채널로 돌아와 전환한 경우는 포함하지 않으므로 CAC 는 보수적(높게), ROAS 는 낮게 나온다.
 
-채널 규칙(`channel1` paid/non_paid, `channel2` 유입 유형, `channel3` 플랫폼)의 원본은 `bigquery/sql/01_map_channel.sql` 하나다.
+채널 규칙(`channel1` paid/non_paid, `channel2` 유입 유형, `channel3` 소스)의 원본은 `bigquery/sql/01_map_channel.sql` 하나다.

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import type { Wait } from '../lib/source'
+import { retryFailed, type Wait } from '../lib/source'
 import MetricHelp from './MetricHelp'
 
 export function Segmented<T extends string>({
@@ -121,8 +121,19 @@ export function Pending({ wait, h = 240, w = 'w-full', inline = false }: { wait:
   const Tag = inline ? 'span' : 'div'
   if (wait === 'error')
     return (
-      <Tag className={`${inline ? 'inline' : 'flex items-center'} text-sm text-muted`} style={inline ? undefined : { minHeight: Math.min(h, 22) }}>
-        불러오지 못함
+      <Tag
+        data-pending="error"
+        className={`${inline ? 'inline-flex' : 'flex'} flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted`}
+        style={inline ? undefined : { minHeight: Math.min(h, 22) }}
+      >
+        <span className="whitespace-nowrap">불러오지 못함</span>
+        <button
+          type="button"
+          onClick={retryFailed}
+          className="whitespace-nowrap rounded border border-line px-1.5 text-xs leading-5 text-ink2 hover:text-ink"
+        >
+          다시 시도
+        </button>
       </Tag>
     )
   return <Tag data-pending="loading" className={`${inline ? 'inline-block align-middle' : 'block'} ${w} animate-pulse rounded-md bg-wash`} style={{ height: h }} />

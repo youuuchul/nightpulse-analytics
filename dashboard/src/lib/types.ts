@@ -226,7 +226,7 @@ export interface Meta {
 
 export interface Data {
   meta: Meta
-  files: Partial<Record<LazyKey | 'person_day_meta', string>>
+  files: Partial<Record<LazyKey | 'person_day_meta' | 'person_day_gz', string>>
   daily_metrics: DailyMetric[]
   daily_ad: DailyAd[]
   funnel_daily: FunnelDaily[]

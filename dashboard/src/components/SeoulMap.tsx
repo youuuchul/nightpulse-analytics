@@ -65,22 +65,23 @@ export default function SeoulMap({ venues }: { venues: VenueRegistry[] }) {
         return { v, x, y, r: 3 + 9 * Math.sqrt(v.detail_viewers_28d / max) }
       })
       .sort((a, b) => Number(a.v.is_partner) - Number(b.v.is_partner) || b.r - a.r)
-    const agg = new Map<string, { x: number; y: number; n: number }>()
+    const agg = new Map<string, Dot[]>()
     for (const d of ds) {
       if (d.v.region === '기타') continue
-      const z = agg.get(d.v.region) ?? { x: 0, y: 0, n: 0 }
-      z.x += d.x
-      z.y += d.y
-      z.n++
+      const z = agg.get(d.v.region) ?? []
+      z.push(d)
       agg.set(d.v.region, z)
     }
+    // 라벨은 상권 점 무리의 위(막히면 아래) 가장자리 바깥에 둔다. 가장자리는 외곽 5% 를 뺀 분위로 잡는다.
+    const q = (v: number[], p: number) => v.sort((a, b) => a - b)[Math.min(v.length - 1, Math.floor(p * v.length))]
     const placed: { name: string; x: number; y: number; w: number }[] = []
-    for (const [name, z] of [...agg.entries()].filter(([, z]) => z.n >= 5).sort((a, b) => b[1].n - a[1].n)) {
+    for (const [name, z] of [...agg.entries()].filter(([, z]) => z.length >= 5).sort((a, b) => b[1].length - a[1].length)) {
       const short = name.split('·')[0]
       const w = short.length * 17 + 8
-      const x = z.x / z.n
-      const cy = z.y / z.n
-      const y = [cy - 26, cy + 36].find((yy) => placed.every((p) => Math.abs(p.x - x) > (p.w + w) / 2 || Math.abs(p.y - yy) > 22))
+      const x = z.reduce((a, d) => a + d.x, 0) / z.length
+      const top = q(z.map((d) => d.y - d.r), 0.05) - 8
+      const bottom = q(z.map((d) => d.y + d.r), 0.95) + 20
+      const y = [top, bottom].find((yy) => placed.every((p) => Math.abs(p.x - x) > (p.w + w) / 2 || Math.abs(p.y - yy) > 22))
       if (y != null) placed.push({ name: short, x, y, w })
     }
     return { dots: ds, labels: placed }

@@ -178,7 +178,7 @@ function EventList({ data, s, range }: TabProps) {
         <Tile metricId="E07" label="조회된 행사" value={num(list.length)} unit="건" wait={ew} />
         <Tile metricId="C11" label="신청" value={num(tot.applies)} unit="건" wait={ew} />
         <Tile metricId="C13" label="결제 금액" value={won(tot.pay_amount)} unit="원" sub={`결제 ${num(tot.pay_count)}건`} wait={ew} />
-        <Tile metricId="C06" label="취소율" value={pct(ratio(tot.cancels, tot.applies))} sub={`신청 ${num(tot.applies)}건 중`} wait={ew} />
+        <Tile metricId="C21" label="신청분 취소율" value={pct(ratio(tot.cancels, tot.applies))} sub={`신청 ${num(tot.applies)}건 중`} wait={ew} />
       </TileRow>
       {!range.oneDay && (
         <Card title="결제 금액 추이" meta={`${grain(trend.weekly)} · 원`} wait={ew} waitH={220}>
@@ -192,7 +192,7 @@ function EventList({ data, s, range }: TabProps) {
           />
         </Card>
       )}
-      <Card title="행사별 성과" metricId="E04" meta={`${list.length}건`} wait={ew}>
+      <Card title="행사별 성과" metricId="E04" meta={`${num(list.length)}건`} wait={ew}>
         <DataTable cols={cols} rows={list} sortKey="applies" rowKey={(r) => String(r.event_id)} />
       </Card>
     </div>

@@ -1,16 +1,16 @@
 # NightPulse 합성 데이터 MANIFEST (실제 서비스 데이터 아님)
 seed: 20260923
-args: weeks=52 persons=80000 end_date=2026-09-20
-generated_at_utc: 2026-09-23 15:11:20
-elapsed_sec: 265.9
+args: weeks=52 persons=210000 end_date=2026-09-20
+generated_at_utc: 2026-09-23 16:27:08
+elapsed_sec: 269.6
 
 file	rows	sha256
-raw/ads_spend.csv	153	be88266a2fb3e2eea3ca9b9258fba5778ed1c5668b5622ea7bed199f95a60a06
-raw/db_applications.csv	77786	bf75d51f2d3050bd9cf5f2a7f3c85ba1f2469d19fc9bf2d5c26ed09ad9a14f0f
-raw/db_events.csv	2402	75af061dcb7882e3e5795876953f40bf371bb30ec76360c0620407411c28a325
-raw/db_members.csv	7462	7eacf206297647bf619ef7310ba29f584f543075be648a263a9bb3cb5ec9c5ed
-raw/db_payments.csv	54656	5af1b396a3f3728b32b264ba7564bc8dd664c422303399f22dc5cfb86058552d
-raw/db_subscriptions.csv	2466	acd658ffa1df2166aa21d98d5efddefd4514e90ab3cc549fcbc69c2b4f6f7ae1
+raw/ads_spend.csv	153	5979f4607077fed2c2ae1386fce01b187668032c95c29f04d74cc61d59ef3e50
+raw/db_applications.csv	64663	e2f6122e021ef7898e54d01ae644bc8b4cccf0cbe0714af2ce8d34b5978ecac4
+raw/db_events.csv	2812	c267f53a255e1fc813a8316f377dcbb1bb8b19b4fe03188644ed9b5b2327c28b
+raw/db_members.csv	22008	a08151909442046bd70ad24e58ddfc5ce1da436a0116adc0bc7b452fbeef0748
+raw/db_payments.csv	47078	80865235e9e5e0dcff2964be2bba196581d251793ebc5fdfb9b3274e3d634802
+raw/db_subscriptions.csv	2422	56658ef26ef0fb6f7b01138616474a824d041fd3e62868912f60011e900705ff
 raw/db_venue_contracts.csv	200	8571a8aebd87c6cf0bc2afbdad5d53b958abd99163e758031b4fbcbd3b979a5a
 raw/db_venues.csv	1800	9a586226ff9664da977aaf4064e2663cbdc21704b1372fede6440ebf995d069e
-raw/ga4_events.ndjson.gz	8265295	313f844e05494653d791fed2c3d5c185f12744cf32f45b9489ae4f13ef997ba1
+raw/ga4_events.ndjson.gz	9642756	3970774ad0beeb4399c7591b8017b1aed3b0eb498e3deff2c6929448403c0ee0

@@ -5,7 +5,7 @@
 -- 원천: raw.db_payments·db_applications·db_subscriptions·db_venues,
 --       staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
 --       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day,
---       marts.daily_revenue·daily_subscription·daily_venue_registry
+--       marts.daily_revenue·daily_subscription·daily_venue_registry·daily_event·venue_registry
 -- 소비: load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1
 --
 -- 표 정의는 sql/00_ops_tables.sql.
@@ -281,6 +281,30 @@ integrity AS (
        FROM staging.fct_order
        WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31' AND kind = 'ticket') AS orphan_orders
 ),
+-- C12 신청 건수·결제 금액: 일 마트(로그, 세션 시작일) vs 행사 마트(원장, 신청일). 날짜 귀속이 달라 기간 합은
+--     자정을 넘긴 세션만큼 어긋날 수 있지만 전 기간 합은 같아야 한다 (대시보드 개요·흐름 vs 행사별 보기)
+c12 AS (
+  SELECT
+    (SELECT SUM(applies) FROM marts.daily_metrics WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS dm_applies,
+    (SELECT SUM(applies) FROM marts.daily_event WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS de_applies,
+    (SELECT SUM(pay_amount) FROM marts.daily_metrics WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS dm_amount,
+    (SELECT SUM(pay_amount) FROM marts.daily_event WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31') AS de_amount
+),
+-- C13 기준일 파트너 공간: 상권 마트 마지막 날 합 vs 공간 스냅샷 is_partner (대시보드 공간 탭 타일 vs 지도·표)
+c13 AS (
+  SELECT
+    (SELECT SUM(partner_total) FROM marts.daily_venue_registry
+      WHERE kst_date = (SELECT MAX(kst_date) FROM marts.daily_venue_registry
+                        WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31')) AS mart_v,
+    (SELECT COUNTIF(is_partner) FROM marts.venue_registry) AS snap_v
+),
+-- R9 세션 시작일과 다른 날에 일어난 신청 비중 (C12 기간 차이의 크기)
+cross_day AS (
+  SELECT COUNTIF(e.kst_date != s.session_date) AS cross_n, COUNT(*) AS all_n
+  FROM staging.events_clean AS e
+  JOIN staging.int_session AS s USING (client_id, session_id)
+  WHERE e.kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31' AND e.event_name = 'apply_event'
+),
 checks AS (
   SELECT 'C1a' AS check_id, 'reconcile' AS category, '결제 건수: 로그 vs 원장' AS check_name,
          'events_clean purchase' AS left_label, CAST(l.purchases AS FLOAT64) AS left_value,
@@ -399,6 +423,26 @@ checks AS (
   SELECT 'I4', 'integrity', '행사 원장에 없는 신청', '고아 신청', orphan_orders, NULL, NULL,
          orphan_orders, 0, 0, NULL
   FROM integrity
+  UNION ALL
+  SELECT 'C12a', 'reconcile', '신청 건수 전 기간: 일 마트(로그) vs 행사 마트(원장)',
+         'daily_metrics applies 합', dm_applies, 'daily_event applies 합', de_applies,
+         ABS(dm_applies - de_applies), 0, 0, NULL
+  FROM c12
+  UNION ALL
+  SELECT 'C12b', 'reconcile', '결제 금액 전 기간: 일 마트(로그) vs 행사 마트(원장)',
+         'daily_metrics pay_amount 합', dm_amount, 'daily_event pay_amount 합', de_amount,
+         ABS(dm_amount - de_amount), 0, 0, NULL
+  FROM c12
+  UNION ALL
+  SELECT 'C13', 'reconcile', '기준일 파트너 공간: 상권 마트 vs 공간 스냅샷',
+         'daily_venue_registry partner_total (마지막 날 합)', mart_v, 'venue_registry is_partner 수', snap_v,
+         ABS(mart_v - snap_v), 0, 0, NULL
+  FROM c13
+  UNION ALL
+  SELECT 'R9', 'range', '세션 시작일과 다른 날의 신청 (자정 넘긴 세션)',
+         '다른 날 신청', cross_n, '전체 신청', all_n,
+         SAFE_DIVIDE(cross_n, all_n), 0, 0.02, NULL
+  FROM cross_day
 )
 SELECT
   @run_id,

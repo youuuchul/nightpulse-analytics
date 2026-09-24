@@ -44,12 +44,15 @@ function MemberView({ data, s, range }: TabProps) {
     }))
     const b = bucketed(rows, ['member', 'guest'], range)
     if (!b.weekly || !pd) return b
-    const u = uniquePersons(pd, range.from, range.to, F.visited, { ch: s.ch, pf: s.pf, ms: s.ms }, (r) => [
-      `${mondayOf(addDays(range.from, r.off))}|${r.member_seg}`,
-    ])
+    // 주마다 따로 센다: 사람은 그 주 안 마지막 방문일의 회원 여부로 귀속된다(주 안에서 회원 + 비회원 = 주 방문자)
     return {
       weekly: true,
-      rows: b.rows.map((r) => ({ ...r, member: u.get(`${r.date}|member`) ?? 0, guest: u.get(`${r.date}|guest`) ?? 0 })),
+      rows: b.rows.map((r) => {
+        const a = r.date < range.from ? range.from : r.date
+        const e = addDays(r.date, 6) > range.to ? range.to : addDays(r.date, 6)
+        const u = uniquePersons(pd, a, e, F.visited, { ch: s.ch, pf: s.pf, ms: s.ms }, (x) => [x.member_seg])
+        return { ...r, member: u.get('member') ?? 0, guest: u.get('guest') ?? 0 }
+      }),
     }
   }, [data, pd, m, range])
 
@@ -163,7 +166,7 @@ function MemberView({ data, s, range }: TabProps) {
               xFormat={(v) => String(v)}
               kind="line"
               decimals
-              yFormat={(v) => `${Math.round(v * 100)}%`}
+              yFormat={(v) => `${+(v * 100).toFixed(1)}%`}
               valueFormat={(v) => pct(v)}
               series={[{ key: 'rate', label: '재방문', color: S(1) }]}
               height={260}

@@ -62,6 +62,13 @@ export function pdSpan(pd: PersonDay, lo: number, hi: number): [number, number] 
 /**
  * 기간·세그먼트 안에서 flag 를 가진 고유 사람 수를 그룹별로 센다.
  *
+ * 세그먼트 귀속(`by`):
+ *   - 'last'(기본): 사람마다 기간 안에서 flag 를 가진 마지막 날의 세그먼트 값 하나로 귀속한다.
+ *     세그먼트 필터와 groups 에 넘기는 row 의 channel1·device_platform·member_seg 가 그 값이다
+ *     (off 는 각 행의 실제 날짜). 그래서 세그먼트 값별 수를 더하면 전체와 같다(분할).
+ *     기간 중 가입한 사람은 회원으로 센다.
+ *   - 'day': 그날 행의 값. 한 사람이 기간 중 여러 값을 가지면 양쪽에 모두 세어진다.
+ *
  * Args:
  *   pd: person_day.bin 을 읽은 것.
  *   from: 기간 시작일(YYYY-MM-DD).
@@ -69,6 +76,7 @@ export function pdSpan(pd: PersonDay, lo: number, hi: number): [number, number] 
  *   flag: 비트 플래그(F 의 값).
  *   seg: 세그먼트 필터 상태('all' 이면 미적용).
  *   groups: 행 → 그룹 키 목록. off 는 from 기준 일수. 기본은 '' 하나(기간 전체).
+ *   by: 세그먼트 귀속 규칙.
  *
  * Returns:
  *   그룹 키 → 고유 사람 수.
@@ -80,20 +88,25 @@ export function uniquePersons(
   flag: number,
   seg: SegState,
   groups: (r: PersonRow) => string[] = () => [''],
+  by: 'last' | 'day' = 'last',
 ): Map<string, number> {
   const lo = diffDays(pd.base_date, from)
   const hi = diffDays(pd.base_date, to)
   const [i0, i1] = pdSpan(pd, lo, hi)
   const w = pd.w
+  const last = new Map<number, number>()
+  if (by === 'last')
+    for (let i = i0; i < i1; i++) if (pdFlags(w[2 * i + 1]) & flag) last.set(pdKey(w[2 * i]), i)
   const sets = new Map<string, Set<number>>()
   const row: PersonRow = { off: 0, channel1: '', device_platform: '', member_seg: '' }
   for (let i = i0; i < i1; i++) {
     const a = w[2 * i]
-    const b = w[2 * i + 1]
-    if ((pdFlags(b) & flag) === 0) continue
-    row.channel1 = pd.codes.c[pdCh(a)]
-    row.device_platform = pd.codes.p[pdPf(a)]
-    row.member_seg = pd.codes.m[pdMs(b)]
+    if ((pdFlags(w[2 * i + 1]) & flag) === 0) continue
+    const j = by === 'last' ? last.get(pdKey(a))! : i
+    const sa = w[2 * j]
+    row.channel1 = pd.codes.c[pdCh(sa)]
+    row.device_platform = pd.codes.p[pdPf(sa)]
+    row.member_seg = pd.codes.m[pdMs(w[2 * j + 1])]
     if (seg.ch !== 'all' && row.channel1 !== seg.ch) continue
     if (seg.pf !== 'all' && row.device_platform !== seg.pf) continue
     if (seg.ms !== 'all' && row.member_seg !== seg.ms) continue
