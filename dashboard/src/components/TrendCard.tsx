@@ -16,6 +16,17 @@ export interface TrendMetric<D, H> {
   value: (r: D) => number
   hour?: (r: H) => number
   format?: (v: number) => string
+  /** 버킷 값: sum = 버킷 합(기본), last = 버킷 안 마지막 행이 있는 날의 값(잔액형 일별 값). */
+  bucketAgg?: 'sum' | 'last'
+}
+
+/** 분해 타일 대신 쓰는 고정 타일. 값이 null 이면 `—`. */
+export interface FixedTile {
+  label: string
+  unit: string
+  cur: number | null
+  prev: number | null
+  format?: (v: number) => string
 }
 
 type Grain = 'auto' | 'hour' | 'day' | 'week' | 'month'
@@ -105,8 +116,8 @@ export function buckets(range: Range, g: 'day' | 'week' | 'month'): Bucket[] {
   return out
 }
 
-export function change(cur: number, prev: number | null): number | null {
-  return prev == null || prev === 0 ? null : cur / prev - 1
+export function change(cur: number | null, prev: number | null): number | null {
+  return cur == null || prev == null || prev === 0 ? null : cur / prev - 1
 }
 
 export function DeltaMark({ v, suffix }: { v: number | null; suffix?: string }) {
@@ -163,13 +174,13 @@ interface Point {
   i: number
   x: string
   partial?: boolean
-  cur: number
+  cur: number | null
   prev: number | null
-  cur2?: number
+  cur2?: number | null
   prev2?: number | null
 }
 
-export default function TrendCard<D extends Seg & { kst_date: string }, H extends Seg & { kst_date: string; kst_hour: number }>({
+export default function TrendCard<D extends Partial<Seg> & { kst_date: string }, H extends Seg & { kst_date: string; kst_hour: number }>({
   title,
   metrics,
   daily,
@@ -183,6 +194,8 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   personWait = null,
   hourWait = null,
   axes,
+  fixedTiles,
+  gaps = false,
 }: {
   title: string
   metrics: [TrendMetric<D, H>] | [TrendMetric<D, H>, TrendMetric<D, H>]
@@ -197,6 +210,10 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   personWait?: Wait
   hourWait?: Wait
   axes?: Axis[]
+  /** 주면 분해 타일·분해 선택기 대신 이 타일을 보여 준다(세그먼트 축이 없는 마트). */
+  fixedTiles?: FixedTile[]
+  /** true 면 행이 하나도 없는 버킷을 0 대신 빈 값으로 두어 선을 끊는다. */
+  gaps?: boolean
 }) {
   const [pick, setPick] = useState<Grain>('auto')
   const shown = axes ? AXES.filter((a) => axes.includes(a.id)) : AXES
@@ -210,7 +227,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
   const fixed: Record<Axis, boolean> = { ms: seg.ms !== 'all', ch: seg.ch !== 'all', pf: seg.pf !== 'all' }
   const axis = fixed[axisPick] || !shown.some((a) => a.id === axisPick) ? shown.find((a) => !fixed[a.id])?.id : axisPick
 
-  const segOk = (r: Seg) =>
+  const segOk = (r: Partial<Seg>) =>
     (seg.ch === 'all' || r.channel1 === seg.ch) &&
     (seg.pf === 'all' || r.device_platform === seg.pf) &&
     (seg.ms === 'all' || r.member_seg === seg.ms)
@@ -225,7 +242,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
       z.a += v
       if (second) z.b += second.value(r)
       for (const ax of AXES) {
-        const k = `${ax.id}:${r[ax.field]}`
+        const k = `${ax.id}:${(r as Partial<Seg>)[ax.field]}`
         z.parts[k] = (z.parts[k] ?? 0) + v
       }
     }
@@ -276,41 +293,42 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
         uniquePersons(pd, from, to, main.flag!, seg, (r) => [`${pre}${at[r.off]}`])
       uniq = new Map([...byBucket(range.prevFrom, range.prevTo, 'p'), ...byBucket(range.from, range.to, 'c')])
     }
-    const points = bks.map((b, i) => {
+    const last = main.bucketAgg === 'last'
+    const agg = (from: string, to: string) => {
       let a = 0
       let b2 = 0
-      let pa = 0
-      let pb = 0
-      for (const d of eachDay(b.from, b.to)) {
+      let n = 0
+      for (const d of eachDay(from, to)) {
         const z = byDay.get(d)
-        const pz = byDay.get(addDays(d, -range.days))
-        if (z) {
-          a += z.a
-          b2 += z.b
-        }
-        if (pz) {
-          pa += pz.a
-          pb += pz.b
-        }
+        if (!z) continue
+        a = last ? z.a : a + z.a
+        b2 += z.b
+        n++
       }
+      return gaps && n === 0 ? { a: null, b: null } : { a, b: b2 }
+    }
+    const points = bks.map((b, i) => {
+      const c = agg(b.from, b.to)
+      const p = agg(addDays(b.from, -range.days), addDays(b.to, -range.days))
       if (uniq) {
-        a = uniq.get(`c${i}`) ?? 0
-        pa = uniq.get(`p${i}`) ?? 0
+        c.a = uniq.get(`c${i}`) ?? 0
+        p.a = uniq.get(`p${i}`) ?? 0
       }
       return {
         i,
         x: b.label,
         partial: b.partial,
-        cur: a,
-        prev: hasPrev ? pa : null,
-        cur2: second ? b2 : undefined,
-        prev2: second && hasPrev ? pb : null,
+        cur: c.a,
+        prev: hasPrev ? p.a : null,
+        cur2: second ? c.b : undefined,
+        prev2: second && hasPrev ? p.b : null,
       }
     })
     return { points, bks }
-  }, [grain, byDay, hourly, range.from, range.to, range.days, range.prevFrom, hasPrev, seg.ch, seg.pf, seg.ms, main, second, pd])
+  }, [grain, byDay, hourly, range.from, range.to, range.days, range.prevFrom, hasPrev, seg.ch, seg.pf, seg.ms, main, second, pd, gaps])
 
-  const tiles = useMemo(() => {
+  const tiles = useMemo((): FixedTile[] => {
+    if (fixedTiles) return fixedTiles
     const total = (k: string | null, shift: number) => {
       let v = 0
       for (const d of eachDay(addDays(range.from, -shift), addDays(range.to, -shift))) {
@@ -335,11 +353,10 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
     return keys.map(({ label, k }) => {
       const cur = uc ? uc.get(k ?? 'all') ?? 0 : total(k, 0)
       const prev = !hasPrev ? null : up ? up.get(k ?? 'all') ?? 0 : total(k, range.days)
-      return { label, cur, delta: change(cur, prev) }
+      return { label, unit: main.unit, cur, prev, format: main.format }
     })
-  }, [byDay, axis, range.from, range.to, range.days, range.prevFrom, range.prevTo, hasPrev, pd, seg.ch, seg.pf, seg.ms])
+  }, [fixedTiles, byDay, axis, range.from, range.to, range.days, range.prevFrom, range.prevTo, hasPrev, pd, seg.ch, seg.pf, seg.ms])
 
-  const unit = main.unit
   const spanOf = (a: string, b: string) =>
     a === b ? md(a) : a.slice(0, 4) === b.slice(0, 4) ? `${md(a)}~${md(b)}` : `${a}~${b}`
   const span = spanOf(range.from, range.to)
@@ -398,12 +415,14 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
               options={grainOptions}
             />
           )}
-          <MiniSeg
-            label="분해"
-            value={(axis ?? shown[0].id) as Axis}
-            onChange={setAxis}
-            options={shown.map((a) => ({ value: a.id, label: a.label, disabled: fixed[a.id] }))}
-          />
+          {!fixedTiles && (
+            <MiniSeg
+              label="분해"
+              value={(axis ?? shown[0].id) as Axis}
+              onChange={setAxis}
+              options={shown.map((a) => ({ value: a.id, label: a.label, disabled: fixed[a.id] }))}
+            />
+          )}
         </div>
       </header>
 
@@ -486,7 +505,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
                               <span className="inline-block h-2 w-2 rounded-sm" style={{ background: S(1) }} />
                               {main.label}
                             </span>
-                            <span className="tnum font-medium text-ink">{fmt(p.cur)}</span>
+                            <span className="tnum font-medium text-ink">{p.cur == null ? '—' : fmt(p.cur)}</span>
                           </div>
                           {hasPrev && (
                             <>
@@ -505,7 +524,7 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
                                 {second!.label}
                               </span>
                               <span className="tnum text-ink">
-                                <span className="font-medium">{f2(p.cur2)}</span>
+                                <span className="font-medium">{p.cur2 == null ? '—' : f2(p.cur2)}</span>
                                 {hasPrev && (
                                   <span className="ml-1.5 text-[11px]">
                                     <DeltaMark v={change(p.cur2, p.prev2 ?? null)} />
@@ -567,12 +586,14 @@ export default function TrendCard<D extends Seg & { kst_date: string }, H extend
             <div key={t.label} className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
               <div className="truncate text-xs text-ink2">{t.label}</div>
               <div className="flex items-baseline gap-1">
-                <span className="tnum text-lg font-semibold leading-tight text-ink">{fmt(t.cur)}</span>
-                <span className="text-[11px] text-muted">{unit}</span>
+                <span className="tnum text-lg font-semibold leading-tight text-ink">
+                  {t.cur == null ? '—' : (t.format ?? num)(t.cur)}
+                </span>
+                {t.cur != null && <span className="text-[11px] text-muted">{t.unit}</span>}
               </div>
               {hasPrev && (
                 <div className="text-[11px]">
-                  <DeltaMark v={t.delta} />
+                  <DeltaMark v={change(t.cur, t.prev)} />
                 </div>
               )}
             </div>

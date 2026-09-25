@@ -5,7 +5,7 @@ import { num, won } from '../lib/format'
 import { F, uniquePersons } from '../lib/persons'
 import { ready, useTable, waitOf } from '../lib/source'
 import type { DailyMetric, DailySubscription, HourlyMetric } from '../lib/types'
-import TrendCard, { type TrendMetric } from '../components/TrendCard'
+import TrendCard, { type FixedTile, type TrendMetric } from '../components/TrendCard'
 import RevenueCard from '../components/RevenueCard'
 import { sumRevenue } from '../lib/revenue'
 import { Pending, SectionTitle, Tile, TileRow } from '../components/ui'
@@ -25,16 +25,32 @@ const KEYS = [
 type M = TrendMetric<DailyMetric, HourlyMetric>
 
 const VISITORS: [M] = [{ label: '방문자', unit: '명', flag: F.visited, value: (r) => r.persons, hour: (r) => r.persons }]
-const ENGAGED: [M] = [{ label: '활성 세션', unit: '세션', value: (r) => r.engaged_sessions }]
 const NEW_SIGNUP: [M, M] = [
   { label: '신규 방문자', unit: '명', value: (r) => r.new_persons },
   { label: '가입', unit: '명', value: (r) => r.signups },
 ]
-const APPLY_PAY: [M, M] = [
-  { label: '신청', unit: '건', value: (r) => r.applies, hour: (r) => r.applies },
+const PAY: [M, M] = [
   { label: '결제', unit: '건', value: (r) => r.pay_count, hour: (r) => r.pay_count },
+  { label: '신청', unit: '건', value: (r) => r.applies, hour: (r) => r.applies },
 ]
-const AMOUNT: [M] = [{ label: '결제 금액', unit: '원', value: (r) => r.pay_amount, format: won }]
+type SM = TrendMetric<DailySubscription, HourlyMetric>
+const SUBS: [SM, SM] = [
+  { label: '활성 구독자', unit: '명', value: (r) => r.active_subscribers, bucketAgg: 'last' },
+  { label: '신규 구독', unit: '건', value: (r) => r.new_subscribers },
+]
+
+/** 기간 [from, to] 의 구독 행 합(신규·해지). 행이 없으면 null. */
+function subSum(rows: DailySubscription[] | undefined, from: string, to: string) {
+  let n = 0
+  const z = { new: 0, churned: 0 }
+  for (const r of rows ?? []) {
+    if (r.kst_date < from || r.kst_date > to) continue
+    z.new += r.new_subscribers
+    z.churned += r.churned_subscribers
+    n++
+  }
+  return n ? z : null
+}
 
 /** 날짜 d 이하 마지막 날의 구독 행. */
 function subAt(rows: DailySubscription[] | undefined, d: string): DailySubscription | undefined {
@@ -97,6 +113,14 @@ export default function Overview({ data, s, set, range }: TabProps) {
   const subEnd = subAt(data.daily_subscription, range.to)
   const subPrev = subAt(data.daily_subscription, range.prevTo)
   const money = !segOn && rCur && rPrev ? { cur: rCur, prev: rPrev } : null
+  const sCur = subSum(data.daily_subscription, range.from, range.to)
+  const sPrev = subSum(data.daily_subscription, range.prevFrom, range.prevTo)
+  const subTiles: FixedTile[] = [
+    { label: '활성 구독자', unit: '명', cur: subEnd?.active_subscribers ?? null, prev: subPrev?.active_subscribers ?? null },
+    { label: '신규 구독', unit: '건', cur: sCur?.new ?? null, prev: sPrev?.new ?? null },
+    { label: '구독 해지', unit: '건', cur: sCur?.churned ?? null, prev: sPrev?.churned ?? null },
+    { label: 'MRR', unit: '원', cur: subEnd?.mrr ?? null, prev: subPrev?.mrr ?? null, format: won },
+  ]
 
   const card = {
     daily: data.daily_metrics,
@@ -167,17 +191,28 @@ export default function Overview({ data, s, set, range }: TabProps) {
 
       <SectionTitle>추이</SectionTitle>
       <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />
-      <TrendCard title="활성 세션" metrics={ENGAGED} {...card} />
       <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} axes={['ch', 'pf']} />
-      <TrendCard title="신청 · 결제" metrics={APPLY_PAY} {...card} />
-      <TrendCard title="결제 금액" metrics={AMOUNT} {...card} />
+      <TrendCard title="결제" metrics={PAY} {...card} />
       {!segOn && (
         <RevenueCard
+          title="플랫폼 매출 · 구성"
           rows={rev}
           range={range}
           dataFrom={data.meta.from_date}
           dataTo={data.meta.to_date}
           onDrill={card.onDrill}
+        />
+      )}
+      {!segOn && data.daily_subscription && (
+        <TrendCard
+          title="활성 구독자"
+          metrics={SUBS}
+          {...card}
+          daily={data.daily_subscription}
+          hourly={[]}
+          persons={undefined}
+          fixedTiles={subTiles}
+          gaps
         />
       )}
     </div>

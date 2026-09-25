@@ -46,6 +46,7 @@ const extras = [
   ['66_venues_region_1year', `tab=venues&p=365&sr=${encodeURIComponent('홍대·합정·연남')}`],
   ['67_venues_partner_genre', `tab=venues&sp=partner&sg=${encodeURIComponent('힙합')}`],
   ['68_overview_1year', 'tab=overview&p=365'],
+  ['86_overview_28_member', 'tab=overview&ms=member'],
   ['79_venues_1year', 'tab=venues&p=365'],
   ['80_members_subscription_1year', 'tab=members&view=subscription&p=365'],
 ]
@@ -165,9 +166,9 @@ try {
     await shoot('45_data_nocatalog', 'page=data', { noCatalog: true, wait: 'main' })
     await shoot('46_header_phone_about', 'page=about', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
     await shoot('53_overview_hover_left', 'tab=overview&p=90', { section: '방문자', hover: 0.08 })
-    await shoot('54_overview_hover_right', 'tab=overview&p=90', { section: '신청 · 결제', hover: 0.97 })
-    await shoot('55_overview_hover_day', 'tab=overview&p=7', { section: '결제 금액', hover: 0.5 })
-    await shoot('56_overview_hover_hour', 'tab=overview&p=1', { section: '신청 · 결제', hover: 0.6 })
+    await shoot('54_overview_hover_right', 'tab=overview&p=90', { section: '결제', hover: 0.97 })
+    await shoot('55_overview_hover_day', 'tab=overview&p=7', { section: '결제', hover: 0.5 })
+    await shoot('56_overview_hover_hour', 'tab=overview&p=1', { section: '결제', hover: 0.6 })
     await shoot('57_overview_hover_dark', 'tab=overview&p=365', { section: '방문자', hover: 0.9, scheme: 'dark' })
     await shoot('58_overview_hover_phone', 'tab=overview', { section: '방문자', hover: 0.9, viewport: { width: 390, height: 844 }, scale: 2 })
     await shoot('59_overview_drill_week', 'tab=overview&p=90', { drill: '방문자' })
@@ -179,7 +180,9 @@ try {
     await shoot('72_metrics_phone', 'page=metrics', { viewport: { width: 390, height: 844 }, scale: 2, wait: 'main section' })
     await shoot('73_metrics_dark', 'page=metrics', { scheme: 'dark', wait: 'main section' })
     await shoot('74_overview_help', 'tab=overview', { help: '플랫폼 매출', clip: true })
-    await shoot('75_overview_revenue_hover', 'tab=overview&p=365', { section: '매출 구성', hover: 0.8 })
+    await shoot('75_overview_revenue_hover', 'tab=overview&p=365', { section: '플랫폼 매출 · 구성', hover: 0.8 })
+    await shoot('84_overview_subs_hover_1year', 'tab=overview&p=365', { section: '활성 구독자', hover: 0.9 })
+    await shoot('85_overview_subs_hover_90', 'tab=overview&p=90', { section: '활성 구독자', hover: 0.5 })
     await shoot('76_members_subscription_dark', 'tab=members&view=subscription&p=365', { scheme: 'dark' })
     await shoot('78_venues_region_open', 'tab=venues', { expand: 'select >> nth=0', clip: true })
     await shoot('81_metrics_top', 'page=metrics', { wait: 'main section', clip: true })

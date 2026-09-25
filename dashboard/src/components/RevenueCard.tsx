@@ -30,6 +30,7 @@ export default function RevenueCard({
   dataTo,
   onDrill,
   tiles: withTiles = true,
+  title = '매출 구성',
 }: {
   rows?: DailyRevenue[]
   range: Range
@@ -37,6 +38,7 @@ export default function RevenueCard({
   dataTo: string
   onDrill: (p: { p: '1'; d: string } | { p: 'custom'; from: string; to: string }) => void
   tiles?: boolean
+  title?: string
 }) {
   const [pick, setPick] = useState<Grain>('auto')
   const hoverIdx = useRef<number | null>(null)
@@ -120,7 +122,7 @@ export default function RevenueCard({
       <header className="mb-3 flex min-h-8 flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex min-w-0 items-baseline gap-2">
           <h2 className="flex items-center text-[15px] font-semibold text-ink">
-            매출 구성
+            {title}
             <MetricHelp id="M05" />
           </h2>
           {rows && <span className="tnum truncate text-xs text-muted">{meta}</span>}
