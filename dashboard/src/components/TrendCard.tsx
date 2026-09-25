@@ -27,6 +27,8 @@ export interface FixedTile {
   cur: number | null
   prev: number | null
   format?: (v: number) => string
+  /** 낮을수록 좋은 지표(해지 등)면 true — 증가를 나쁜 색으로 */
+  lowerIsBetter?: boolean
 }
 
 type Grain = 'auto' | 'hour' | 'day' | 'week' | 'month'
@@ -120,10 +122,10 @@ export function change(cur: number | null, prev: number | null): number | null {
   return cur == null || prev == null || prev === 0 ? null : cur / prev - 1
 }
 
-export function DeltaMark({ v, suffix }: { v: number | null; suffix?: string }) {
+export function DeltaMark({ v, suffix, lowerIsBetter = false }: { v: number | null; suffix?: string; lowerIsBetter?: boolean }) {
   if (v == null || !Number.isFinite(v)) return <span className="text-muted">—{suffix ? ` ${suffix}` : ''}</span>
   const flat = Math.abs(v) < 0.0005
-  const color = flat ? 'var(--muted)' : v > 0 ? 'var(--good)' : 'var(--bad)'
+  const color = flat ? 'var(--muted)' : v > 0 !== lowerIsBetter ? 'var(--good)' : 'var(--bad)'
   return (
     <span className="tnum whitespace-nowrap">
       <span style={{ color }} className="font-medium">
@@ -593,7 +595,7 @@ export default function TrendCard<D extends Partial<Seg> & { kst_date: string },
               </div>
               {hasPrev && (
                 <div className="text-[11px]">
-                  <DeltaMark v={change(t.cur, t.prev)} />
+                  <DeltaMark v={change(t.cur, t.prev)} lowerIsBetter={t.lowerIsBetter} />
                 </div>
               )}
             </div>

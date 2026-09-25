@@ -118,7 +118,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
   const subTiles: FixedTile[] = [
     { label: '활성 구독자', unit: '명', cur: subEnd?.active_subscribers ?? null, prev: subPrev?.active_subscribers ?? null },
     { label: '신규 구독', unit: '건', cur: sCur?.new ?? null, prev: sPrev?.new ?? null },
-    { label: '구독 해지', unit: '건', cur: sCur?.churned ?? null, prev: sPrev?.churned ?? null },
+    { label: '구독 해지', unit: '건', cur: sCur?.churned ?? null, prev: sPrev?.churned ?? null, lowerIsBetter: true },
     { label: 'MRR', unit: '원', cur: subEnd?.mrr ?? null, prev: subPrev?.mrr ?? null, format: won },
   ]
 

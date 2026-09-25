@@ -12,6 +12,8 @@ export interface MetricDef {
   mart_columns: string[]
   why: string
   axis?: string
+  /** 'down' 이면 낮을수록 좋은 지표 — 증가를 나쁜 색으로 */
+  direction?: 'up' | 'down'
 }
 
 export interface TabGuide {

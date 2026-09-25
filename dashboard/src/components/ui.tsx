@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { retryFailed, type Wait } from '../lib/source'
 import MetricHelp from './MetricHelp'
+import { useMetricSpec } from '../lib/metrics'
 
 export function Segmented<T extends string>({
   options,
@@ -93,6 +94,9 @@ export function Tile({
   wait?: Wait
   metricId?: string
 }) {
+  const spec = useMetricSpec()
+  const down = metricId && spec && spec !== 'error' && spec.metrics.find((m) => m.id === metricId)?.direction === 'down'
+  const d = delta && down && delta.goodUp !== null ? { ...delta, goodUp: false } : delta
   return (
     <div className="flex min-w-0 flex-col gap-1 px-4 py-3.5">
       <div className="flex min-w-0 items-center text-[13px] text-ink2">
@@ -109,7 +113,7 @@ export function Tile({
           {unit && value !== '—' && <span className="text-sm text-ink2">{unit}</span>}
         </div>
       )}
-      <div className="flex min-h-[18px] items-center text-xs text-muted">{!wait && delta && <DeltaText d={delta} />}</div>
+      <div className="flex min-h-[18px] items-center text-xs text-muted">{!wait && d && <DeltaText d={d} />}</div>
       <div className="min-h-[16px] truncate text-xs text-muted">{!wait && sub}</div>
     </div>
   )
