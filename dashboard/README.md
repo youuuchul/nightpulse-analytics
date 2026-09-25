@@ -1,4 +1,4 @@
-# dashboard — NightPulse KPI 대시보드 (정적 웹)
+# dashboard — Placewave KPI 대시보드 (정적 웹)
 
 **합성 데이터 · 실제 서비스 데이터 아님.** 마트를 분할 파일(`public/data/`)로 뽑아 정적 웹에서 읽는다. 실시간 조회는 없다.
 

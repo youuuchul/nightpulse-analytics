@@ -1,8 +1,8 @@
 {
   "_note": "상호·행사·캠페인은 전부 가상 조합이며 실존 상호와 무관하다. 상권 이름·구·중심 좌표는 공개 지리 정보, 비중·장르 경향은 이 프로젝트가 정한 값.",
   "service": {
-    "name": "NightPulse",
-    "host": "nightpulse.app"
+    "name": "Placewave",
+    "host": "placewave.app"
   },
   "genres": [
     "힙합",

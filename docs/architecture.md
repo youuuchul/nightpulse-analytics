@@ -1,6 +1,6 @@
-# NightPulse 데이터 아키텍처
+# Placewave 데이터 아키텍처
 
-가상 나이트라이프 플랫폼 NightPulse의 행동 로그(GA4 형태)와 서비스 RDB(MySQL 가정)를 BigQuery 한 곳에 모아 KPI 대시보드까지 잇는 구조. 데이터는 전부 합성이다.
+가상 나이트라이프 플랫폼 Placewave의 행동 로그(GA4 형태)와 서비스 RDB(MySQL 가정)를 BigQuery 한 곳에 모아 KPI 대시보드까지 잇는 구조. 데이터는 전부 합성이다.
 
 ## 0. 설계 원칙
 

@@ -1,5 +1,5 @@
 [project]
-name = "nightpulse-analytics"
+name = "placewave-analytics"
 version = "0.1.0"
 description = "합성 GA4 형태 로그와 원장으로 재현한 KPI 파이프라인 포트폴리오 (실제 서비스 데이터 아님)"
 readme = "README.md"

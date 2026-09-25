@@ -1,7 +1,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { DATA_NOTE_ID } from './components/Header'
 
-const REPO = 'https://github.com/youuuchul/nightpulse-analytics'
+const REPO = 'https://github.com/youuuchul/placewave-analytics'
 
 const B = { fill: 'var(--wash)' }
 const LINE = 'var(--axis)'
@@ -320,14 +320,14 @@ export default function About({
           <br className="hidden sm:block" /> 퍼널·코호트·광고 지표로
         </h2>
         <p className="max-w-[640px] text-[15px] leading-relaxed text-ink2">
-          가상 서비스 NightPulse의 행동 로그·서비스 DB·광고 리포트를 BigQuery 네 층으로 정리하고, 마트에서 뽑은 집계로 이
+          가상 서비스 Placewave의 행동 로그·서비스 DB·광고 리포트를 BigQuery 네 층으로 정리하고, 마트에서 뽑은 집계로 이
           대시보드를 만든 데이터 분석 포트폴리오입니다.
         </p>
         <p
           id={DATA_NOTE_ID}
           className="max-w-[640px] scroll-mt-6 border-l-2 border-line pl-3 text-[13px] leading-relaxed text-muted"
         >
-          이 대시보드의 수치는 가상 서비스 NightPulse의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
+          이 대시보드의 수치는 가상 서비스 Placewave의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
           구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 210,000명·회원 약 22,000명·등록 공간
           1,800곳·이벤트 약 960만 건 규모입니다. 상권 이름과 위치는 공개 지리 정보이고 상호는 모두 가상입니다.
         </p>
@@ -335,7 +335,7 @@ export default function About({
 
       <Section n={1} title="가상 프로덕트">
         <p className="max-w-[720px] text-[14px] leading-relaxed text-ink2">
-          NightPulse는 클럽·바·라운지 같은 공간과 그곳에서 열리는 행사를 찾아보고, 신청하고, 결제하는 서비스입니다. 탐색은
+          Placewave는 클럽·바·라운지 같은 공간과 그곳에서 열리는 행사를 찾아보고, 신청하고, 결제하는 서비스입니다. 탐색은
           비회원도 할 수 있지만 신청부터는 로그인이 필요합니다. iOS·Android 앱과 웹으로 들어오고, 일부 방문은 SNS 광고
           캠페인에서 옵니다. 분석의 질문은 두 가지입니다 — 어느 단계에서 사람이 빠지는가, 어떤 유입이 결제까지 이어지는가.
         </p>

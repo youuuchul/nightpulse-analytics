@@ -3,7 +3,7 @@ import { Card } from './components/ui'
 import { useTable, waitOf } from './lib/source'
 import type { Data, LazyKey } from './lib/types'
 
-const REPO = 'https://github.com/youuuchul/nightpulse-analytics'
+const REPO = 'https://github.com/youuuchul/placewave-analytics'
 const PREVIEW_ROWS = 20
 
 interface CatalogColumn {

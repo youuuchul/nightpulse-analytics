@@ -11,7 +11,7 @@ bigquery/load_all.sh --skip-raw        # 적재 생략, 2단계부터
 bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 ```
 
-- BigQuery 명령은 모두 `scripts/bq.sh` 를 거친다. 프로젝트 `nightpulse-analytics`, 리전 `asia-northeast3` 가 래퍼에 고정돼 있다.
+- BigQuery 명령은 모두 `scripts/bq.sh` 를 거친다. GCP 프로젝트 ID `nightpulse-analytics`(초기 명칭 유지), 리전 `asia-northeast3` 가 래퍼에 고정돼 있다.
 - 입력은 생성기 출력 `data/raw/` 9개 파일(이벤트 NDJSON 1 + RDB CSV 7 + 광고 CSV 1), 스키마는 `bigquery/schema/<표>.json`.
 - 단계마다 stdout 한 줄(`[단계] 표 ok rows=… bytes=… 초`)과 `ops.build_log` 1행을 남긴다. 실행 ID(`run_id`)는 시작 시각(UTC)이다.
 

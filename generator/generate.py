@@ -1,6 +1,6 @@
-"""NightPulse 합성 데이터 생성기.
+"""Placewave 합성 데이터 생성기.
 
-가상 서비스 NightPulse 의 GA4 export 형태 이벤트 로그와 서비스 원장(회원·공간·행사·신청·결제·광고비)을
+가상 서비스 Placewave 의 GA4 export 형태 이벤트 로그와 서비스 원장(회원·공간·행사·신청·결제·광고비)을
 한 루프에서 함께 만든다. 입력은 `generator/seed/` 의 분포 파일(비율·분위수·전이 확률)뿐이며,
 절대 규모는 CLI 인자로 새로 정한다. 실제 서비스 데이터가 아니다.
 
@@ -25,7 +25,7 @@ from typing import Any
 
 import numpy as np
 
-logger = logging.getLogger("nightpulse.generate")
+logger = logging.getLogger("placewave.generate")
 
 SEED_DIR = Path(__file__).resolve().parent / "seed"
 KST = timezone(timedelta(hours=9))
@@ -1390,19 +1390,19 @@ class Generator:
         v: Venue | None = kw.get("venue")
         h = f"https://{self.host}"
         paths = {
-            "home": ("/", "NightPulse"),
-            "map_main": ("/map", "지도 | NightPulse"),
-            "search_main": ("/search", "검색 | NightPulse"),
-            "search_result": ("/search/results", "검색 결과 | NightPulse"),
-            "login": ("/login", "로그인 | NightPulse"),
-            "subscribe": ("/subscribe", "구독 | NightPulse"),
-            "taste_setup": ("/taste", "취향 설정 | NightPulse"),
+            "home": ("/", "Placewave"),
+            "map_main": ("/map", "지도 | Placewave"),
+            "search_main": ("/search", "검색 | Placewave"),
+            "search_result": ("/search/results", "검색 결과 | Placewave"),
+            "login": ("/login", "로그인 | Placewave"),
+            "subscribe": ("/subscribe", "구독 | Placewave"),
+            "taste_setup": ("/taste", "취향 설정 | Placewave"),
         }
         if screen in paths:
             path, title = paths[screen]
         elif screen in ("venue_detail", "venue_review") and v is not None:
             path = f"/venue/{v.venue_id}" + ("/reviews" if screen == "venue_review" else "")
-            title = f"{v.name} | NightPulse"
+            title = f"{v.name} | Placewave"
         elif ev is not None:
             suffix = {
                 "event_detail": "",
@@ -1411,9 +1411,9 @@ class Generator:
                 "payment_success": "/payment/success",
             }.get(screen, "")
             path = f"/event/{ev.event_id}{suffix}"
-            title = f"{ev.name} | NightPulse"
+            title = f"{ev.name} | Placewave"
         else:
-            path, title = "/", "NightPulse"
+            path, title = "/", "Placewave"
         return h + path, title
 
     def _emit(
@@ -1788,7 +1788,7 @@ def write_manifest(out: Path, seed: int, args: argparse.Namespace, elapsed: floa
         elapsed: 생성 소요 초.
     """
     lines = [
-        "# NightPulse 합성 데이터 MANIFEST (실제 서비스 데이터 아님)",
+        "# Placewave 합성 데이터 MANIFEST (실제 서비스 데이터 아님)",
         f"seed: {seed}",
         f"args: weeks={args.weeks} persons={args.persons} end_date={args.end_date}",
         f"generated_at_utc: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1810,7 +1810,7 @@ def write_manifest(out: Path, seed: int, args: argparse.Namespace, elapsed: floa
 
 def main() -> None:
     """CLI 진입점."""
-    ap = argparse.ArgumentParser(description="NightPulse 합성 데이터 생성기")
+    ap = argparse.ArgumentParser(description="Placewave 합성 데이터 생성기")
     ap.add_argument("--seed", type=int, default=20260923)
     ap.add_argument("--weeks", type=int, default=52)
     ap.add_argument("--persons", type=int, default=8000)

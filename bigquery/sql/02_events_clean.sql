@@ -70,7 +70,7 @@ WITH src AS (
   -- 전체 재생성: 파티션 필터를 전 기간으로 명시한다
   WHERE event_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
     -- 테스트 제외: 서비스 도메인 밖에서 찍힌 이벤트(로컬·스테이징)
-    AND (page_location IS NULL OR STARTS_WITH(page_location, 'https://nightpulse.app'))
+    AND (page_location IS NULL OR STARTS_WITH(page_location, 'https://placewave.app') OR STARTS_WITH(page_location, 'https://nightpulse.app'))
   QUALIFY ROW_NUMBER() OVER (
     PARTITION BY user_pseudo_id, ga_session_id, event_timestamp, event_name
     ORDER BY page_location

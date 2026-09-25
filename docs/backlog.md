@@ -31,7 +31,7 @@
 ## 3. 경로 탐색 (드릴다운, 완료 09-23)
 
 - **무엇을**: 세션 안에서 화면이 어떻게 이어지는지(랜딩 → 2단계 → … → 5단계) 생키 다이어그램. GA4 탐색의 경로 탐색과 같은 읽기.
-- **마트**: `marts.weekly_path` — 그레인 주 × 세그먼트 3축 × 단계(1~5) × from 화면 × to 화면. 열 `week_start, channel1, device_platform, member_seg, step, from_screen, to_screen, sessions`. 화면은 `screen_name`(NightPulse 화면 체계), 세션당 앞 5개 화면 전이만, 자동 로드 세션 제외. 상위 화면 12개 밖은 `(기타)`로 접어 노드 수를 고정한다. 원천 `staging.events_clean`.
+- **마트**: `marts.weekly_path` — 그레인 주 × 세그먼트 3축 × 단계(1~5) × from 화면 × to 화면. 열 `week_start, channel1, device_platform, member_seg, step, from_screen, to_screen, sessions`. 화면은 `screen_name`(Placewave 화면 체계), 세션당 앞 5개 화면 전이만, 자동 로드 세션 제외. 상위 화면 12개 밖은 `(기타)`로 접어 노드 수를 고정한다. 원천 `staging.events_clean`.
 - **화면**: 시작 화면 선택(기본 전체 랜딩) → 단계별 노드·링크 생키(노드 최대 12 × 5단계), 링크 클릭 시 그 경로의 세션 수·비중. 이탈은 각 단계에 `(이탈)` 노드로 표시.
 - **완료 기준**: 1단계 세션 합 = 그 주 방문 세션 수(`weekly_activity` 세션 합, 대조 C7).
 

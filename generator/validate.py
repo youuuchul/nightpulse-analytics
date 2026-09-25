@@ -1,4 +1,4 @@
-"""NightPulse 합성 데이터 검증기.
+"""Placewave 합성 데이터 검증기.
 
 생성 직후 이벤트 로그와 원장이 서로 맞는지 단언하고, 요약 통계를 `data/summary.md` 로 쓴다.
 단언이 하나라도 어긋나면 exit 1.
@@ -21,7 +21,7 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("nightpulse.validate")
+logger = logging.getLogger("placewave.validate")
 
 KST = timezone(timedelta(hours=9))
 KEY_EVENTS = {"sign_up", "apply_event", "purchase", "share", "cancel_apply", "subscribe", "subscription_cancel"}
@@ -854,7 +854,7 @@ def _summary(
 
     daily = sorted(len(v) for v in day_persons.values())
     out: list[str] = [
-        "# NightPulse 합성 데이터 요약",
+        "# Placewave 합성 데이터 요약",
         "",
         "합성 데이터 · 실제 서비스 데이터 아님. `generator/validate.py` 생성물.",
         "",
@@ -910,7 +910,7 @@ def _summary(
 
 def main() -> None:
     """CLI 진입점."""
-    ap = argparse.ArgumentParser(description="NightPulse 합성 데이터 검증")
+    ap = argparse.ArgumentParser(description="Placewave 합성 데이터 검증")
     ap.add_argument("--data", type=Path, default=Path("data"))
     ap.add_argument("--weeks", type=int, default=52)
     ap.add_argument("--end-date", type=date.fromisoformat, default=date(2026, 9, 20))

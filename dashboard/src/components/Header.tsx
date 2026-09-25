@@ -82,7 +82,7 @@ export default function Header({
             />
           </svg>
           <h1 className="whitespace-nowrap text-lg font-semibold tracking-tight">
-            NightPulse <span className="hidden font-normal text-ink2 sm:inline">KPI</span>
+            Placewave <span className="hidden font-normal text-ink2 sm:inline">KPI</span>
           </h1>
         </PageLink>
         <nav className="flex items-center gap-0.5 sm:ml-2">

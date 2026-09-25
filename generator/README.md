@@ -1,6 +1,6 @@
 # generator — 합성 데이터 생성기
 
-**합성 데이터 · 실제 서비스 데이터 아님.** 가상 서비스 NightPulse(도시의 라이브·클럽 공간과 파티를 찾고 예매하는 모바일 웹)의 행동 로그와 서비스 원장을 한 루프에서 함께 만든다. 시나리오 기준은 `docs/scenario_v2.md`(1.0 의 탐색 → 신청 → 결제에 공간 등록·파트너 계약, 소비자 구독, B2B 계약 매출을 더한 2.0). 상호·행사·캠페인은 전부 가상 조합이고, 상권 이름·구·중심 좌표만 공개 지리 정보다.
+**합성 데이터 · 실제 서비스 데이터 아님.** 가상 서비스 Placewave(도시의 라이브·클럽 공간과 파티를 찾고 예매하는 모바일 웹)의 행동 로그와 서비스 원장을 한 루프에서 함께 만든다. 시나리오 기준은 `docs/scenario_v2.md`(1.0 의 탐색 → 신청 → 결제에 공간 등록·파트너 계약, 소비자 구독, B2B 계약 매출을 더한 2.0). 상호·행사·캠페인은 전부 가상 조합이고, 상권 이름·구·중심 좌표만 공개 지리 정보다.
 
 ## 실행
 
@@ -16,7 +16,7 @@ uv run generator/validate.py --data data/ --weeks 52 --end-date 2026-09-20
 
 ## 입력
 
-`seed/` 의 분포 파일. 전부 비율·분위수·전이 확률이고 절대값·식별자는 없다. 절대 규모(기간·사람 수)는 CLI 인자로 정한다. 이벤트명·화면명·경로는 이미 아래 「이벤트 체계」의 NightPulse 어휘로 적혀 있고, 범위 밖 도메인은 `(other_event)` · `(other_screen)` 한 줄로 합쳐져 있다.
+`seed/` 의 분포 파일. 전부 비율·분위수·전이 확률이고 절대값·식별자는 없다. 절대 규모(기간·사람 수)는 CLI 인자로 정한다. 이벤트명·화면명·경로는 이미 아래 「이벤트 체계」의 Placewave 어휘로 적혀 있고, 범위 밖 도메인은 `(other_event)` · `(other_screen)` 한 줄로 합쳐져 있다.
 
 | 파일 | 생성기에서 쓰는 곳 |
 |---|---|
@@ -90,7 +90,7 @@ GA4 원본과 다른 점(의도한 단순화):
 | `subscribe` | 구독 결제 완료 (회원만) | `order_id`(1회차 결제), `subscription_id`, `value`(9,900), `currency` |
 | `subscription_cancel` | 구독 해지 | `subscription_id` |
 
-화면(`screen_name`) 13종: `home` · `map_main` · `search_main` · `search_result` · `venue_detail` · `venue_review` · `event_detail` · `event_apply` · `login` · `taste_setup` · `payment_confirm` · `payment_success` · `subscribe`. URL 은 `https://nightpulse.app/` 아래 `/event/{id}`, `/venue/{id}`, `/event/{id}/apply`, `/subscribe` 등.
+화면(`screen_name`) 13종: `home` · `map_main` · `search_main` · `search_result` · `venue_detail` · `venue_review` · `event_detail` · `event_apply` · `login` · `taste_setup` · `payment_confirm` · `payment_success` · `subscribe`. URL 은 `https://placewave.app/` 아래 `/event/{id}`, `/venue/{id}`, `/event/{id}/apply`, `/subscribe` 등.
 
 ## 생성 규칙
 

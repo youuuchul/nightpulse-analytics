@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# NightPulse BigQuery 파이프라인 1회 실행: raw 적재 → staging → marts → 대조 → 기록
+# Placewave BigQuery 파이프라인 1회 실행: raw 적재 → staging → marts → 대조 → 기록
 #   bigquery/load_all.sh                 1~9단계 전부
 #   bigquery/load_all.sh --skip-raw      1단계(raw 적재) 생략
 #   bigquery/load_all.sh --only 7        한 단계만 (1~9)
