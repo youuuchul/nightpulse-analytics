@@ -18,7 +18,7 @@ import { Funnel, Heatmap, TimeChart } from '../components/charts'
 import { PathSankey, type PathLink } from '../components/PathSankey'
 import { ReachTable, type ReachRow } from '../components/ReachTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
-import { hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
+import { hourTip, hourX, ptDelta, type TabProps, vsLabel, weekTip } from './common'
 
 const STEPS: FunnelStep[] = ['landing', 'detail', 'signup', 'apply_view', 'payment']
 const REACH_STEPS = STEPS.slice(1).map((k) => FUNNEL_LABEL[k])
@@ -370,7 +370,7 @@ export default function FunnelTab(p: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-4">
+      <TileRow cols="lg:grid-cols-4" title={`전환 · ${vsLabel(data, range)}`}>
         <Tile
           metricId="C15"
           label="전체 전환율 · 랜딩 → 결제"

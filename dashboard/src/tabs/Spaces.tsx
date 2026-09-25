@@ -7,7 +7,7 @@ import { addDays, md, mondayOf } from '../lib/date'
 import { num, pct, ratio, won } from '../lib/format'
 import { PLAN_LABEL, S } from '../lib/labels'
 import type { DailyVenueRegistry, VenueRegistry } from '../lib/types'
-import { delta, ptDelta, type TabProps } from './common'
+import { delta, ptDelta, type TabProps, vsLabel } from './common'
 
 interface Snap {
   registered: number
@@ -168,7 +168,7 @@ export default function Spaces({ data, s, set, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow>
+      <TileRow title={`공간 · ${vsLabel(data, range)}`}>
         <Tile
           metricId="P01"
           label="등록 공간"

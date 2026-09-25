@@ -7,7 +7,7 @@ import { ready, useTable, waitOf } from '../lib/source'
 import { Funnel, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
-import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
+import { delta, grain, hourTip, hourX, ptDelta, type TabProps, vsLabel, weekTip } from './common'
 import Venues from './Venues'
 import Revenue from './Revenue'
 import type { DailyEvent } from '../lib/types'
@@ -52,7 +52,7 @@ function Flow({ data, s, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-5">
+      <TileRow cols="lg:grid-cols-5" title={`신청·결제 · ${vsLabel(data, range)}`}>
         <Tile metricId="C11" label="신청" value={num(cur.applies)} unit="건" delta={delta(data, range, cur.applies, prev.applies)} />
         <Tile metricId="C12" label="결제" value={num(cur.pay_count)} unit="건" delta={delta(data, range, cur.pay_count, prev.pay_count)} />
         <Tile metricId="C13" label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={delta(data, range, cur.pay_amount, prev.pay_amount)} />

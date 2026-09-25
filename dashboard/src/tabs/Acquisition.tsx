@@ -6,7 +6,7 @@ import { CHANNEL2, channel2Color, channel2Label, S } from '../lib/labels'
 import { BarList, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Legend, Stage, Tile, TileRow } from '../components/ui'
-import { delta, grain, ptDelta, type TabProps, weekTip } from './common'
+import { delta, grain, ptDelta, type TabProps, vsLabel, weekTip } from './common'
 import { ready, useTable, waitOf } from '../lib/source'
 
 interface ChannelRow {
@@ -87,7 +87,7 @@ function Channels({ data, s, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-5">
+      <TileRow cols="lg:grid-cols-5" title={`유입 · ${vsLabel(data, range)}`}>
         <Tile metricId="A01" label="세션" value={num(cur.sessions)} delta={delta(data, range, cur.sessions, prev.sessions)} wait={w} />
         <Tile
           metricId="A02"

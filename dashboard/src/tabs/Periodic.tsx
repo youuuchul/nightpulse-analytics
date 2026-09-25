@@ -26,9 +26,9 @@ export function defaultMonth(data: Data): string {
   return data.meta.to_date >= lastDay || months.length < 2 ? last : months[months.length - 2]
 }
 
-function rel(cur: number | null, prev: number | null, vs: string, goodUp: boolean | null = true, points = false): Delta {
-  if (cur == null || prev == null) return { value: null, vs, goodUp, points }
-  return { value: points ? cur - prev : prev ? cur / prev - 1 : null, vs, goodUp, points }
+function rel(cur: number | null, prev: number | null, goodUp: boolean | null = true, points = false): Delta {
+  if (cur == null || prev == null) return { value: null, goodUp, points }
+  return { value: points ? cur - prev : prev ? cur / prev - 1 : null, goodUp, points }
 }
 
 type WA = Pick<WeeklyActivity, 'wau' | 'new_persons' | 'returning_persons' | 'two_plus_days'>
@@ -112,7 +112,7 @@ function Weekly({ data, s }: TabProps) {
     const z = byWeek.get(w)
     if (z) trend.push({ date: w, new_persons: z.new_persons, returning_persons: z.returning_persons })
   }
-  const vs = '전주 대비'
+  const vs = byWeek.has(prevWk) ? '전주 대비' : '전기 없음'
   const series = [
     { key: 'returning_persons', label: '재방문', color: S(1) },
     { key: 'new_persons', label: '신규', color: S(2) },
@@ -120,36 +120,36 @@ function Weekly({ data, s }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow>
-        <Tile metricId="V03" label={`WAU · ${md(wk)} 주`} value={num(cur.wau)} unit="명" delta={rel(cur.wau, prev.wau, vs)} />
-        <Tile metricId="V16" label="신규" value={num(cur.new_persons)} unit="명" delta={rel(cur.new_persons, prev.new_persons, vs)} />
+      <TileRow title={`주간 · ${vs}`}>
+        <Tile metricId="V03" label={`WAU · ${md(wk)} 주`} value={num(cur.wau)} unit="명" delta={rel(cur.wau, prev.wau)} />
+        <Tile metricId="V16" label="신규" value={num(cur.new_persons)} unit="명" delta={rel(cur.new_persons, prev.new_persons)} />
         <Tile
           metricId="V17"
           label="재방문"
           value={num(cur.returning_persons)}
           unit="명"
-          delta={rel(cur.returning_persons, prev.returning_persons, vs)}
+          delta={rel(cur.returning_persons, prev.returning_persons)}
         />
         <Tile
           metricId="V05"
           label="재방문 비중"
           value={pct(ratio(cur.returning_persons, cur.wau))}
           sub={`WAU ${num(cur.wau)} 중`}
-          delta={rel(ratio(cur.returning_persons, cur.wau), ratio(prev.returning_persons, prev.wau), vs, true, true)}
+          delta={rel(ratio(cur.returning_persons, cur.wau), ratio(prev.returning_persons, prev.wau), true, true)}
         />
         <Tile
           metricId="V06"
           label="주 2일+ 방문"
           value={pct(ratio(cur.two_plus_days, cur.wau))}
           sub={`WAU ${num(cur.wau)} 중`}
-          delta={rel(ratio(cur.two_plus_days, cur.wau), ratio(prev.two_plus_days, prev.wau), vs, true, true)}
+          delta={rel(ratio(cur.two_plus_days, cur.wau), ratio(prev.two_plus_days, prev.wau), true, true)}
         />
         <Tile
           metricId="R01"
           label={`W1 리텐션 · ${md(w1Cohort)} 코호트`}
           value={pct(w1(w1Cohort))}
           sub={`코호트 ${num(cohorts.get(w1Cohort)?.size ?? 0)}명`}
-          delta={rel(w1(w1Cohort), w1(w1Prev), '직전 코호트 대비', true, true)}
+          delta={rel(w1(w1Cohort), w1(w1Prev), true, true)}
         />
       </TileRow>
 
@@ -187,7 +187,7 @@ function Monthly({ data, s }: TabProps) {
   const n = Number(s.mr)
   const window = months.filter((m) => m <= mo).slice(-n)
   const rows = window.map((m) => byMonth.get(m)!).filter(Boolean)
-  const vs = '전월 대비'
+  const vs = prev ? '전월 대비' : '전기 없음'
   const cancel = (r?: typeof cur) => (r ? ratio(r.cancels, r.applies) : null)
 
   const cohort = useMemo(() => {
@@ -238,30 +238,30 @@ function Monthly({ data, s }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow>
-        <Tile metricId="V04" label={`방문자 · ${mo}`} value={num(cur?.persons)} unit="명" delta={rel(cur?.persons ?? null, prev?.persons ?? null, vs)} />
-        <Tile metricId="V02" label="신규" value={num(cur?.new_persons)} unit="명" delta={rel(cur?.new_persons ?? null, prev?.new_persons ?? null, vs)} />
-        <Tile metricId="C10" label="가입" value={num(cur?.signups)} unit="명" delta={rel(cur?.signups ?? null, prev?.signups ?? null, vs)} />
+      <TileRow title={`월간 · ${vs}`}>
+        <Tile metricId="V04" label={`방문자 · ${mo}`} value={num(cur?.persons)} unit="명" delta={rel(cur?.persons ?? null, prev?.persons ?? null)} />
+        <Tile metricId="V02" label="신규" value={num(cur?.new_persons)} unit="명" delta={rel(cur?.new_persons ?? null, prev?.new_persons ?? null)} />
+        <Tile metricId="C10" label="가입" value={num(cur?.signups)} unit="명" delta={rel(cur?.signups ?? null, prev?.signups ?? null)} />
         <Tile
           metricId="C13"
           label="결제 금액"
           value={won(cur?.pay_amount)}
           unit="원"
-          delta={rel(cur?.pay_amount ?? null, prev?.pay_amount ?? null, vs)}
+          delta={rel(cur?.pay_amount ?? null, prev?.pay_amount ?? null)}
         />
         <Tile
           metricId="C21"
           label="신청분 취소율"
           value={pct(cancel(cur))}
           sub={`신청 ${num(cur?.applies)}건 중`}
-          delta={rel(cancel(cur), cancel(prev), vs, false, true)}
+          delta={rel(cancel(cur), cancel(prev), false, true)}
         />
         <Tile
           metricId="R02"
           label="W1 리텐션"
           value={pct(cur?.w1_retention)}
           sub="이달 첫 방문 코호트"
-          delta={rel(cur?.w1_retention ?? null, prev?.w1_retention ?? null, vs, true, true)}
+          delta={rel(cur?.w1_retention ?? null, prev?.w1_retention ?? null, true, true)}
         />
       </TileRow>
 

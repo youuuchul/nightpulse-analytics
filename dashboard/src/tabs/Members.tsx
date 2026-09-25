@@ -7,7 +7,7 @@ import { F, uniquePersons } from '../lib/persons'
 import { ready, useTable, waitOf } from '../lib/source'
 import { TimeChart } from '../components/charts'
 import { Card, Legend, Tile, TileRow } from '../components/ui'
-import { delta, grain, hourTip, hourX, ptDelta, type TabProps, weekTip } from './common'
+import { delta, grain, hourTip, hourX, ptDelta, type TabProps, vsLabel, weekTip } from './common'
 import Subscription from './Subscription'
 
 function MemberView({ data, s, range }: TabProps) {
@@ -105,7 +105,7 @@ function MemberView({ data, s, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow>
+      <TileRow title={`회원 · ${vsLabel(data, range)}`}>
         <Tile metricId="C10" label="가입" value={num(cur.signups)} unit="명" delta={delta(data, range, cur.signups, prev.signups)} />
         <Tile
           metricId="C01"

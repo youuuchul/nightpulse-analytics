@@ -8,8 +8,8 @@ import type { DailyMetric, HourlyMetric } from '../lib/types'
 import TrendCard, { type TrendMetric } from '../components/TrendCard'
 import RevenueCard from '../components/RevenueCard'
 import { sumRevenue } from '../lib/revenue'
-import { Pending, Tile, TileRow } from '../components/ui'
-import { delta, ptDelta, type TabProps } from './common'
+import { Pending, SectionTitle, Tile, TileRow } from '../components/ui'
+import { delta, ptDelta, type TabProps, vsLabel } from './common'
 
 const KEYS = [
   'persons',
@@ -85,6 +85,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
   const rCur = rev ? sumRevenue(rev, range.from, range.to) : null
   const rPrev = rev ? sumRevenue(rev, range.prevFrom, range.prevTo) : null
 
+  const vs = vsLabel(data, range)
   const engaged = ratio(cur.engaged_sessions, cur.sessions)
   const engagedPrev = ratio(prev.engaged_sessions, prev.sessions)
 
@@ -134,9 +135,8 @@ export default function Overview({ data, s, set, range }: TabProps) {
         )}
       </section>
 
-      <TileRow cols="sm:grid-cols-4 lg:grid-cols-8">
+      <TileRow cols="sm:grid-cols-4 lg:grid-cols-7" title={`핵심 지표 · ${vs}`}>
         <Tile metricId="V12" label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} wait={waitOf(pdL)} />
-        <Tile metricId="V07" label="세션" value={num(cur.sessions)} delta={d('sessions')} />
         <Tile
           metricId="V08"
           label="활성 세션 비율"
@@ -152,7 +152,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
       </TileRow>
 
       {!segOn && rCur && rPrev && (
-        <TileRow cols="sm:grid-cols-4 lg:grid-cols-4">
+        <TileRow cols="sm:grid-cols-4 lg:grid-cols-4" title={`매출 · ${vs}`}>
           <Tile metricId="M01" label="총 매출" value={won(rCur.total)} unit="원" delta={delta(data, range, rCur.total, rPrev.total)} />
           <Tile
             metricId="M02"
@@ -181,6 +181,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
         </TileRow>
       )}
 
+      <SectionTitle>추이</SectionTitle>
       <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />
       <TrendCard title="활성 세션" metrics={ENGAGED} {...card} />
       <TrendCard title="신규 방문자 · 가입" metrics={NEW_SIGNUP} {...card} axes={['ch', 'pf']} />

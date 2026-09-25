@@ -109,6 +109,18 @@ try {
       await page.locator(`button[aria-label="${opts.help} 정의"]`).first().click()
       await page.waitForTimeout(200)
     }
+    if (opts.expand) {
+      const opts2 = await page.locator(opts.expand).evaluate((el) => {
+        el.size = el.options.length
+        el.parentElement.style.position = 'relative'
+        el.parentElement.style.minWidth = `${el.parentElement.offsetWidth}px`
+        el.style.cssText += ';position:absolute;right:0;top:0;z-index:60;height:auto;overflow:visible;background:var(--surface);box-shadow:0 4px 16px rgba(0,0,0,.15);padding:4px'
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) p.style.overflow = 'visible'
+        return [...el.options].map((o) => o.text)
+      })
+      console.log(`  선택지 → ${opts2.join(' / ')}`)
+      await page.waitForTimeout(150)
+    }
     const file = `${OUT}${name}.png`
     if (opts.section) {
       const card = page.locator('main section.card', { has: page.locator(`h2:text-is("${opts.section}")`) })
@@ -167,6 +179,7 @@ try {
     await shoot('74_overview_help', 'tab=overview', { help: '총 매출', clip: true })
     await shoot('75_overview_revenue_hover', 'tab=overview&p=365', { section: '매출 구성', hover: 0.8 })
     await shoot('76_members_subscription_dark', 'tab=members&view=subscription&p=365', { scheme: 'dark' })
+    await shoot('78_venues_region_open', 'tab=venues', { expand: 'select >> nth=0', clip: true })
     await shoot('77_header_phone_metrics', 'page=metrics', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
   }
   await browser.close()

@@ -24,12 +24,12 @@
 
 | 항목 | 값 |
 |---|---|
-| 사람 / 회원 | 80,000명 / 7,462명 |
+| 사람 / 회원 | 210,000명 / 22,008명 |
 | 등록 공간 / 파트너 공간 | 1,800곳 / 180곳 |
 | 활성 구독자 | 2,002명 |
-| 행사 | 2,402건 |
-| 이벤트 로그 | 826만 행 |
-| 연 티켓 매출 | 14.8억 원 |
+| 행사 | 2,812건 (예정 행사 410건 포함) |
+| 이벤트 로그 | 964만 행 |
+| 연 티켓 매출 | 13.0억 원 |
 
 ## 무엇을 보여주는가
 
@@ -58,7 +58,7 @@ scripts/     bq.sh — 개인 GCP 전용 래퍼 (설정 폴더·프로젝트·�
 
 ```bash
 # 1. 생성 — 합성 로그·원장·광고 리포트를 data/ 에 쓴다 (같은 시드면 같은 결과)
-uv run generator/generate.py --seed 20260923 --weeks 52 --persons 80000 --end-date 2026-09-20 --out data/
+uv run generator/generate.py --seed 20260923 --weeks 52 --persons 210000 --end-date 2026-09-20 --out data/
 uv run generator/validate.py --data data/ --weeks 52 --end-date 2026-09-20
 
 # 2. 적재 — raw 적재 → staging → marts → ops 검사·기록 (개인 GCP 프로젝트)

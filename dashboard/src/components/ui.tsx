@@ -73,7 +73,6 @@ export function Select({
 export interface Delta {
   value: number | null
   goodUp?: boolean | null
-  vs: string
   points?: boolean
 }
 
@@ -140,7 +139,7 @@ export function Pending({ wait, h = 240, w = 'w-full', inline = false }: { wait:
 }
 
 function DeltaText({ d }: { d: Delta }) {
-  if (d.value == null || !Number.isFinite(d.value)) return <span>{d.vs} —</span>
+  if (d.value == null || !Number.isFinite(d.value)) return <span>—</span>
   const up = d.value > 0
   const flat = Math.abs(d.value) < 0.0005
   const mag = (Math.abs(d.value) * 100).toFixed(1) + (d.points ? '%p' : '%')
@@ -151,19 +150,30 @@ function DeltaText({ d }: { d: Delta }) {
       <span style={{ color }} className="font-medium">
         {flat ? '' : up ? '▲ ' : '▼ '}
         {mag}
-      </span>{' '}
-      {d.vs}
+      </span>
     </span>
   )
 }
 
-export function TileRow({ children, cols = 'lg:grid-cols-6' }: { children: ReactNode; cols?: string }) {
-  return (
+/** 구획 위 소제목 한 줄. 스코어보드·추이 묶음의 이름과 비교 기준을 적는다. */
+export function SectionTitle({ children }: { children: ReactNode }) {
+  return <h3 className="-mb-2.5 px-1 text-xs font-medium text-muted">{children}</h3>
+}
+
+export function TileRow({ children, cols = 'lg:grid-cols-6', title }: { children: ReactNode; cols?: string; title?: string }) {
+  const row = (
     <div className="card overflow-hidden">
       <div className={`-mb-px -mr-px grid grid-cols-2 sm:grid-cols-3 ${cols} [&>*]:border-b [&>*]:border-r [&>*]:border-line`}>
         {children}
       </div>
     </div>
+  )
+  if (!title) return row
+  return (
+    <>
+      <SectionTitle>{title}</SectionTitle>
+      {row}
+    </>
   )
 }
 

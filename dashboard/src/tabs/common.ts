@@ -10,7 +10,9 @@ export interface TabProps {
   range: Range
 }
 
-export function vs(range: Range): string {
+/** 스코어보드 소제목의 비교 기준. 직전 기간이 데이터 범위 밖이면 '전기 없음'. */
+export function vsLabel(data: Data, range: Range): string {
+  if (range.prevFrom < data.meta.from_date) return '전기 없음'
   return range.oneDay ? '전일 대비' : `직전 ${range.days}일 대비`
 }
 
@@ -23,7 +25,7 @@ export function delta(
 ): Delta | undefined {
   if (range.prevFrom < data.meta.from_date) return undefined
   const v = cur != null && prev != null && prev !== 0 ? cur / prev - 1 : null
-  return { value: v, goodUp, vs: vs(range) }
+  return { value: v, goodUp }
 }
 
 export function ptDelta(
@@ -35,7 +37,7 @@ export function ptDelta(
 ): Delta | undefined {
   if (range.prevFrom < data.meta.from_date) return undefined
   const v = cur != null && prev != null ? cur - prev : null
-  return { value: v, goodUp, vs: vs(range), points: true }
+  return { value: v, goodUp, points: true }
 }
 
 export function grain(weekly: boolean): string {

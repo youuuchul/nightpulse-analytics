@@ -9,7 +9,7 @@ import { F, pdFlags, pdKey, pdMs, pdSpan } from '../lib/persons'
 import { sumRevenue } from '../lib/revenue'
 import { ready, useTable, waitOf } from '../lib/source'
 import type { DailySubscription, PersonDay } from '../lib/types'
-import { delta, grain, ptDelta, type TabProps, weekTip } from './common'
+import { delta, grain, ptDelta, type TabProps, vsLabel, weekTip } from './common'
 
 interface CompareRow {
   key: string
@@ -143,7 +143,7 @@ export default function Subscription({ data, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-5">
+      <TileRow cols="lg:grid-cols-5" title={`구독 · ${vsLabel(data, range)}`}>
         <Tile
           metricId="S01"
           label="구독자"

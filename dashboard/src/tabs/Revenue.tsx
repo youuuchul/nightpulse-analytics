@@ -9,7 +9,7 @@ import { num, pct, ratio, won } from '../lib/format'
 import { REVENUE_KINDS, S } from '../lib/labels'
 import { sumRevenue } from '../lib/revenue'
 import type { DailyRevenue } from '../lib/types'
-import { delta, ptDelta, type TabProps } from './common'
+import { delta, ptDelta, type TabProps, vsLabel } from './common'
 
 const PARTNER = [
   { key: 'partner', label: '파트너 공간', color: S(7) },
@@ -106,7 +106,7 @@ export default function Revenue({ data, range }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="sm:grid-cols-4 lg:grid-cols-4">
+      <TileRow cols="sm:grid-cols-4 lg:grid-cols-4" title={`매출 · ${vsLabel(data, range)}`}>
         <Tile metricId="M01" label="총 매출" value={won(cur.total)} unit="원" delta={delta(data, range, cur.total, prev.total)} />
         <Tile
           metricId="M06"

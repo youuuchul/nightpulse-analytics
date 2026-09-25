@@ -75,6 +75,19 @@ function uniq(v: string[]): { value: string; label: string }[] {
   return [...new Set(v)].sort((a, b) => a.localeCompare(b, 'ko')).map((x) => ({ value: x, label: x }))
 }
 
+/** 상권 선택지: 기준일 등록 공간 수 내림차순, '기타'는 맨 아래. */
+function regionsBySize(data: Data): { value: string; label: string }[] {
+  const size = new Map<string, number>()
+  const reg = (data.daily_venue_registry ?? []).filter((r) => r.kst_date <= data.meta.to_date)
+  const last = reg.reduce((a, r) => (r.kst_date > a ? r.kst_date : a), '')
+  for (const r of reg) if (r.kst_date === last) size.set(r.region, (size.get(r.region) ?? 0) + r.registered_total)
+  for (const v of data.venue_registry ?? []) if (!size.has(v.region)) size.set(v.region, 0)
+  const rank = (r: string) => (r === '기타' ? 1 : 0)
+  return [...size.entries()]
+    .sort((a, b) => rank(a[0]) - rank(b[0]) || b[1] - a[1] || a[0].localeCompare(b[0], 'ko'))
+    .map(([x]) => ({ value: x, label: x }))
+}
+
 type Theme = 'light' | 'dark' | null
 
 function useTheme(): [Theme, () => void] {
@@ -214,10 +227,7 @@ export default function App() {
     )
     let controls: ReactNode = <SegmentControls s={st} set={set} />
     if (tab.id === 'venues') {
-      const regs = uniq([
-        ...(data.daily_venue_registry ?? []).map((r) => r.region),
-        ...(data.venue_registry ?? []).map((r) => r.region),
-      ])
+      const regs = regionsBySize(data)
       controls = (
         <Select
           label="상권"
