@@ -28,13 +28,14 @@ def render(spec: dict) -> str:
     """metrics.json 사전을 마크다운 문서로 만든다.
 
     Args:
-        spec: {rules, groups, notes, tabs, metrics} 사전.
+        spec: {rules, groups, axes, notes, tabs, metrics} 사전.
 
     Returns:
         docs/metrics.md 본문.
     """
     tab_name = {t["id"]: t["name"] for t in spec["tabs"]}
     metric_name = {m["id"]: m["name"] for m in spec["metrics"]}
+    axis_name = {a["id"]: a["name"] for a in spec.get("axes", [])}
     lines = [
         "# 지표 정의",
         "",
@@ -46,6 +47,13 @@ def render(spec: dict) -> str:
         " 이 문서는 그 열을 가리킨다. 대시보드의 `지표 가이드` 페이지와 타일 이름 옆 `?` 가 같은 원본을 보여준다.",
         "",
         f"지표 {len(spec['metrics'])}개 · 탭 {len(spec['tabs'])}개.",
+        "",
+        "수익 축: "
+        + " · ".join(
+            f"{a['name']} {sum(1 for m in spec['metrics'] if m.get('axis') == a['id'])}" for a in spec.get("axes", [])
+        )
+        + ". 축은 지표가 어느 수익 갈래(마켓플레이스 거래 · 소비자 구독 · 공간 B2B)의 건강을 재는지를 뜻하며,"
+        " 공통은 플랫폼 매출 전체다.",
         "",
         "## 탭이 답하는 질문",
         "",
@@ -65,13 +73,14 @@ def render(spec: dict) -> str:
             "",
             f"## {g['name']}",
             "",
-            "| 코드 | 이름 | 탭 | 단위 | 정의 | 산식 | 분모 | 마트 열 | 의의 |",
-            "|---|---|---|---|---|---|---|---|---|",
+            "| 코드 | 이름 | 탭 | 축 | 단위 | 정의 | 산식 | 분모 | 마트 열 | 의의 |",
+            "|---|---|---|---|---|---|---|---|---|---|",
         ]
         for m in ms:
             cols = ", ".join(f"`{c}`" for c in m["mart_columns"])
             lines.append(
-                f"| {m['id']} | {cell(m['name'])} | {tab_name.get(m['tab'], m['tab'])} | {m['unit']} | "
+                f"| {m['id']} | {cell(m['name'])} | {tab_name.get(m['tab'], m['tab'])} | "
+                f"{axis_name.get(m.get('axis', ''), '—')} | {m['unit']} | "
                 f"{cell(m['definition'])} | {cell(m['formula'])} | {cell(m['denominator'])} | {cols} | "
                 f"{cell(m['why'])} |"
             )

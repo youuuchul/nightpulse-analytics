@@ -46,6 +46,8 @@ const extras = [
   ['66_venues_region_1year', `tab=venues&p=365&sr=${encodeURIComponent('홍대·합정·연남')}`],
   ['67_venues_partner_genre', `tab=venues&sp=partner&sg=${encodeURIComponent('힙합')}`],
   ['68_overview_1year', 'tab=overview&p=365'],
+  ['79_venues_1year', 'tab=venues&p=365'],
+  ['80_members_subscription_1year', 'tab=members&view=subscription&p=365'],
 ]
 
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' })
@@ -85,7 +87,7 @@ try {
       })
     if (opts.strip)
       await page.route('**/data/index.json', async (route) => {
-        const body = await (await route.fetch()).json()
+        const body = dataDir ? JSON.parse(readFileSync(`${dataDir}/index.json`, 'utf8')) : await (await route.fetch()).json()
         for (const k of opts.strip) {
           delete body[k]
           delete body.files[k]
@@ -176,10 +178,11 @@ try {
     await shoot('71_venues_phone', 'tab=venues', { viewport: { width: 390, height: 844 }, scale: 2 })
     await shoot('72_metrics_phone', 'page=metrics', { viewport: { width: 390, height: 844 }, scale: 2, wait: 'main section' })
     await shoot('73_metrics_dark', 'page=metrics', { scheme: 'dark', wait: 'main section' })
-    await shoot('74_overview_help', 'tab=overview', { help: '총 매출', clip: true })
+    await shoot('74_overview_help', 'tab=overview', { help: '플랫폼 매출', clip: true })
     await shoot('75_overview_revenue_hover', 'tab=overview&p=365', { section: '매출 구성', hover: 0.8 })
     await shoot('76_members_subscription_dark', 'tab=members&view=subscription&p=365', { scheme: 'dark' })
     await shoot('78_venues_region_open', 'tab=venues', { expand: 'select >> nth=0', clip: true })
+    await shoot('81_metrics_top', 'page=metrics', { wait: 'main section', clip: true })
     await shoot('77_header_phone_metrics', 'page=metrics', { viewport: { width: 390, height: 300 }, scale: 2, wait: 'header', clip: true })
   }
   await browser.close()

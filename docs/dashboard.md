@@ -17,23 +17,23 @@
 
 | 탭 | 보기 | 세그먼트 줄 | 스코어보드 | 메인 차트 | 표 | 마트 |
 |---|---|---|---|---|---|---|
-| 개요 | — | 채널·플랫폼·회원 | 기준일 현황(누적 회원·등록 공간·파트너 공간·구독자, 필터 미적용) + `핵심 지표` 행(방문자·활성 세션 비율·신규 방문자·가입·신청·결제·결제 금액) + `매출` 행(총·티켓·구독·B2B, 세그먼트 필터 시 숨김) | `추이` 소제목 아래 추이 카드 5개: 방문자 → 활성 세션 → 신규 방문자·가입 → 신청·결제 → 결제 금액 (§3b) + 매출 구성 카드(§3c, 세그먼트 필터 시 숨김) | — | daily_metrics, hourly_metrics, person_day, daily_venue, daily_revenue, daily_subscription, daily_venue_registry |
+| 개요 | — | 채널·플랫폼·회원 | 기준일 현황(누적 회원·등록 공간·파트너 공간, 필터 미적용) + `핵심 지표` 한 줄 6칸(방문자·신규 방문자·가입·결제·플랫폼 매출·활성 구독자. 뒤 둘은 세그먼트 필터 시 숨기고 4칸) | `추이` 소제목 아래 추이 카드 5개: 방문자 → 활성 세션 → 신규 방문자·가입 → 신청·결제 → 결제 금액 (§3b) + 매출 구성 카드(§3c, 세그먼트 필터 시 숨김) | — | daily_metrics, hourly_metrics, person_day, daily_venue, daily_revenue, daily_subscription, daily_venue_registry |
 | 퍼널 | — | 채널·플랫폼·회원 | 전체 전환율(랜딩→결제)·최대 이탈 단계·가장 크게 변한 단계·탐색 도달률 | 단계 전환율 추이(상세→신청 화면, 신청 화면→결제. 28일 이상 주별, 미만 일별, 1일은 단계 막대) + 세그먼트별 퍼널 히트맵 표 | 드릴다운 ① 오디언스별 퍼널(오디언스 칩 → 도달률 표 + 주별 전환율. 기간·세그먼트 안 랜딩 0인 오디언스는 칩 비활성, 예: 회원 필터의 `신규`) ② 경로 탐색 생키 · 보조 요일×시간대 (1일: 시간별 세션) | person_day, funnel_daily, daily_metrics, hourly_metrics, weekly_audience_funnel, weekly_path |
 | 행사·결제 | 흐름 | 채널·플랫폼·회원 | 신청·결제·결제 금액·결제자당 금액·취소율 | 신청·결제 추이 + 결제 퍼널(행사 상세 → 신청 화면 → 결제) | — | daily_metrics, hourly_metrics, person_day |
 | 행사·결제 | 행사별 | 유형·가격대 | 조회된 행사·신청·결제 금액·신청분 취소율 | 결제 금액 추이 | 행사별 성과 | daily_event |
 | 행사·결제 | 공간별 | 지역·장르 | 조회된 공간·신청·결제 | 공간 상세 조회 추이 | 공간 순위 | daily_venue |
-| 행사·결제 | 매출 구성 | (없음 — 매출 마트에 세그먼트 축 없음) | 총 매출·티켓 객단가·구독 할인액·파트너 티켓 매출 비중 | 매출 구성 누적 막대(티켓·구독·B2B, 31일 이하 일별·120일 이하 주별·그 이상 월별) + 객단가 / 할인액 두 차트 + 파트너·비파트너 티켓 매출 누적 | 개최 공간별 티켓(파트너·비파트너) | daily_revenue |
+| 행사·결제 | 매출 구성 | (없음 — 매출 마트에 세그먼트 축 없음) | 거래액·플랫폼 매출·실효 수수료율·객단가·환불률 | 매출 구성 카드(개요와 같은 카드, 분해 타일 없이 차트만 — 수수료·멤버십·파트너 플랜 누적 + 거래액 선) → 멤버 할인 부담액 막대(31일 이하 일별·120일 이하 주별·그 이상 월별) | 수수료 등급별 거래(비파트너·베이직·프로: 율·결제·거래액·비중·수수료·멤버 할인, 머리에 파트너 거래액 비중) | daily_revenue |
 | 회원 | 회원 | 채널·플랫폼·회원 | 가입·신규 방문자 대비 가입·회원 방문자·방문자 중 회원 비중·W1·W4 | 방문자 회원/비회원 누적 + 리텐션 곡선 W1~W12 | — | daily_metrics, hourly_metrics, weekly_cohort, person_day |
-| 회원 | 구독 | (없음 — 구독 마트에 세그먼트 축 없음) | 구독자·신규 구독·해지·구독 MRR·월 이탈률 | 구독자 / 구독 MRR 두 차트(120일 이하 일별, 그 이상 주 마지막 날) | 구독자 vs 비구독 회원 티켓 결제(방문 회원·결제자·방문 대비 결제·티켓 순매출·결제자당 금액·구독 할인) | daily_subscription, daily_revenue, person_day |
-| 공간 | — | 상권 선택(세그먼트 줄 대체) | 등록 공간·파트너 공간·파트너 비중·신규 계약·계약 해지·B2B MRR | 등록 공간 / 파트너 공간 / 신규 계약·해지 세 차트(31일 이하 일별, 그 이상 주별) → 서울 분포 지도(영업 중 공간, 카드 안 장르·파트너 여부 선택) | 상권별(기준일 스냅샷, 등록 수는 폐업 포함 — 등록 공간 타일과 같은 기준) · 파트너 공간(상위 50, 정렬) | daily_venue_registry, venue_registry |
+| 회원 | 구독 | (없음 — 구독 마트에 세그먼트 축 없음) | 2줄 8칸: 활성 구독자·신규 구독·구독 해지·구독 월 해지율 / 구독 MRR(보조 ARR)·구독 LTV(보조 ARPU − 할인)·회원 대비 구독 비중·멤버 할인 부담률 | 구독자 / 구독 MRR 두 차트(120일 이하 일별, 그 이상 주 마지막 날) → 구독 코호트 유지율 히트맵(시작 월 × M1~, 기간 끝일까지 끝난 달) | 구독자 vs 비구독 회원 티켓 결제(방문 회원·결제자·방문 대비 결제·티켓 결제액·결제자당 금액·멤버 할인) | daily_subscription, daily_revenue, subscription_cohort, daily_metrics, person_day |
+| 공간 | — | 상권 선택(세그먼트 줄 대체) | `공간` 행(등록 공간·파트너 공간·파트너 전환율·신규 계약·계약 해지·파트너 플랜 MRR) + `파트너 계약 · 월 기준` 행(계약 월 해지율·ARPA·GRR·NRR·파트너 부담률, 상권 선택 시 숨김) | 등록 공간 / 파트너 공간 / 신규 계약·해지 세 차트(31일 이하 일별, 그 이상 주별) → 플랜별 구성(월말 계약·MRR 토글, 최근 12개월) + 계약 코호트 유지율 히트맵(계약·MRR 토글) (둘 다 상권 선택 시 숨김) → 서울 분포 지도(영업 중 공간, 카드 안 무드·파트너 여부 선택) | 상권별(기준일 스냅샷, 등록 수는 폐업 포함 — 등록 공간 타일과 같은 기준) · 파트너 공간(상위 50, 정렬) | daily_venue_registry, venue_registry, monthly_contract, contract_cohort, daily_revenue |
 | 유입·광고 | 채널 | 채널·플랫폼·회원 | 세션·광고 세션 비중·신규 방문자·가입·결제 금액 | 유입 유형별 세션 누적 (1일: 막대 목록) | 채널별 성과(유입 유형 · 소스 = `channel2` · `channel3`) | daily_channel |
 | 유입·광고 | 캠페인 | 캠페인 선택 | 집행(지출·노출·클릭, CTR) → 유입(세션·신규 방문자) → 행동(가입 + CAC·신청·결제 금액 + ROAS) | 지출 / 광고 세션 (두 차트, 이중 축 없음) | 캠페인 비교(행 클릭 = 선택) | daily_ad |
 | 주간·월간 | 주간 | 채널·플랫폼·회원 · 기간 줄 → 주차 | WAU·신규·재방문·재방문 비중·주 2일+ 방문·W1(직전 주 코호트) | 주간 방문자 12주(신규/재방문) + 코호트 히트맵 W1~W12(12개 코호트 + 가중 평균) | — | weekly_activity, weekly_cohort |
 | 주간·월간 | 월간 | 범위 6/12개월 · 기간 줄 → 월 | 방문자·신규·가입·결제 금액·신청분 취소율·W1 (전월 대비) | 월간 방문자(신규/재방문) + 월 코호트 M1~M6 | 월간 브리핑 | monthly_summary, monthly_cohort |
 
-스코어보드마다 위에 소제목 한 줄 `<구획 이름> · <비교 기준>` 을 둔다(개요 `핵심 지표`·`매출`, 퍼널 `전환`, 흐름 `신청·결제`, 매출 구성 `매출`, 회원 `회원`, 구독 `구독`, 공간 `공간`, 채널 `유입`, 주간 `주간 · 전주 대비`, 월간 `월간 · 전월 대비`). 비교 기준은 `직전 N일 대비`(1일은 `전일 대비`), 직전 기간이 데이터 범위 밖이면 `전기 없음`. 증감이 없는 스코어보드(행사별·공간별·캠페인)는 소제목을 두지 않는다. 공간 탭 상권 선택지는 `전체` → 기준일 등록 공간 수 내림차순 → `기타`.
+스코어보드마다 위에 소제목 한 줄 `<구획 이름> · <비교 기준>` 을 둔다(개요 `핵심 지표`, 퍼널 `전환`, 흐름 `신청·결제`, 매출 구성 `거래·매출`, 회원 `회원`, 구독 `구독`, 공간 `공간`·`파트너 계약 · 월 기준 <달 범위>`(비교 기준 `직전 N개월 대비`), 채널 `유입`, 주간 `주간 · 전주 대비`, 월간 `월간 · 전월 대비`). 비교 기준은 `직전 N일 대비`(1일은 `전일 대비`), 직전 기간이 데이터 범위 밖이면 `전기 없음`. 증감이 없는 스코어보드(행사별·공간별·캠페인)는 소제목을 두지 않는다. 공간 탭 상권 선택지는 `전체` → 기준일 등록 공간 수 내림차순 → `기타`.
 
-탭 순서는 도메인 탭 → 성격이 다른 주간·월간 탭(끝). 공간 탭은 회원 옆. 공간 탭의 장르·파트너 여부 선택은 필터 줄이 아니라 지도 카드 머리에 둔다 — `daily_venue_registry` 의 축이 상권 하나라 스코어보드·추이가 그 선택을 받을 수 없기 때문이다(URL `sr`·`sg`·`sp`). 퍼널 탭은 표 열에 드릴다운 카드를 적었다. 옛 링크 `tab=explore` 는 퍼널 탭으로, `tab=explore&view=venue` 는 행사·결제 공간별로 연결된다.
+탭 순서는 도메인 탭 → 성격이 다른 주간·월간 탭(끝). 공간 탭은 회원 옆. 공간·행사의 `genre` 값은 화면에서 `무드` 로 부른다. 공간 탭의 무드·파트너 여부 선택은 필터 줄이 아니라 지도 카드 머리에 둔다 — `daily_venue_registry` 의 축이 상권 하나라 스코어보드·추이가 그 선택을 받을 수 없기 때문이다(URL `sr`·`sg`·`sp`). 퍼널 탭은 표 열에 드릴다운 카드를 적었다. 옛 링크 `tab=explore` 는 퍼널 탭으로, `tab=explore&view=venue` 는 행사·결제 공간별로 연결된다.
 
 ## 3. 지표 산식 (화면 계산)
 
@@ -60,7 +60,7 @@
 | 재방문 비중 · 주 2일+ 방문 | returning_persons ÷ wau · two_plus_days ÷ wau | 사람 |
 | 증감 | 직전 동일 길이 기간 대비(1일은 전일). 직전 기간이 데이터 범위 밖이면 표시하지 않는다 | % / %p |
 
-타일 보조 문구: 증감 줄은 `▲ 9.5%` 처럼 화살표와 값만 쓴다(비교 기준은 스코어보드 소제목, 계산 불가는 `—`, 전기 없음은 빈 줄). 그 아래 보조 줄은 분모(`세션 187,803 중`, `방문자 N명 중`)·창(`9/20 기준`, `30일 환산`, 코호트 크기)·구성비(`총 매출의 82%`)처럼 값 해석에 필요한 정보가 있는 타일에만 둔다. 분모가 다른 타일에 있으면 그 수만 보여 주는 타일은 따로 두지 않는다(개요 `세션` 타일 제거 — 활성 세션 비율의 분모로 남음).
+타일 보조 문구: 증감 줄은 `▲ 9.5%` 처럼 화살표와 값만 쓴다(비교 기준은 스코어보드 소제목, 계산 불가는 `—`, 전기 없음은 빈 줄). 그 아래 보조 줄은 분모(`세션 187,803 중`, `방문자 N명 중`)·창(`9/20 기준`, `30일 환산`, 코호트 크기)·구성비(`플랫폼 매출의 82%`)처럼 값 해석에 필요한 정보가 있는 타일에만 둔다. 분모가 다른 타일에 있으면 그 수만 보여 주는 타일은 따로 두지 않는다(개요 `세션` 타일 제거 — 활성 세션 비율의 분모로 남음).
 
 ### 3b. 개요 탭 추이 카드 (`TrendCard`)
 
@@ -78,21 +78,38 @@
 
 ### 3c. 매출·구독·공간 산식
 
+수익 모델은 `docs/business_model.md` A안. 플랫폼 매출 = 수수료 + 멤버십 + 파트너 플랜이고, 거래액(GMV)·티켓 결제액은 규모 지표다. `daily_revenue` 티켓 행은 `gmv_amount − discount_amount = paid_amount`(환불 주문 제외), `net_amount` = 수수료, `pay_count` 는 환불 포함. 멤버십·파트너 플랜 행은 `gmv_amount` 가 null 이고 `net_amount` 가 매출이다.
+
 | 지표 | 산식 | 단위 |
 |---|---|---|
-| 총 매출 · 티켓 · 구독 · B2B | 기간 Σ `daily_revenue.net_amount`(= gross − discount − refund) 종류별. 전기 대비는 직전 동일 길이 기간 | 원 |
-| 매출 구성 카드 (개요) | `TrendCard` 와 같은 버킷·그레인·전기·드릴다운 규칙(§3b), 차트는 종류별 누적 막대 + 전기 합계 점선, 분해 타일 = 전체·티켓·구독·B2B. 1일은 분해 타일만 | 원 |
-| 티켓 객단가 | Σ gross_amount ÷ Σ pay_count (kind = ticket) | 원 |
-| 구독 할인액 · 파트너 티켓 매출 비중 | Σ discount_amount · Σ net_amount(partner_flag) ÷ Σ net_amount(ticket) | 원 · % |
-| 구독자 · 구독 MRR | 기간 끝일 이하 마지막 날의 `active_subscribers` · `mrr`(합산하지 않음) | 명 · 원 |
-| 신규 구독 · 해지 | 기간 Σ new_subscribers · churned_subscribers | 건 |
-| 월 이탈률 | Σ churned ÷ 기간 시작일 active_subscribers × 30 ÷ 기간 일수 | % |
-| 구독자 vs 비구독 회원 | `person_day` 에서 member 코드인 행만, 사람마다 기간 안 마지막 회원 행(방문 또는 결제)의 비트 32768(`subscribed`) 유무로 귀속해 visited·paid 고유 pk(두 행 합 = 기간 회원 방문자). 티켓 순매출은 구독자 = Σ subscriber_ticket_amount, 비구독 = 티켓 순매출 − 그 값. 구독 할인은 전부 구독자 몫 | 명 · 원 |
-| 등록 공간 · 파트너 공간 · B2B MRR | 기간 끝일 이하 마지막 날의 상권 합 `registered_total` · `partner_total` · `mrr_basic + mrr_pro`(`*_total` 은 기간으로 더하지 않는다) | 곳 · 원 |
+| 플랫폼 매출 · 수수료 · 멤버십 · 파트너 플랜 | 기간 Σ `net_amount` 전체 · kind = ticket · membership · partner_plan. 전기 대비는 직전 동일 길이 기간 | 원 |
+| 거래액 · 티켓 결제액 | Σ `gmv_amount` · Σ `paid_amount` (kind = ticket) | 원 |
+| 매출 구성 카드 (개요·매출 구성) | `TrendCard` 와 같은 버킷·그레인·전기·드릴다운 규칙(§3b). 차트 = 수수료·멤버십·파트너 플랜 누적 막대(왼쪽 축) + 거래액 선(오른쪽 축) + 전기 플랫폼 매출 점선. 분해 타일(개요만) = 플랫폼 매출·수수료·멤버십·파트너 플랜·거래액. 1일은 분해 타일만 | 원 |
+| 실효 수수료율 | Σ net(ticket) ÷ Σ gmv(ticket) | % |
+| 객단가 | Σ gmv ÷ (Σ pay_count − Σ refund_count) (ticket) | 원 |
+| 환불률 | Σ refund_count ÷ Σ pay_count (ticket), 보조 줄에 환불 금액 | % |
+| 수수료 등급별 거래 | `fee_tier` 별 결제(pay_count − refund_count)·거래액·거래액 비중·수수료·멤버 할인. 수수료율 열은 설정값(10·5·3%). 파트너 거래액 비중 = (basic + pro) gmv ÷ gmv | 건 · 원 · % |
+| 멤버 할인 부담액 | 버킷별 Σ discount_amount (ticket) | 원 |
+| 활성 구독자 · 구독 MRR | 기간 끝일 이하 마지막 날의 `active_subscribers` · `mrr`(합산하지 않음). ARR = MRR × 12 | 명 · 원 |
+| 신규 구독 · 구독 해지 | 기간 Σ new_subscribers · churned_subscribers | 건 |
+| 구독 월 해지율 | Σ churned ÷ 구독자·월. 구독자·월 = Σ 일별 active_subscribers ÷ 30(기간이 출시 전부터 시작해도 계산된다) | % |
+| 구독 LTV(추정) | (ARPU − 1인·월 할인) ÷ 구독 월 해지율. ARPU = 멤버십 매출 ÷ 구독자·월, 1인·월 할인 = Σ `daily_subscription.discount_amount` ÷ 구독자·월 | 원 |
+| 회원 대비 구독 비중 | 기간 끝 활성 구독자 ÷ 그날까지 Σ signups(`daily_metrics` 전체 세그먼트) | % |
+| 멤버 할인 부담률 | Σ `daily_subscription.discount_amount` ÷ 멤버십 매출 | % |
+| 구독 코호트 유지율 | `subscription_cohort` retained ÷ cohort_size. 행 = 시작 월 ≤ 기간 끝 월의 최근 12개, 칸 = M1~M12 중 그 달 말일 ≤ 기간 끝일 | % |
+| 구독자 vs 비구독 회원 | `person_day` 에서 member 코드인 행만, 사람마다 기간 안 마지막 회원 행(방문 또는 결제)의 비트 32768(`subscribed`) 유무로 귀속해 visited·paid 고유 pk(두 행 합 = 기간 회원 방문자). 티켓 결제액은 구독자 = Σ subscriber_ticket_amount, 비구독 = 티켓 결제액 − 그 값. 멤버 할인은 전부 구독자 몫 | 명 · 원 |
+| 등록 공간 · 파트너 공간 · 파트너 플랜 MRR | 기간 끝일 이하 마지막 날의 상권 합 `registered_total` · `partner_total` · `mrr_basic + mrr_pro`(`*_total` 은 기간으로 더하지 않는다) | 곳 · 원 |
 | 신규 계약 · 계약 해지 | 기간 Σ new_contracts · churned_contracts | 건 |
+| 계약 월 구획의 달 | `monthly_contract` 의 끝난 달(말일 ≤ `meta.to_date`) 중 기간과 겹치는 달. 없으면 기간 끝 이전 마지막 끝난 달. 전기 = 바로 앞 같은 개수의 끝난 달(모자라면 증감 없음). 전부 plan = all 행 | 달 |
+| 계약 월 해지율 · 매출 해지율 | Σ churned_contracts ÷ Σ contracts_bom · Σ (mrr_churn + mrr_contraction) ÷ Σ mrr_bom | % |
+| GRR · NRR | Σ (mrr_bom − mrr_churn − mrr_contraction) ÷ Σ mrr_bom · 같은 분자 + Σ mrr_expansion. NRR 보조 줄에 업·다운그레이드 건수 | % |
+| ARPA | 구획 마지막 달의 `arpa`(= mrr_eom ÷ contracts_eom) | 원 |
+| 파트너 부담률 | 구획 달 범위의 (Σ net(ticket, fee_tier ∈ basic, pro) + Σ net(partner_plan)) ÷ Σ gmv(ticket, fee_tier ∈ basic, pro) | % |
+| 플랜별 구성 | `monthly_contract` plan = basic·pro 의 contracts_eom 또는 mrr_eom, 기간 끝 월까지 최근 12개월(진행 중인 달은 기준일 값) | 계약 · 원 |
+| 계약 코호트 유지율 | `contract_cohort` retained ÷ cohort_size, MRR 토글은 mrr_retained ÷ 0개월 mrr_retained. 머리 칸은 코호트 계약 수 | % |
 | 공간 추이 (주별) | `*_total` 은 주 마지막 날 값, 계약 수는 주 합 | 곳 · 건 |
 | 서울 분포 지도 | `venue_registry` 중 `status ≠ closed`. 좌표는 위경도를 등장방형 근사(경도 × cos 37.55°)로 투영, 서울 외곽선·한강은 근사 다각형. 점 반지름 = 3 + 9·√(28일 조회 ÷ 최댓값), 색 = `is_partner`. hover 는 가장 가까운 점(14px 이내) | 곳 |
-| 상권별 · 파트너 공간 표 | `venue_registry` 스냅샷 그대로(파트너 판정은 `is_partner` 만), 행사·매출은 365일, 조회는 28일. 상권별 등록 수는 폐업 포함(합 = 등록 공간 타일 1,800), 지도·파트너 공간 표는 `status ≠ closed` | 곳 · 건 · 원 |
+| 상권별 · 파트너 공간 표 | `venue_registry` 스냅샷 그대로(파트너 판정은 `is_partner` 만), 이벤트·티켓 결제액은 365일, 조회는 28일. 상권별 등록 수는 폐업 포함(합 = 등록 공간 타일 1,800), 지도·파트너 공간 표는 `status ≠ closed` | 곳 · 건 · 원 |
 
 ### 3a. 퍼널 탭 산식
 
@@ -119,7 +136,7 @@
 
 | 파일 | 내용 | 받는 시점 |
 |---|---|---|
-| `index.json` (고정 이름) | `meta` + `files` + `daily_metrics, daily_ad, funnel_daily, weekly_cohort, monthly_cohort, weekly_activity, monthly_summary, weekly_audience_funnel, daily_revenue, daily_subscription, daily_venue_registry, venue_registry` | 첫 요청 |
+| `index.json` (고정 이름) | `meta` + `files` + `daily_metrics, daily_ad, funnel_daily, weekly_cohort, monthly_cohort, weekly_activity, monthly_summary, weekly_audience_funnel, daily_revenue, daily_subscription, daily_venue_registry, venue_registry, monthly_contract, contract_cohort, subscription_cohort` | 첫 요청 |
 | `hourly_metrics.<해시>.json` | 행 배열 | 1일 보기(개요·행사·회원), 퍼널 탭 시간대 히트맵 |
 | `daily_channel.<해시>.json` | 행 배열 | 유입·광고 탭 채널 보기 |
 | `daily_venue.<해시>.json` | 행 배열 | 개요 상단 공간 수, 행사·결제 탭 공간별 보기 |
@@ -148,10 +165,13 @@
 | `weekly_activity` | `week_start, channel1, device_platform, member_seg, wau, new_persons, returning_persons, two_plus_days` |
 | `weekly_audience_funnel` | `week_start, audience_id(new/returning/paid_inflow/past_payer/apply_no_pay/explorer_only), step(landing/detail/signup/apply_view/payment), channel1, device_platform, member_seg, persons` |
 | `weekly_path` | `week_start, channel1, device_platform, member_seg, step(1..4, 정수), from_screen, to_screen, sessions` |
-| `monthly_summary` | `month, persons, new_persons, signups, applies, pay_count, pay_amount, cancels, w1_retention, top_channel, ticket_amount, subscription_amount, b2b_amount, active_subscribers_eom, partner_total_eom, registered_total_eom` |
-| `daily_revenue` | `kst_date, kind(ticket/subscription/b2b), partner_flag(bool, ticket 만·나머지 null), pay_count, gross_amount, discount_amount, refund_amount, net_amount, payers` — 매출은 `net_amount`(= gross − discount − refund), b2b 는 계약 월 요금 ÷ 그 달 일수, `payers` 는 회원 수(b2b 는 공간 수) |
-| `daily_subscription` | `kst_date, active_subscribers, new_subscribers, churned_subscribers, mrr, subscriber_ticket_payers, subscriber_ticket_amount` — 첫 구독일 ~ 기준일 모든 날, 이탈률 = 기간 churned ÷ 기간 시작일 active |
-| `daily_venue_registry` | `kst_date, region, registered_total, partner_total, new_registered, new_contracts, churned_contracts, mrr_basic, mrr_pro` — 모든 날 × 모든 상권, 전체 = 상권 합, `*_total` 은 그날 값(기간 합산 금지) |
+| `monthly_summary` | `month, persons, new_persons, signups, applies, pay_count, pay_amount, cancels, w1_retention, top_channel, gmv_amount, fee_amount, membership_amount, partner_plan_amount, platform_revenue, ad_spend, active_subscribers_eom, partner_total_eom, registered_total_eom` — `platform_revenue` = 수수료 + 멤버십 + 파트너 플랜(`daily_revenue.net_amount` 월 합), `gmv_amount` 은 매출이 아니다, `ad_spend` 는 집행일 기준 |
+| `daily_revenue` | `kst_date, kind(ticket/membership/partner_plan), fee_tier(none/basic/pro, ticket 만·나머지 null), pay_count, gmv_amount(ticket 만·나머지 null), paid_amount, discount_amount, refund_count, refund_amount, net_amount, payers` — `net_amount` = 플랫폼 매출(ticket 수수료 = 정가 × 등급 율·환불 주문 0, membership 실결제, partner_plan 그날 요금 ÷ 그 달 일수), 전 kind 합 = 플랫폼 매출. ticket 의 `gmv_amount`(정가)·`paid_amount`(실결제)·`discount_amount` 는 환불 주문 제외라 `gmv − discount = paid`, `pay_count` 는 환불 포함(환불 제외 건수 = `pay_count − refund_count`). 결제일 기준. `payers` 는 회원 수(partner_plan 은 공간 수, `pay_count` 는 활성 계약 수) |
+| `daily_subscription` | `kst_date, active_subscribers, new_subscribers, churned_subscribers, mrr, subscriber_ticket_payers, subscriber_ticket_amount, discount_amount` — 첫 구독일 ~ 기준일 모든 날, 이탈률 = 기간 churned ÷ 기간 시작일 active, `discount_amount` = 그날 멤버 할인 합(환불 주문 제외, `daily_revenue` ticket 할인 일 합과 같다) |
+| `daily_venue_registry` | `kst_date, region, registered_total, partner_total, new_registered, new_contracts, churned_contracts, mrr_basic, mrr_pro` — 모든 날 × 모든 상권, 전체 = 상권 합, `*_total` 은 그날 값(기간 합산 금지), `mrr_*` 는 그날 요금제·요금(변경 반영) |
+| `monthly_contract` | `month, plan(basic/pro/all), contracts_bom, new_contracts, churned_contracts, upgrades, downgrades, contracts_eom, mrr_bom, mrr_new, mrr_expansion, mrr_contraction, mrr_churn, mrr_eom, arpa` — 첫 계약 월 ~ 기준월, 월초 = 전월 마지막 날, 월말 = 그 달 마지막 날(기준월은 기준일). 다리: `mrr_eom = mrr_bom + mrr_new + mrr_expansion − mrr_contraction − mrr_churn`, all 행은 `contracts_eom = contracts_bom + new − churned` 도 성립. GRR·NRR·매출 해지율·계약 월 해지율은 all 행으로 계산. 요금제 행의 expansion·contraction 은 그 요금제로 옮겨 온·빠져나간 요금, upgrades·downgrades 는 그 요금제가 한쪽인 변경 건수. `arpa` = `mrr_eom ÷ contracts_eom`(원, 계약 0 이면 null) |
+| `contract_cohort` | `cohort_month, month_offset(0..12), cohort_size, retained, mrr_retained` — 계약 시작 월 코호트, n개월 = 시작일 + n개월에 활성. 0개월 `retained = cohort_size`, `mrr_retained` 는 그날 요금 합(업그레이드로 0개월 값을 넘을 수 있다). 코호트 전원이 관측된 칸만 행이 있다 |
+| `subscription_cohort` | `cohort_month, month_offset(0..9), cohort_size, retained` — 구독 시작 월 코호트(구독 건), n개월 = 시작일 + n개월에 활성. 0개월 `retained = cohort_size`, 전원 관측된 칸만 행이 있다 |
 | `venue_registry` | `venue_id, name, region, district, lat, lng, genre, venue_type, capacity_band, registered_at, is_partner(bool), plan, contract_started_at, contract_ended_at, events_365d, ticket_amount_365d, detail_viewers_28d, status, as_of_date` — 기준일 고정(기간·세그먼트 필터 없음), 날짜 열은 `YYYY-MM-DD` |
 | `person_day` | 바이너리 `person_day.<해시>.bin`(전송용 gzip 사본 `.pdz`): 행당 8바이트, 리틀엔디언 Uint32 2개. word0 = `pk`(비트 0–19) \| `d`(20–28) \| `c`(29) \| `p`(30–31), word1 = `m`(0) \| `f`(1–16), 나머지 비트 0. 행은 날짜·사람 키 순. 메타 `person_day.meta.<해시>.json` = `{base_date, codes, rows, row_bytes, layout}`. 날짜 = `base_date` + `d`일, `pk` 는 익명 사람 키(적재마다 재부여), `c`·`p`·`m` 은 `codes` 인덱스 — `codes = {c: [non_paid, paid], p: [android, ios, web], m: [guest, member]}`(적재 데이터의 고유값 정렬, 값이 늘면 인덱스가 바뀐다). `f` 는 비트 플래그(`src/lib/persons.ts` 의 `F`, 비트 정의는 `bigquery/sql/marts/person_day.sql` 머리 주석). 플래그가 없는 날은 행이 없다. 폭을 넘는 값이 나오면 `extract.py` 가 중단한다(`PD_BITS` 를 늘리고 `persons.ts` 를 같이 고친다). `meta.tables.person_day` 는 행 수 |
 
@@ -175,18 +195,17 @@
 
 **프로젝트 개요** — 대시보드 안에 설명 문장을 넣지 않기 위한 자리.
 
-1. 한 문장 요약 + 데이터 설명 절(`#data-note`, 저톤 문단): 시나리오·분포 규칙으로 생성했고 실제 데이터를 포함하지 않음, 방문자 210,000명·회원 약 22,000명·52주·이벤트 약 960만 건 규모
-2. 가상 프로덕트 배경 한 단락(공간·행사 탐색 → 신청 → 결제, 회원·비회원, 앱·웹, 광고 유입)
-3. 핵심 퍼널 5화면 와이어프레임(홈·지도 → 행사 상세 → 로그인·가입 → 신청 화면 → 결제 완료)과 화면별 이벤트 이름
-4. 데이터 흐름 도식(행동 로그·서비스 DB·광고 리포트 → raw → staging → marts, ops → JSON 추출 → 정적 웹). 폭 768px 미만은 세로 도식
-5. 문서 카드 6개: 데이터 페이지 · 지표 가이드(둘 다 내부 이동) · SQL 카탈로그(`bigquery/README.md`) · 데이터 아키텍처 · 대시보드 설계 · 저장소
+1. 한 문장 요약(도심 공간·이벤트 플랫폼) + 데이터 설명 절(`#data-note`, 저톤 문단): 시나리오·분포 규칙으로 생성한 합성 데이터, 방문자 210,000명·회원 약 22,000명·52주·이벤트 약 960만 건 규모
+2. 프로덕트: 도심 공간(카페·바·라운지·라이브홀·루프탑·팝업)과 이벤트 탐색 → 신청 → 결제, 회원·비회원, 앱·웹, 광고 유입. 두 번째 단락은 공간 두 층(등록 1,800곳, 파트너 플랜 베이직 4.9만·프로 14.9만 원 약 10%)과 멤버십(월 9,900원, 파트너 공간 이벤트 15% 할인)
+3. 비즈니스 모델: 한 줄(플랫폼 매출 세 갈래, 거래액은 규모 지표) → 인라인 SVG 돈의 흐름(소비자 → 티켓 결제·멤버십 → Placewave → 정산 → 공간 사업자, 공간 사업자 → 파트너 플랜, 멤버 할인은 점선. 색 = 수익 축, 개요 매출 구성 카드와 같은 색). 폭 768px 미만은 세로 도식 → 축 카드 3장(거래 수수료·멤버십·파트너 플랜: 산식 한 줄 + 핵심 지표 3개)
+4. 핵심 퍼널 5화면 와이어프레임(홈·지도 → 행사 상세 → 로그인·가입 → 신청 화면 → 결제 완료)과 화면별 이벤트 이름
+5. 데이터 흐름 도식(행동 로그·서비스 DB·광고 리포트 → raw → staging → marts, ops → JSON 추출 → 정적 웹). 폭 768px 미만은 세로 도식. 서비스 DB 상자는 `공간·계약·구독·결제` 원장
+6. 문서 카드 6개: 데이터 페이지 · 지표 가이드(둘 다 내부 이동) · SQL 카탈로그(`bigquery/README.md`) · 데이터 아키텍처 · 대시보드 설계 · 저장소
 
-가상 프로덕트 절에 시나리오 2.0 단락(공간 두 층 — 등록 1,800곳과 월 이용료를 내는 파트너 약 10%, 소비자 구독 9,900원·파트너 행사 15% 할인, 매출 티켓·구독·B2B)을 두고, 데이터 흐름 도식의 서비스 DB 상자는 `공간·계약·구독·결제` 원장을 적는다.
-
-**지표 가이드** — 원본 `public/metrics.json`(`rules`·`groups`·`notes`·`tabs[]{id, name, question, users[], key_metrics[]}`·`metrics[]{id, name, tab, group, definition, formula, unit, denominator, mart_columns[], why}`). `docs/metrics.md` 는 이 JSON 에서 `dashboard/scripts/build_metrics_doc.py` 로 생성한다(직접 수정 금지, `--check` 로 불일치 확인).
+**지표 가이드** — 원본 `public/metrics.json`(`rules`·`groups`·`axes[]{id, name}`·`notes`·`tabs[]{id, name, question, users[], key_metrics[]}`·`metrics[]{id, name, tab, group, axis, definition, formula, unit, denominator, mart_columns[], why}`). 축은 `platform`(공통 — 플랫폼 매출 전체)·`marketplace`·`subscription`·`b2b`. `docs/metrics.md` 는 이 JSON 에서 `dashboard/scripts/build_metrics_doc.py` 로 생성한다(직접 수정 금지, `--check` 로 불일치 확인).
 
 - 탭별 질문 표: 탭 · 답하는 질문 · 주 사용자 · 핵심 지표 3개(누르면 아래 지표 표가 그 코드로 검색된다).
-- 지표 표: 탭 칩(전체 + 탭별 개수) · 검색(이름·코드·정의·산식·마트 열) → 행 = 이름·코드·탭 / 정의·의의 / 산식·분모 / 단위 / 마트 열. 폭 1024px 미만은 행 안에서 세로로 쌓는다.
+- 지표 표: 수익 축 선택(전체 축·공통·마켓플레이스·구독·B2B, 개수 병기) → 탭 칩(전체 + 탭별 개수, 선택한 축 안의 개수) · 검색(이름·코드·정의·산식·마트 열) → 행 = 이름·코드·탭 / 정의·의의 / 산식·분모 / 단위 / 마트 열. 폭 1024px 미만은 행 안에서 세로로 쌓는다.
 - 타일·카드 이름 옆 `?`(`metricId` prop): 같은 JSON 의 이름·정의·산식·분모·단위를 팝오버로 띄운다. 바깥 클릭·Esc·스크롤로 닫힌다. JSON 이 없거나 id 가 없으면 `?` 를 그리지 않는다.
 
 **데이터** — `public/catalog.json`(계약은 `docs/backlog.md` §6, 생성기 `bigquery/build_catalog.py --export`) + `public/data/`.

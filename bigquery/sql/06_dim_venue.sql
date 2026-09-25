@@ -2,16 +2,17 @@
 -- 1행: 공간 1곳
 -- 키: venue_id
 -- 파티션·클러스터: 없음 / 없음
--- 원천: raw.db_venues, raw.db_events, staging.dim_contract
+-- 원천: raw.db_venues, raw.db_events, staging.dim_contract, staging.int_contract_day (그 계약의 마지막 활성일 요금제)
 -- 소비: marts.daily_venue·daily_venue_registry·venue_registry (공간 속성)
 --
 -- 파트너 여부·요금제·계약일은 스냅샷 기준일에 활성인 계약 기준이다(활성 규칙은 dim_contract).
 -- 기준일에 활성 계약이 없으면 is_partner = FALSE 이고 plan·계약일은 가장 최근 계약 값(계약 이력이 없으면 NULL).
+-- plan 은 그 계약의 마지막 활성일 요금제(요금제 변경 반영, staging.int_contract_day). 진행 중이면 기준일 요금제다.
 
 CREATE OR REPLACE TABLE staging.dim_venue (
   venue_id INT64 OPTIONS(description='공간 ID'),
   venue_name STRING OPTIONS(description='공간명 (가상)'),
-  region STRING OPTIONS(description='상권 (서울 나이트라이프 상권)'),
+  region STRING OPTIONS(description='상권 (서울 주요 상권)'),
   genre STRING OPTIONS(description='대표 장르'),
   capacity_band STRING OPTIONS(description='수용 규모 S/M/L/XL'),
   events INT64 OPTIONS(description='등록 행사 수'),
@@ -30,7 +31,7 @@ CREATE OR REPLACE TABLE staging.dim_venue (
   contracts INT64 OPTIONS(description='계약 이력 건수'),
   snapshot_date DATE OPTIONS(description='원장 스냅샷 기준일')
 )
-OPTIONS(description='공간 차원. 1행 = 공간 1곳. 키 venue_id. 원천 raw.db_venues·db_events + staging.dim_contract(기준일 파트너 여부·요금제)')
+OPTIONS(description='공간 차원. 1행 = 공간 1곳. 키 venue_id. 원천 raw.db_venues·db_events + staging.dim_contract·int_contract_day(기준일 파트너 여부·요금제)')
 AS
 WITH c AS (
   SELECT
@@ -49,6 +50,12 @@ WITH c AS (
     )[OFFSET(0)] AS cur
   FROM staging.dim_contract
   GROUP BY venue_id
+),
+last_plan AS (
+  SELECT contract_id, ARRAY_AGG(plan ORDER BY kst_date DESC LIMIT 1)[OFFSET(0)] AS plan
+  FROM staging.int_contract_day
+  WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+  GROUP BY contract_id
 ),
 ev AS (
   SELECT venue_id, COUNT(*) AS events
@@ -70,7 +77,7 @@ SELECT
   DATE(v.registered_at, 'Asia/Seoul') AS registered_date,
   v.status,
   COALESCE(c.cur.is_active, FALSE) AS is_partner,
-  c.cur.plan,
+  COALESCE(lp.plan, c.cur.plan) AS plan,
   c.cur.contract_id,
   c.cur.start_date AS contract_start_date,
   c.cur.end_date AS contract_end_date,
@@ -78,4 +85,5 @@ SELECT
   v.snapshot_date
 FROM raw.db_venues AS v
 LEFT JOIN c USING (venue_id)
+LEFT JOIN last_plan AS lp ON lp.contract_id = c.cur.contract_id
 LEFT JOIN ev USING (venue_id);

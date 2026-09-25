@@ -89,7 +89,8 @@ SUB_HAZARD = 0.06  # 구독 결제 회차당 해지 결심 확률. 해지는 다
 SUB_CORE_WEIGHT = 3.0  # 구독 후보 추첨 시 단골층 가중
 SUB_VIEW_P = (0.008, 0.04)  # 세션당 구독 안내 조회 확률 (비회원, 비구독 회원)
 CONTRACT_CHURN = (0.015, 0.025)  # 파트너 계약 월 해지율 범위 (월마다 추첨)
-PLAN_FEE = {"basic": 99000, "pro": 299000}
+PLAN_CHANGE_MONTHLY = (0.01, 0.02)  # 진행 계약 중 그달 플랜을 바꾸는 비율 범위 (월마다 추첨). 요금은 names.json pricing
+PLAN_UPGRADE_SHARE = 0.8  # 플랜 변경 중 basic -> pro 비중 (나머지 pro -> basic)
 PLAN_PRO_SHARE = 0.3
 VENUE_CLOSE_SHARE = 0.03  # 기간 안 폐업 공간 비중
 VENUE_PARETO = 1.3  # 공간 개별 인기 지수 파레토 모양
@@ -412,6 +413,7 @@ class Generator:
         """
         self.s = seed
         self.rng = np.random.default_rng(rng_seed)
+        self.plan_rng = np.random.default_rng([rng_seed, 2])  # 플랜 변경 전용 (주 난수열 보존)
         self.weeks = weeks
         self.n_days = weeks * 7
         self.n_persons = persons
@@ -429,6 +431,7 @@ class Generator:
                 "members",
                 "venues",
                 "contracts",
+                "contract_changes",
                 "events_master",
                 "applications",
                 "payments",
@@ -629,13 +632,17 @@ class Generator:
             self.partner_day[d] = active
         contracts.sort(key=lambda c: (c["start_day"], c["venue_idx"]))
         for k, c in enumerate(contracts, start=1):
+            c["contract_id"] = f"c{k:05d}"
+        self._plan_changes(contracts)
+        fee = self.s.names["pricing"]["partner_plan_fee"]
+        for c in contracts:
             ended = c["end_day"] is not None
             self.ledger["contracts"].append(
                 {
-                    "contract_id": f"c{k:05d}",
+                    "contract_id": c["contract_id"],
                     "venue_id": self.venues[c["venue_idx"]].venue_id,
                     "plan": c["plan"],
-                    "monthly_fee": PLAN_FEE[c["plan"]],
+                    "monthly_fee": fee[c["plan"]],
                     "started_at": _ts(self.day0 + c["start_day"] * 86400),
                     "ended_at": _ts(self.day0 + c["end_day"] * 86400) if ended else "",
                     "status": "ended" if ended else "active",
@@ -650,6 +657,50 @@ class Generator:
             self.venue_cum[d] = np.cumsum(w)
         self._reg = reg
         self._close = close
+
+    def _plan_changes(self, contracts: list[dict[str, Any]]) -> None:
+        """진행 계약의 플랜 업그레이드·다운그레이드를 만든다. 계약의 plan 은 현재값으로 바뀐다.
+
+        그날 진행 중(시작 다음 날부터 종료 전날까지)인 계약 수 x 월 변경률(월마다 추첨)을 일로 나눈 포아송 건수를
+        뽑고, 건마다 PLAN_UPGRADE_SHARE 로 방향을 정해 해당 플랜 계약 중 하나를 고른다. 변경일은 KST 자정이며
+        그날부터 새 요금이다. 계약당 하루 1회.
+
+        Args:
+            contracts: contract_id 가 붙은 계약 목록 (시작일 순).
+        """
+        rng = self.plan_rng
+        fee = self.s.names["pricing"]["partner_plan_fee"]
+        rate = 0.0
+        seq = 0
+        for d in range(self.n_days):
+            dd = self._day_date(d)
+            if d == 0 or dd.day == 1:
+                nxt = date(dd.year + dd.month // 12, dd.month % 12 + 1, 1)
+                rate = float(rng.uniform(*PLAN_CHANGE_MONTHLY)) / (nxt - date(dd.year, dd.month, 1)).days
+            live = [c for c in contracts if c["start_day"] < d and (c["end_day"] is None or c["end_day"] > d)]
+            touched: set[str] = set()
+            for _ in range(int(rng.poisson(len(live) * rate))):
+                up = rng.random() < PLAN_UPGRADE_SHARE
+                src, dst = ("basic", "pro") if up else ("pro", "basic")
+                pool = [c for c in live if c["plan"] == src and c["contract_id"] not in touched]
+                if not pool:
+                    continue
+                c = pool[int(rng.integers(len(pool)))]
+                seq += 1
+                self.ledger["contract_changes"].append(
+                    {
+                        "change_id": f"pc{seq:05d}",
+                        "contract_id": c["contract_id"],
+                        "venue_id": self.venues[c["venue_idx"]].venue_id,
+                        "changed_at": _ts(self.day0 + d * 86400),
+                        "from_plan": src,
+                        "to_plan": dst,
+                        "from_fee": fee[src],
+                        "to_fee": fee[dst],
+                    }
+                )
+                c["plan"] = dst
+                touched.add(c["contract_id"])
 
     def _events_per_week(self, w: int) -> float:
         for _, a, b, _, _, _, (lo, hi) in PHASES:
@@ -1700,6 +1751,7 @@ OUTPUT_FILES = {
     "members": "db_members",
     "venues": "db_venues",
     "contracts": "db_venue_contracts",
+    "contract_changes": "db_venue_contract_changes",
     "events_master": "db_events",
     "applications": "db_applications",
     "payments": "db_payments",
@@ -1724,6 +1776,16 @@ LEDGER_COLUMNS = {
         "status",
     ],
     "contracts": ["contract_id", "venue_id", "plan", "monthly_fee", "started_at", "ended_at", "status"],
+    "contract_changes": [
+        "change_id",
+        "contract_id",
+        "venue_id",
+        "changed_at",
+        "from_plan",
+        "to_plan",
+        "from_fee",
+        "to_fee",
+    ],
     "events_master": [
         "event_id",
         "venue_id",
@@ -1754,7 +1816,7 @@ LEDGER_COLUMNS = {
 
 
 def write_ledgers(g: Generator, raw_dir: Path) -> None:
-    """원장 8종을 CSV 로 쓴다. 서비스 RDB 스냅샷(db_*)에는 snapshot_date 열을 붙인다.
+    """원장 9종을 CSV 로 쓴다. 서비스 RDB 스냅샷(db_*)에는 snapshot_date 열을 붙인다.
 
     Args:
         g: 실행이 끝난 생성기.

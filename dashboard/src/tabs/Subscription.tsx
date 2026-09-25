@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
-import { TimeChart } from '../components/charts'
+import { Heatmap, TimeChart } from '../components/charts'
 import { DataTable, type Col } from '../components/DataTable'
 import { Card, Tile, TileRow } from '../components/ui'
+import { cohortHeat } from '../lib/cohort'
 import { diffDays, md, mondayOf } from '../lib/date'
 import { num, pct, ratio, won } from '../lib/format'
 import { S } from '../lib/labels'
@@ -62,21 +63,41 @@ function at(rows: DailySubscription[], d: string): DailySubscription | undefined
   return last
 }
 
-/** 기간 흐름. 월 이탈률 = 기간 해지 ÷ 기간 시작일 활성 구독자 × 30 ÷ 기간 일수. */
+/**
+ * 기간 흐름. 구독자·월 = Σ 일별 활성 ÷ 30 — 월 해지율·ARPU·1인·월 할인의 분모.
+ * 월 해지율 = 기간 해지 ÷ 구독자·월(월 평균 활성 기준이라 기간이 출시 전부터 시작해도 계산된다).
+ */
 function span(rows: DailySubscription[], from: string, to: string) {
   let churn = 0
   let fresh = 0
   let amount = 0
-  let start: number | null = null
+  let discount = 0
+  let activeDays = 0
   for (const r of rows) {
     if (r.kst_date < from || r.kst_date > to) continue
-    if (start == null) start = r.active_subscribers
     churn += r.churned_subscribers
     fresh += r.new_subscribers
     amount += r.subscriber_ticket_amount
+    discount += r.discount_amount ?? 0
+    activeDays += r.active_subscribers
   }
-  const days = diffDays(from, to) + 1
-  return { churn, fresh, amount, rate: start ? (churn / start) * (30 / days) : null }
+  const subMonths = activeDays / 30
+  return { churn, fresh, amount, discount, subMonths, rate: ratio(churn, subMonths) }
+}
+
+/** 구독 LTV(추정) = (ARPU − 1인·월 할인) ÷ 월 해지율. */
+function ltv(membership: number, discount: number, subMonths: number, rate: number | null) {
+  const arpu = ratio(membership, subMonths)
+  const dpm = ratio(discount, subMonths)
+  const value = arpu != null && dpm != null && rate ? (arpu - dpm) / rate : null
+  return { arpu, dpm, value }
+}
+
+/** 날짜 d 까지 누적 가입(전체 세그먼트). */
+function membersAt(signups: Map<string, number>, d: string): number {
+  let n = 0
+  for (const [k, v] of signups) if (k <= d) n += v
+  return n
 }
 
 export default function Subscription({ data, range }: TabProps) {
@@ -85,6 +106,21 @@ export default function Subscription({ data, range }: TabProps) {
   const pd = ready(pdL)
   const pw = waitOf(pdL)
   const cmp = useMemo(() => (pd ? compare(pd, range.from, range.to) : null), [pd, range.from, range.to])
+  const signups = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of data.daily_metrics) m.set(r.kst_date, (m.get(r.kst_date) ?? 0) + r.signups)
+    return m
+  }, [data])
+  const heat = useMemo(
+    () =>
+      cohortHeat(
+        data.subscription_cohort ?? [],
+        range.to,
+        (r, f) => ratio(r.retained, f.cohort_size),
+        (f) => num(f.cohort_size),
+      ),
+    [data, range.to],
+  )
 
   const trend = useMemo(() => {
     if (!rows) return { weekly: false, rows: [] as { date: string; active: number; mrr: number }[] }
@@ -108,11 +144,22 @@ export default function Subscription({ data, range }: TabProps) {
   const w = span(rows, range.from, range.to)
   const wp = span(rows, range.prevFrom, range.prevTo)
   const rev = data.daily_revenue ? sumRevenue(data.daily_revenue, range.from, range.to) : null
+  const revPrev = data.daily_revenue ? sumRevenue(data.daily_revenue, range.prevFrom, range.prevTo) : null
+  const discount = rows[0]?.discount_amount != null ? w.discount : (rev?.discount ?? 0)
+  const discountPrev = rows[0]?.discount_amount != null ? wp.discount : (revPrev?.discount ?? 0)
+  const lv = ltv(rev?.membership ?? 0, discount, w.subMonths, w.rate)
+  const lvPrev = ltv(revPrev?.membership ?? 0, discountPrev, wp.subMonths, wp.rate)
+  const members = membersAt(signups, end?.kst_date ?? range.to)
+  const membersPrev = membersAt(signups, endPrev?.kst_date ?? range.prevTo)
+  const pen = ratio(end?.active_subscribers ?? 0, members)
+  const penPrev = ratio(endPrev?.active_subscribers ?? 0, membersPrev)
+  const burden = rev ? ratio(discount, rev.membership) : null
+  const burdenPrev = revPrev ? ratio(discountPrev, revPrev.membership) : null
 
   const table: CompareRow[] = cmp
     ? [
-        { key: 'sub', label: '구독자', ...cmp.sub, amount: w.amount, discount: rev?.discount ?? 0 },
-        { key: 'non', label: '비구독 회원', ...cmp.non, amount: rev ? rev.ticket - w.amount : 0, discount: 0 },
+        { key: 'sub', label: '구독자', ...cmp.sub, amount: w.amount, discount },
+        { key: 'non', label: '비구독 회원', ...cmp.non, amount: rev ? rev.paid - w.amount : 0, discount: 0 },
       ]
     : []
   const cols: Col<CompareRow>[] = [
@@ -128,7 +175,7 @@ export default function Subscription({ data, range }: TabProps) {
     },
     ...(rev
       ? [
-          { key: 'amount', label: '티켓 순매출', value: (r: CompareRow) => r.amount, render: (r: CompareRow) => won(r.amount), num: true },
+          { key: 'amount', label: '티켓 결제액', value: (r: CompareRow) => r.amount, render: (r: CompareRow) => won(r.amount), num: true },
           {
             key: 'per',
             label: '결제자당 금액',
@@ -136,37 +183,60 @@ export default function Subscription({ data, range }: TabProps) {
             render: (r: CompareRow) => won(ratio(r.amount, r.payers)),
             num: true,
           },
-          { key: 'discount', label: '구독 할인', value: (r: CompareRow) => r.discount, render: (r: CompareRow) => won(r.discount), num: true },
+          { key: 'discount', label: '멤버 할인', value: (r: CompareRow) => r.discount, render: (r: CompareRow) => won(r.discount), num: true },
         ]
       : []),
   ]
 
   return (
     <div className="flex flex-col gap-4">
-      <TileRow cols="lg:grid-cols-5" title={`구독 · ${vsLabel(data, range)}`}>
+      <TileRow cols="lg:grid-cols-4" title={`구독 · ${vsLabel(data, range)}`}>
         <Tile
           metricId="S01"
-          label="구독자"
+          label="활성 구독자"
           value={num(end?.active_subscribers)}
           unit="명"
           sub={end ? `${md(end.kst_date)} 기준` : undefined}
           delta={delta(data, range, end?.active_subscribers ?? null, endPrev?.active_subscribers ?? null)}
         />
         <Tile metricId="S02" label="신규 구독" value={num(w.fresh)} unit="건" delta={delta(data, range, w.fresh, wp.fresh)} />
-        <Tile metricId="S03" label="해지" value={num(w.churn)} unit="건" delta={delta(data, range, w.churn, wp.churn, false)} />
+        <Tile metricId="S03" label="구독 해지" value={num(w.churn)} unit="건" delta={delta(data, range, w.churn, wp.churn, false)} />
+        <Tile
+          metricId="S05"
+          label="구독 월 해지율"
+          value={pct(w.rate)}
+          sub={`구독자·월 ${num(w.subMonths)} 기준`}
+          delta={ptDelta(data, range, w.rate, wp.rate, false)}
+        />
         <Tile
           metricId="S04"
           label="구독 MRR"
           value={won(end?.mrr)}
           unit="원"
+          sub={end ? `ARR ${won(end.mrr * 12)}원` : undefined}
           delta={delta(data, range, end?.mrr ?? null, endPrev?.mrr ?? null)}
         />
         <Tile
-          metricId="S05"
-          label="월 이탈률"
-          value={pct(w.rate)}
-          sub="30일 환산"
-          delta={ptDelta(data, range, w.rate, wp.rate, false)}
+          metricId="S08"
+          label="구독 LTV"
+          value={won(lv.value)}
+          unit="원"
+          sub={lv.arpu != null ? `ARPU ${won(lv.arpu)} − 할인 ${won(lv.dpm)}` : undefined}
+          delta={delta(data, range, lv.value, lvPrev.value)}
+        />
+        <Tile
+          metricId="S10"
+          label="회원 대비 구독 비중"
+          value={pct(pen)}
+          sub={`회원 ${num(members)}명 중`}
+          delta={ptDelta(data, range, pen, penPrev)}
+        />
+        <Tile
+          metricId="S11"
+          label="멤버 할인 부담률"
+          value={pct(burden)}
+          sub={`할인 ${won(discount)}원`}
+          delta={ptDelta(data, range, burden, burdenPrev, false)}
         />
       </TileRow>
 
@@ -193,6 +263,26 @@ export default function Subscription({ data, range }: TabProps) {
           </Card>
         </div>
       )}
+
+      <Card
+        title="구독 코호트 유지율"
+        metricId="S09"
+        meta={`시작 월 코호트 · ${md(range.to)}까지 끝난 달 · %`}
+      >
+        {heat.rows.length ? (
+          <Heatmap
+            cols={heat.cols}
+            rows={heat.rows}
+            head
+            headLabel="시작"
+            format={(v) => `${Math.round(v * 100)}`}
+            rowLabelWidth={48}
+            tip={(r, c, v) => `${heat.rows[r].label} 코호트 M${c + 1} · ${pct(v)}`}
+          />
+        ) : (
+          <div className="text-sm text-muted">데이터 없음</div>
+        )}
+      </Card>
 
       <Card title="구독자 vs 비구독 회원 · 티켓 결제" metricId="S06" meta="회원으로 방문한 날 기준 · 기간 고유 사람" wait={pw} waitH={120}>
         {cmp ? (

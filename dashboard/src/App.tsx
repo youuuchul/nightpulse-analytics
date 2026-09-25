@@ -249,7 +249,7 @@ export default function App() {
             options={[{ value: 'all', label: '전체' }, ...uniq(venues.map((r) => r.region))]}
           />
           <Select
-            label="장르"
+            label="무드"
             value={st.gn}
             width="w-32"
             onChange={(gn) => set({ gn })}

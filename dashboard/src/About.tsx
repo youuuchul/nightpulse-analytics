@@ -279,6 +279,185 @@ function FlowTall() {
   )
 }
 
+type Party = 'c' | 'p' | 's'
+
+const PARTIES: Record<Party, { label: string; sub: string; accent?: boolean }> = {
+  c: { label: '소비자', sub: '탐색 · 신청 · 결제' },
+  p: { label: 'Placewave', sub: '연결 · 결제 · 정산', accent: true },
+  s: { label: '공간 사업자', sub: '공간 등록 · 이벤트 개설' },
+}
+
+const MONEY: { from: Party; to: Party; label: string; sub: string; color: string; dashed?: boolean }[] = [
+  { from: 'c', to: 'p', label: '티켓 결제', sub: '정가 − 멤버 할인', color: 'var(--s1)' },
+  { from: 'c', to: 'p', label: '멤버십', sub: '월 9,900원', color: 'var(--s2)' },
+  { from: 'p', to: 'c', label: '멤버 할인 15%', sub: '플랫폼 부담', color: 'var(--s2)', dashed: true },
+  { from: 'p', to: 's', label: '정산', sub: '정가 − 수수료', color: 'var(--s1)' },
+  { from: 's', to: 'p', label: '파트너 플랜', sub: '월 4.9만 · 14.9만원', color: 'var(--s3)' },
+]
+
+const AXES: { title: string; color: string; formula: string; metrics: [string, string][] }[] = [
+  {
+    title: '거래 수수료',
+    color: 'var(--s1)',
+    formula: '티켓 정가 × 공간 등급별 수수료율 — 비파트너 10% · 베이직 5% · 프로 3%',
+    metrics: [
+      ['M09', '거래액'],
+      ['M11', '실효 수수료율'],
+      ['M12', '환불률'],
+    ],
+  },
+  {
+    title: '멤버십',
+    color: 'var(--s2)',
+    formula: '활성 구독자 × 월 9,900원 — 파트너 공간 이벤트 15% 할인은 플랫폼이 부담',
+    metrics: [
+      ['S01', '활성 구독자'],
+      ['S05', '구독 월 해지율'],
+      ['S11', '멤버 할인 부담률'],
+    ],
+  },
+  {
+    title: '파트너 플랜',
+    color: 'var(--s3)',
+    formula: '활성 계약 × 월 요금 — 베이직 4.9만 · 프로 14.9만원, 수수료 우대 · 상단 노출',
+    metrics: [
+      ['P05', '파트너 플랜 MRR'],
+      ['P11', '계약 월 해지율'],
+      ['P13', 'GRR'],
+    ],
+  },
+]
+
+function MoneyMarkers({ prefix }: { prefix: string }) {
+  return (
+    <defs>
+      {['s1', 's2', 's3'].map((c) => (
+        <marker
+          key={c}
+          id={`${prefix}-${c}`}
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M0 0L10 5L0 10z" fill={`var(--${c})`} />
+        </marker>
+      ))}
+    </defs>
+  )
+}
+
+const markerOf = (prefix: string, color: string) => `url(#${prefix}-${color.slice(6, 8)})`
+
+function PartyBox({ x, y, w, h, id }: { x: number; y: number; w: number; h: number; id: Party }) {
+  const n = PARTIES[id]
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        rx="10"
+        fill={n.accent ? 'var(--accent)' : 'var(--surface)'}
+        fillOpacity={n.accent ? 0.14 : 1}
+        stroke={n.accent ? 'var(--accent)' : LINE}
+      />
+      <text x={x + w / 2} y={y + h / 2 - 3} textAnchor="middle" fontSize="14" fontWeight="600" fill="var(--ink)">
+        {n.label}
+      </text>
+      <text x={x + w / 2} y={y + h / 2 + 14} textAnchor="middle" fontSize="11" fill="var(--muted)">
+        {n.sub}
+      </text>
+    </g>
+  )
+}
+
+function MoneyWide() {
+  const W = 170
+  const box = { c: 0, p: 365, s: 730 }
+  const lanes: Record<string, number[]> = { cp: [102, 132, 162], ps: [112, 152] }
+  const used = { cp: 0, ps: 0 }
+  return (
+    <svg viewBox="-4 64 912 136" className="hidden w-full md:block" role="img" aria-label="수익 흐름">
+      <MoneyMarkers prefix="bm-w" />
+      <PartyBox x={box.c} y={92} w={W} h={76} id="c" />
+      <PartyBox x={box.p} y={82} w={W} h={96} id="p" />
+      <PartyBox x={box.s} y={92} w={W} h={76} id="s" />
+      {MONEY.map((m) => {
+        const pair = m.from === 's' || m.to === 's' ? 'ps' : 'cp'
+        const y = lanes[pair][used[pair]++]
+        const [l, r] = pair === 'cp' ? [box.c + W + 6, box.p - 6] : [box.p + W + 6, box.s - 6]
+        const forward = (pair === 'cp' && m.from === 'c') || (pair === 'ps' && m.from === 'p')
+        const below = m.dashed || m.from === 's'
+        return (
+          <g key={m.label}>
+            <path
+              d={forward ? `M${l},${y} L${r},${y}` : `M${r},${y} L${l},${y}`}
+              stroke={m.color}
+              strokeWidth="1.75"
+              strokeDasharray={m.dashed ? '4 4' : undefined}
+              fill="none"
+              markerEnd={markerOf('bm-w', m.color)}
+            />
+            <text x={(l + r) / 2} y={below ? y + 16 : y - 7} textAnchor="middle" fontSize="11.5">
+              <tspan fontWeight="600" fill="var(--ink)">
+                {m.label}
+              </tspan>
+              <tspan fill="var(--muted)"> · {m.sub}</tspan>
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
+function MoneyTall() {
+  const W = 300
+  const H = 58
+  const row = 34
+  const order: (Party | number)[] = ['c', 0, 1, 2, 'p', 3, 4, 's']
+  let y = 0
+  const items = order.map((it) => {
+    const top = y
+    y += typeof it === 'number' ? row : H + 10
+    return { it, top }
+  })
+  return (
+    <svg viewBox={`-2 -2 ${W + 4} ${y}`} className="mx-auto w-full max-w-[360px] md:hidden" role="img" aria-label="수익 흐름">
+      <MoneyMarkers prefix="bm-t" />
+      {items.map(({ it, top }) => {
+        if (typeof it !== 'number') return <PartyBox key={it} x={0} y={top} w={W} h={H} id={it} />
+        const m = MONEY[it]
+        const down = m.from === 'c' || (m.from === 'p' && m.to === 's')
+        const x = 34
+        const [a, b] = down ? [top - 4, top + row - 12] : [top + row - 12, top - 4]
+        return (
+          <g key={m.label}>
+            <path
+              d={`M${x},${a} L${x},${b}`}
+              stroke={m.color}
+              strokeWidth="1.75"
+              strokeDasharray={m.dashed ? '4 4' : undefined}
+              fill="none"
+              markerEnd={markerOf('bm-t', m.color)}
+            />
+            <text x={x + 16} y={top + row / 2 - 1} fontSize="12" dominantBaseline="middle">
+              <tspan fontWeight="600" fill="var(--ink)">
+                {m.label}
+              </tspan>
+              <tspan fill="var(--muted)"> · {m.sub}</tspan>
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 const DOCS: { label: string; sub: string; href: string; internal?: 'data' | 'metrics' }[] = [
   { label: '데이터 페이지', sub: '층별 표·컬럼·마트 미리보기', href: '', internal: 'data' },
   { label: '지표 가이드', sub: '탭별 질문·지표 정의·산식', href: '', internal: 'metrics' },
@@ -316,8 +495,8 @@ export default function About({
     <main className="mx-auto flex max-w-[1280px] flex-col gap-12 px-4 pb-20 pt-8 sm:px-6">
       <div className="flex flex-col gap-3">
         <h2 className="text-[26px] font-semibold leading-tight tracking-tight text-ink sm:text-[32px]">
-          나이트라이프 플랫폼의 로그를
-          <br className="hidden sm:block" /> 퍼널·코호트·광고 지표로
+          도심 공간·이벤트 플랫폼의 로그를
+          <br className="hidden sm:block" /> 퍼널·코호트·매출 지표로
         </h2>
         <p className="max-w-[640px] text-[15px] leading-relaxed text-ink2">
           가상 서비스 Placewave의 행동 로그·서비스 DB·광고 리포트를 BigQuery 네 층으로 정리하고, 마트에서 뽑은 집계로 이
@@ -328,26 +507,53 @@ export default function About({
           className="max-w-[640px] scroll-mt-6 border-l-2 border-line pl-3 text-[13px] leading-relaxed text-muted"
         >
           이 대시보드의 수치는 가상 서비스 Placewave의 시나리오와 분포 규칙(이벤트 비중·화면 전이·요일×시간·채널
-          구성·리텐션 곡선)으로 생성한 것이며, 실제 서비스나 이용자 데이터를 포함하지 않습니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 210,000명·회원 약 22,000명·등록 공간
+          구성·리텐션 곡선)으로 생성한 합성 데이터입니다. 런칭일 2025-09-22부터 1년(52주)치, 방문자 210,000명·회원 약 22,000명·등록 공간
           1,800곳·이벤트 약 960만 건 규모입니다. 상권 이름과 위치는 공개 지리 정보이고 상호는 모두 가상입니다.
         </p>
       </div>
 
-      <Section n={1} title="가상 프로덕트">
+      <Section n={1} title="프로덕트">
         <p className="max-w-[720px] text-[14px] leading-relaxed text-ink2">
-          Placewave는 클럽·바·라운지 같은 공간과 그곳에서 열리는 행사를 찾아보고, 신청하고, 결제하는 서비스입니다. 탐색은
-          비회원도 할 수 있지만 신청부터는 로그인이 필요합니다. iOS·Android 앱과 웹으로 들어오고, 일부 방문은 SNS 광고
+          Placewave는 도심의 공간 — 카페·바·라운지·라이브홀·루프탑·팝업 — 과 그곳에서 열리는 이벤트를 찾아보고, 신청하고,
+          결제하는 서비스입니다. 탐색은 누구나 할 수 있고 신청부터 로그인합니다. iOS·Android 앱과 웹으로 들어오고, 일부 방문은 SNS 광고
           캠페인에서 옵니다. 분석의 질문은 두 가지입니다 — 어느 단계에서 사람이 빠지는가, 어떤 유입이 결제까지 이어지는가.
         </p>
         <p className="max-w-[720px] text-[14px] leading-relaxed text-ink2">
-          공간은 두 층입니다. 서울 주요 상권의 공간 1,800곳이 목록에 등록돼 있고, 그중 약 10%는 월 이용료(베이직 9.9만·프로
-          29.9만 원)를 내는 파트너 공간으로 행사를 엽니다. 2025년 12월부터 회원은 월 9,900원 구독으로 파트너 공간 행사를 15%
-          할인받습니다. 그래서 매출은 티켓·구독·B2B 계약 세 갈래이고, 질문이 하나 더 붙습니다 — 파트너 계약과 구독이 거래를
-          늘리는가.
+          공간은 두 층입니다. 서울 주요 상권의 공간 1,800곳이 목록에 등록돼 있고, 그중 약 10%는 파트너 플랜(베이직 월 4.9만·프로
+          14.9만 원)에 가입해 수수료 우대와 상단 노출을 받습니다. 2025년 12월부터 회원은 월 9,900원 멤버십으로 파트너 공간
+          이벤트를 15% 할인받습니다. 질문이 하나 더 붙습니다 — 파트너 플랜과 멤버십이 거래를 늘리고 오래 유지되는가.
         </p>
       </Section>
 
-      <Section n={2} title="핵심 퍼널 5화면">
+      <Section n={2} title="비즈니스 모델">
+        <p className="max-w-[720px] text-[14px] leading-relaxed text-ink2">
+          플랫폼 매출은 수수료 · 멤버십 · 파트너 플랜 세 갈래이고, 티켓 거래액은 그 규모를 재는 지표입니다.
+        </p>
+        <div className="card p-4 sm:p-6">
+          <MoneyWide />
+          <MoneyTall />
+        </div>
+        <ul className="grid gap-3 md:grid-cols-3">
+          {AXES.map((a) => (
+            <li key={a.title} className="card flex flex-col gap-3 border-t-2 px-4 py-3" style={{ borderTopColor: a.color }}>
+              <div className="flex flex-col gap-1">
+                <span className="text-[14px] font-semibold text-ink">{a.title}</span>
+                <span className="text-xs leading-snug text-ink2">{a.formula}</span>
+              </div>
+              <ul className="flex flex-col gap-1">
+                {a.metrics.map(([id, name]) => (
+                  <li key={id} className="flex items-center gap-2 text-[13px] text-ink">
+                    <span className="h-1 w-1 shrink-0 rounded-full" style={{ background: a.color }} />
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section n={3} title="핵심 퍼널 5화면">
         <ol className="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
           {SCREENS.map((sc, i) => (
             <li key={sc.title} className="flex min-w-0 flex-col items-center gap-3">
@@ -371,14 +577,14 @@ export default function About({
         </ol>
       </Section>
 
-      <Section n={3} title="데이터 흐름">
+      <Section n={4} title="데이터 흐름">
         <div className="card p-4 sm:p-6">
           <FlowWide />
           <FlowTall />
         </div>
       </Section>
 
-      <Section n={4} title="문서">
+      <Section n={5} title="문서">
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {DOCS.map((d) => (
             <li key={d.label}>

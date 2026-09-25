@@ -3,9 +3,9 @@
 -- 키: (run_id, check_id)
 -- 파티션·클러스터: DATE(checked_at) / 없음
 -- 원천: raw.db_payments·db_applications·db_subscriptions·db_venues,
---       staging.events_clean·int_session·int_person_day·fct_order·ad_spend,
+--       staging.events_clean·int_session·int_person_day·fct_order·ad_spend·dim_contract,
 --       marts.daily_metrics·weekly_cohort·daily_channel·weekly_activity·weekly_audience_funnel·weekly_path·person_day,
---       marts.daily_revenue·daily_subscription·daily_venue_registry·daily_event·venue_registry
+--       marts.daily_revenue·daily_subscription·daily_venue_registry·daily_event·venue_registry·monthly_contract
 -- 소비: load_all.sh 8단계. passed = FALSE 가 하나라도 있으면 파이프라인이 exit 1
 --
 -- 표 정의는 sql/00_ops_tables.sql.
@@ -151,14 +151,20 @@ c8 AS (
     GROUP BY 1, 2, 3, 4
   ) AS d USING (kst_date, channel1, device_platform, member_seg)
 ),
--- C9 티켓 결제: 매출 마트 ticket 실결제액(정가 - 할인) vs 결제 원장 kind = ticket 금액, 결제일별(금액·건수)
+-- C9 티켓 결제: 매출 마트 ticket 실결제(paid_amount, 환불 주문 제외) + 환불액 vs 결제 원장 kind = ticket 금액, 결제일별(금액·건수).
+--    행 단위 단언 gmv_amount - discount_amount = paid_amount 위반 행 수를 더한다
 c9 AS (
   SELECT
     SUM(COALESCE(m.amt, 0)) AS mart_v,
     SUM(COALESCE(r.amt, 0)) AS raw_v,
-    COUNTIF(COALESCE(m.amt, -1) != COALESCE(r.amt, -1) OR COALESCE(m.n, -1) != COALESCE(r.n, -1)) AS bad_days
+    COUNTIF(COALESCE(m.amt, -1) != COALESCE(r.amt, -1) OR COALESCE(m.n, -1) != COALESCE(r.n, -1)) AS bad_days,
+    SUM(COALESCE(m.bad_rows, 0)) AS bad_rows
   FROM (
-    SELECT kst_date, SUM(gross_amount - discount_amount) AS amt, SUM(pay_count) AS n
+    SELECT
+      kst_date,
+      SUM(paid_amount + refund_amount) AS amt,
+      SUM(pay_count) AS n,
+      COUNTIF(gmv_amount - discount_amount != paid_amount) AS bad_rows
     FROM marts.daily_revenue
     WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
       AND kind = 'ticket'
@@ -219,6 +225,86 @@ c11 AS (
       GROUP BY 1
     ) AS reg USING (d)
   ) AS r USING (kst_date)
+),
+-- C14 수수료: 매출 마트 ticket net_amount vs 주문 원장 fee_amount, 결제일 × 수수료 등급별
+c14 AS (
+  SELECT
+    SUM(COALESCE(m.v, 0)) AS mart_v,
+    SUM(COALESCE(o.v, 0)) AS stg_v,
+    COUNTIF(COALESCE(m.v, -1) != COALESCE(o.v, -1)) AS bad_keys
+  FROM (
+    SELECT kst_date, fee_tier, SUM(net_amount) AS v
+    FROM marts.daily_revenue
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND kind = 'ticket'
+    GROUP BY 1, 2
+  ) AS m
+  FULL OUTER JOIN (
+    SELECT paid_date AS kst_date, fee_tier, SUM(fee_amount) AS v
+    FROM staging.fct_order
+    WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+      AND kind = 'ticket' AND is_paid
+    GROUP BY 1, 2
+  ) AS o USING (kst_date, fee_tier)
+),
+-- C15 계약 월 흐름: monthly_contract all 행 월말 계약 수 vs 계약 차원 활성 재집계, 월말 MRR vs daily_venue_registry 월말,
+--     계약 수 다리(all)·MRR 다리(전 행) 위반 수를 더한다
+c15_mc AS (
+  SELECT month, plan, contracts_bom, new_contracts, churned_contracts, contracts_eom,
+         mrr_bom, mrr_new, mrr_expansion, mrr_contraction, mrr_churn, mrr_eom
+  FROM marts.monthly_contract
+  WHERE month BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+),
+c15_eom AS (
+  SELECT DISTINCT
+    mc.month,
+    LEAST(LAST_DAY(mc.month, MONTH), s.hi) AS eom_day
+  FROM c15_mc AS mc
+  CROSS JOIN (SELECT MAX(snapshot_date) AS hi FROM staging.dim_contract) AS s
+),
+c15_ref AS (
+  SELECT
+    e.month,
+    e.eom_day,
+    COUNTIF(dc.start_date <= e.eom_day AND (dc.end_date IS NULL OR dc.end_date > e.eom_day)) AS contracts_eom
+  FROM c15_eom AS e
+  CROSS JOIN staging.dim_contract AS dc
+  GROUP BY 1, 2
+),
+c15 AS (
+  SELECT
+    SUM(a.contracts_eom) AS mart_v,
+    SUM(r.contracts_eom) AS ref_v,
+    COUNTIF(
+      a.contracts_eom != r.contracts_eom
+      OR a.mrr_eom != COALESCE(v.mrr, 0)
+      OR a.contracts_bom + a.new_contracts - a.churned_contracts != a.contracts_eom
+    ) AS bad_months,
+    ANY_VALUE(br.bad_bridges) AS bad_bridges
+  FROM c15_mc AS a
+  JOIN c15_ref AS r USING (month)
+  CROSS JOIN (
+    SELECT COUNTIF(mrr_bom + mrr_new + mrr_expansion - mrr_contraction - mrr_churn != mrr_eom) AS bad_bridges
+    FROM c15_mc
+  ) AS br
+  LEFT JOIN (
+    SELECT kst_date, SUM(mrr_basic + mrr_pro) AS mrr
+    FROM marts.daily_venue_registry
+    WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    GROUP BY 1
+  ) AS v ON v.kst_date = r.eom_day
+  WHERE a.plan = 'all'
+),
+-- R10·R11 수수료·파트너 부담 (전 기간, 매출 마트)
+take AS (
+  SELECT
+    SUM(IF(kind = 'ticket', net_amount, 0)) AS fee,
+    SUM(IF(kind = 'ticket', gmv_amount, 0)) AS gmv,
+    SUM(IF(kind = 'ticket' AND fee_tier IN ('basic', 'pro'), net_amount, 0))
+      + SUM(IF(kind = 'partner_plan', net_amount, 0)) AS partner_cost,
+    SUM(IF(kind = 'ticket' AND fee_tier IN ('basic', 'pro'), gmv_amount, 0)) AS partner_gmv
+  FROM marts.daily_revenue
+  WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
 ),
 cohort_ret AS (
   SELECT
@@ -354,8 +440,9 @@ checks AS (
   FROM c8
   UNION ALL
   SELECT 'C9', 'reconcile', '티켓 결제 금액: 매출 마트 vs 결제 원장',
-         'daily_revenue ticket 정가 - 할인 합', mart_v, 'raw.db_payments amount 합 (kind = ticket)', raw_v,
-         ABS(mart_v - raw_v) + bad_days, 0, 0, FORMAT('불일치 결제일 %d', bad_days)
+         'daily_revenue ticket paid_amount + refund_amount 합', mart_v, 'raw.db_payments amount 합 (kind = ticket)', raw_v,
+         ABS(mart_v - raw_v) + bad_days + bad_rows, 0, 0,
+         FORMAT('불일치 결제일 %d, gmv - discount != paid 행 %d', bad_days, bad_rows)
   FROM c9
   UNION ALL
   SELECT 'C10', 'reconcile', '일별 활성 구독자: 구독 마트 vs 구독 원장',
@@ -367,6 +454,17 @@ checks AS (
          'daily_venue_registry registered_total 합', mart_v, 'db_venues 등록일 누적 합', raw_v,
          ABS(mart_v - raw_v) + bad_days, 0, 0, FORMAT('불일치 날짜 %d', bad_days)
   FROM c11
+  UNION ALL
+  SELECT 'C14', 'reconcile', '수수료 매출: 매출 마트 vs 주문 원장',
+         'daily_revenue ticket net_amount 합', mart_v, 'fct_order fee_amount 합 (결제)', stg_v,
+         ABS(mart_v - stg_v) + bad_keys, 0, 0, FORMAT('불일치 결제일 × 등급 %d', bad_keys)
+  FROM c14
+  UNION ALL
+  SELECT 'C15', 'reconcile', '월말 계약: 계약 월 마트 vs 계약 차원',
+         'monthly_contract all contracts_eom 합', mart_v, 'dim_contract 월말 활성 재집계 합', ref_v,
+         ABS(mart_v - ref_v) + bad_months + bad_bridges, 0, 0,
+         FORMAT('불일치 월(계약 수·월말 MRR·계약 수 다리) %d, MRR 다리 위반 행 %d', bad_months, bad_bridges)
+  FROM c15
   UNION ALL
   SELECT 'R1', 'range', '신규 방문자 W1 리텐션',
          'W1 retained', w1_num, 'cohort_size (W1 관측 완료 코호트)', w1_den,
@@ -407,6 +505,16 @@ checks AS (
          '자동 로드 세션', auto_load, '전체 세션', sessions,
          SAFE_DIVIDE(auto_load, sessions), 0.05, 0.10, NULL
   FROM sess
+  UNION ALL
+  SELECT 'R10', 'range', '실효 수수료율 (수수료 ÷ 거래액)',
+         '수수료 매출', fee, '거래액', gmv,
+         SAFE_DIVIDE(fee, gmv), 0.05, 0.07, NULL
+  FROM take
+  UNION ALL
+  SELECT 'R11', 'range', '파트너 부담률 ((파트너 공간 수수료 + 플랜 매출) ÷ 파트너 거래액)',
+         '파트너 수수료 + 플랜 매출', partner_cost, '파트너 공간 거래액', partner_gmv,
+         SAFE_DIVIDE(partner_cost, partner_gmv), 0, 0.15, NULL
+  FROM take
   UNION ALL
   SELECT 'I1', 'integrity', '기기당 회원 1명', '회원 2명 이상 기기', multi_member_devices, NULL, NULL,
          multi_member_devices, 0, 0, NULL

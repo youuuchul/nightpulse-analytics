@@ -55,6 +55,8 @@ RANGES_V2 = {
     "파트너 계약 월 해지율 (계약·월 대비)": (0.01, 0.03),
 }
 REGION_TOLERANCE = 0.03
+TAKE_RATE_RANGE = (0.05, 0.07)  # 실효 수수료율 = 수수료 / 거래액 (docs/business_model.md §2)
+PARTNER_COST_MAX = 0.15  # 파트너 부담률 = (파트너 공간 수수료 + 플랜 매출) / 파트너 거래액
 REGION_ACTIVITY_TOLERANCE = 0.05  # 상권별 조회·행사 비중 - 공간 수 비중
 SUB_PRICE = 9900
 SUB_DISCOUNT = 0.15
@@ -129,6 +131,7 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     ads = _read_csv(raw / "ads_spend.csv")
     venues = _read_csv(raw / "db_venues.csv")
     contracts = _read_csv(raw / "db_venue_contracts.csv")
+    changes = _read_csv(raw / "db_venue_contract_changes.csv")
     subs = _read_csv(raw / "db_subscriptions.csv")
     sub_iv: dict[str, list[tuple[int, float]]] = defaultdict(list)
     for sb in subs:
@@ -287,7 +290,9 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     )
 
     snap = {
-        r["snapshot_date"] for rows in (apps, pays_all, members, events_master, venues, contracts, subs) for r in rows
+        r["snapshot_date"]
+        for rows in (apps, pays_all, members, events_master, venues, contracts, changes, subs)
+        for r in rows
     }
     check("RDB 스냅샷 snapshot_date = 종료일", snap == {end_date.isoformat()}, ", ".join(sorted(snap)))
 
@@ -377,6 +382,7 @@ def validate(data: Path, weeks: int, end_date: date) -> tuple[list[tuple[str, bo
     ctx = {
         "venues": venues,
         "contracts": contracts,
+        "changes": changes,
         "events": events_master,
         "subs": subs,
         "pays_all": pays_all,
@@ -432,7 +438,11 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
     """
     venues, contracts, events, subs = ctx["venues"], ctx["contracts"], ctx["events"], ctx["subs"]
     pays_all, apps, ads = ctx["pays_all"], ctx["apps"], ctx["ads"]
-    regions = json.loads((SEED_DIR / "names.json").read_text(encoding="utf-8"))["regions"]
+    names = json.loads((SEED_DIR / "names.json").read_text(encoding="utf-8"))
+    regions = names["regions"]
+    plan_fee = names["pricing"]["partner_plan_fee"]
+    fee_rate = names["pricing"]["commission_rate"]
+    changes = ctx["changes"]
     range_end = int(datetime(end_date.year, end_date.month, end_date.day, tzinfo=KST).timestamp()) + 86400
 
     # 공간·계약
@@ -444,13 +454,78 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         a = _kst_date(c["started_at"])
         b = _kst_date(c["ended_at"]) if c["ended_at"] else far
         partner_iv[int(c["venue_id"])].append((a, b))
-        fee_ok &= int(c["monthly_fee"]) == {"basic": 99000, "pro": 299000}[c["plan"]]
+        fee_ok &= int(c["monthly_fee"]) == plan_fee[c["plan"]]
         fee_ok &= (c["status"] == "ended") == bool(c["ended_at"])
     overlap = sum(
         1 for ivs in partner_iv.values() for i, x in enumerate(sorted(ivs)) for y in sorted(ivs)[i + 1 :] if y[0] < x[1]
     )
     check("공간당 진행 계약 1건 이하 (계약 기간 겹침 없음)", overlap == 0, f"겹침 {overlap}")
-    check("계약 요금·상태 규칙 (basic 99,000 / pro 299,000, ended ⇔ ended_at)", fee_ok, f"{len(contracts)} 건")
+    fee_label = " / ".join(f"{k} {v:,}" for k, v in plan_fee.items())
+    check(f"계약 요금·상태 규칙 (현재 플랜 요금 {fee_label}, ended ⇔ ended_at)", fee_ok, f"{len(contracts)} 건")
+
+    # 플랜 변경: 계약별 변경 이력으로 날짜별 플랜을 복원한다
+    by_contract = {c["contract_id"]: c for c in contracts}
+    chg_by: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for ch in changes:
+        chg_by[ch["contract_id"]].append(ch)
+    for v in chg_by.values():
+        v.sort(key=lambda ch: (ch["changed_at"], ch["change_id"]))
+    fee_match = all(
+        int(ch["from_fee"]) == plan_fee[ch["from_plan"]] and int(ch["to_fee"]) == plan_fee[ch["to_plan"]]
+        for ch in changes
+    ) and all(v[-1]["to_plan"] == by_contract[k]["plan"] for k, v in chg_by.items() if k in by_contract)
+    check(
+        f"요금 상수 일치 (플랜 변경 from/to 요금 = 요금표 {fee_label}, 계약 현재 플랜 = 마지막 변경)",
+        fee_match,
+        f"변경 {len(changes)} 건",
+    )
+    bad_chg = 0
+    for k, v in chg_by.items():
+        c = by_contract.get(k)
+        if c is None:
+            bad_chg += len(v)
+            continue
+        a = _kst_date(c["started_at"])
+        b = _kst_date(c["ended_at"]) if c["ended_at"] else far
+        prev_to = None
+        prev_day = None
+        for ch in v:
+            d = _kst_date(ch["changed_at"])
+            bad_chg += (
+                ch["from_plan"] == ch["to_plan"]
+                or ch["venue_id"] != c["venue_id"]
+                or not a < d < b
+                or (prev_to is not None and ch["from_plan"] != prev_to)
+                or d == prev_day
+            )
+            prev_to, prev_day = ch["to_plan"], d
+    n_up = sum(ch["from_plan"] == "basic" and ch["to_plan"] == "pro" for ch in changes)
+    check(
+        "플랜 변경 정합 (from ≠ to, 직전 변경과 연쇄, 변경일에 계약 진행 중, 계약·공간 일치)",
+        bad_chg == 0,
+        f"위반 {bad_chg}, 업그레이드 {n_up} / 다운그레이드 {len(changes) - n_up}",
+    )
+
+    def plan_on(c: dict[str, str], d: date) -> str:
+        v = chg_by.get(c["contract_id"], [])
+        cur = v[0]["from_plan"] if v else c["plan"]
+        for ch in v:
+            if _kst_date(ch["changed_at"]) <= d:
+                cur = ch["to_plan"]
+        return cur
+
+    contracts_of: dict[int, list[dict[str, str]]] = defaultdict(list)
+    for c in contracts:
+        contracts_of[int(c["venue_id"])].append(c)
+
+    def tier_on(vid: int, d: date) -> str:
+        for c in contracts_of.get(vid, []):
+            a = _kst_date(c["started_at"])
+            b = _kst_date(c["ended_at"]) if c["ended_at"] else far
+            if a <= d < b:
+                return plan_on(c, d)
+        return "non_partner"
+
     check(
         "계약 공간이 공간 원장에 있고 등록 후 계약",
         all(int(c["venue_id"]) in reg_ts and _epoch(c["started_at"]) >= reg_ts[int(c["venue_id"])] for c in contracts),
@@ -603,10 +678,44 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         while d < b and d <= end_date:
             mm = date(d.year, d.month, 1)
             dim = (date(mm.year + mm.month // 12, mm.month % 12 + 1, 1) - mm).days
-            b2b[mm] += int(c["monthly_fee"]) / dim
+            b2b[mm] += plan_fee[plan_on(c, d)] / dim
             contract_months += 1 / dim
             d += timedelta(days=1)
     contract_churn = sum(1 for c in contracts if c["ended_at"]) / contract_months
+    change_rate = len(changes) / contract_months
+
+    # 거래 수수료: 정가 x 개최일 공간 등급 율, 결제 완료(환불 제외), 인식일 = 결제일
+    gmv: Counter[date] = Counter()
+    fee_m: Counter[date] = Counter()
+    gmv_tier: Counter[str] = Counter()
+    fee_tier: Counter[str] = Counter()
+    for p in paid_tickets:
+        e = ev_by_id[p["event_id"]]
+        tier = tier_on(int(e["venue_id"]), _kst_date(e["starts_at"]))
+        price = int(e["price"])
+        f = price * fee_rate[tier]
+        d = _kst_date(p["paid_at"])
+        mm = date(d.year, d.month, 1)
+        gmv[mm] += price
+        fee_m[mm] += f
+        gmv_tier[tier] += price
+        fee_tier[tier] += f
+    gmv_total = sum(gmv.values())
+    fee_total = sum(fee_m.values())
+    plan_total = sum(b2b.values())
+    take_rate = fee_total / gmv_total
+    partner_gmv = gmv_tier["basic"] + gmv_tier["pro"]
+    partner_cost = (fee_tier["basic"] + fee_tier["pro"] + plan_total) / partner_gmv
+    check(
+        f"실효 수수료율 {TAKE_RATE_RANGE[0]:.0%}~{TAKE_RATE_RANGE[1]:.0%} (수수료 / 거래액, 정가 x 개최일 등급 율)",
+        TAKE_RATE_RANGE[0] <= take_rate <= TAKE_RATE_RANGE[1],
+        f"{take_rate:.2%} = {fee_total:,.0f} / {gmv_total:,}",
+    )
+    check(
+        f"파트너 부담률 <= {PARTNER_COST_MAX:.0%} ((파트너 공간 수수료 + 플랜 매출) / 파트너 거래액)",
+        partner_cost <= PARTNER_COST_MAX,
+        f"{partner_cost:.2%} = ({fee_tier['basic'] + fee_tier['pro']:,.0f} + {plan_total:,.0f}) / {partner_gmv:,}",
+    )
 
     region_cnt = Counter(v["region"] for v in venues)
     region_err = {r["name"]: abs(region_cnt[r["name"]] / len(venues) - r["share"]) for r in regions}
@@ -669,11 +778,12 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         )
     out = [
         "",
-        "## 매출 구성 (월별, KST)",
+        "## 결제 유입 (월별, KST)",
         "",
-        "티켓 = 결제 완료(환불 제외) 실결제액, 구독 = 월 반복 결제, B2B = 진행 계약 월 이용료 일할 합.",
+        "티켓 결제액 = 결제 완료(환불 제외) 실결제액(매출 아님), 구독 = 월 반복 결제, "
+        "파트너 플랜 = 진행 계약 그날 플랜 요금 일할 합.",
         "",
-        "| 월 | 티켓 결제 | 티켓 매출 | 티켓 할인액 | 구독 매출 | B2B 매출 | 합계 | 광고비 |",
+        "| 월 | 티켓 결제 | 티켓 결제액 | 티켓 할인액 | 구독 매출 | 파트너 플랜 매출 | 유입 합 | 광고비 |",
         "|---|---|---|---|---|---|---|---|",
     ]
     tot = [0, 0, 0, 0, 0, 0, 0]
@@ -683,6 +793,36 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         tot = [x + y for x, y in zip(tot, row, strict=True)]
         out.append(f"| {m:%Y-%m} | " + " | ".join(f"{x:,}" for x in row) + " |")
     out.append("| 합계 | " + " | ".join(f"{x:,}" for x in tot) + " |")
+    out += [
+        "",
+        "## 플랫폼 매출 (월별, KST)",
+        "",
+        "플랫폼 매출 = 수수료 + 멤버십 + 파트너 플랜. 거래액 = 결제 완료(환불 제외) 티켓 정가 합(할인 전), "
+        "수수료 = 정가 x 개최일 공간 등급 율("
+        + " / ".join(f"{k} {v:.0%}" for k, v in fee_rate.items())
+        + "), 인식일 = 결제일.",
+        "",
+        "| 월 | 거래액 | 수수료 | 실효 수수료율 | 멤버십 | 파트너 플랜 | 플랫폼 매출 | 플랜 변경 (업 / 다운) |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    chg_month: dict[date, list[int]] = defaultdict(lambda: [0, 0])
+    for ch in changes:
+        d = _kst_date(ch["changed_at"])
+        chg_month[date(d.year, d.month, 1)][ch["to_plan"] == "basic"] += 1
+    ptot = [0, 0.0, 0, 0.0]
+    for m in months:
+        row = [gmv[m], fee_m[m], s_month[m], b2b[m]]
+        ptot = [x + y for x, y in zip(ptot, row, strict=True)]
+        rate = f"{fee_m[m] / gmv[m]:.1%}" if gmv[m] else "-"
+        up, down = chg_month[m]
+        out.append(
+            f"| {m:%Y-%m} | {gmv[m]:,} | {round(fee_m[m]):,} | {rate} | {s_month[m]:,} | {round(b2b[m]):,} "
+            f"| {round(fee_m[m] + s_month[m] + b2b[m]):,} | {up} / {down} |"
+        )
+    out.append(
+        f"| 합계 | {ptot[0]:,} | {round(ptot[1]):,} | {ptot[1] / ptot[0]:.1%} | {ptot[2]:,} | {round(ptot[3]):,} "
+        f"| {round(ptot[1] + ptot[2] + ptot[3]):,} | {n_up} / {len(changes) - n_up} |"
+    )
     out += [
         "",
         "## 공간 등록·파트너 계약 (월말, KST)",
@@ -752,7 +892,13 @@ def _v2(ctx: dict[str, Any], check: Any, start_date: date, end_date: date) -> li
         f"| 할인 결제 비중 / 할인액 합 | {n_disc / len(tickets):.1%} / {disc_total:,} |",
         f"| 구독 (누적 / 활성 / 해지) | {len(subs):,} / {active_end:,} / {len(canceled):,} |",
         f"| 구독 결제 건 / 매출 | {sum(len(v) for v in sub_pays.values()):,} / {sum(s_month.values()):,} |",
-        f"| B2B 매출 (일할) | {round(sum(b2b.values())):,} |",
+        f"| 파트너 플랜 매출 (일할) | {round(plan_total):,} |",
+        f"| 거래액 (등급 non / basic / pro) | {gmv_total:,} ({gmv_tier['non_partner']:,} / {gmv_tier['basic']:,}"
+        f" / {gmv_tier['pro']:,}) |",
+        f"| 수수료 / 실효 수수료율 | {round(fee_total):,} / {take_rate:.2%} |",
+        f"| 플랫폼 매출 (수수료 + 멤버십 + 파트너 플랜) | {round(fee_total + sum(s_month.values()) + plan_total):,} |",
+        f"| 파트너 부담률 | {partner_cost:.2%} |",
+        f"| 플랜 변경 (업 / 다운, 계약·월 대비) | {n_up} / {len(changes) - n_up} ({change_rate:.4f}) |",
         f"| 광고비 / 티켓 매출 | {spend:,} / {spend / ticket_rev:.1%} |",
         f"| 구독 월 이탈률 (월초 활성 100명 이상인 완결 월 합산) | {churn:.3f} |",
         f"| 파트너 계약 월 해지율 | {contract_churn:.4f} |",

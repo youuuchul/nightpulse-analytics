@@ -4,6 +4,18 @@
     "name": "Placewave",
     "host": "placewave.app"
   },
+  "pricing": {
+    "_note": "요금표(원·율). 파트너 플랜 월 요금, 공간 등급별 거래 수수료율(정가 기준, 개최 시점 등급). docs/business_model.md A안",
+    "partner_plan_fee": {
+      "basic": 49000,
+      "pro": 149000
+    },
+    "commission_rate": {
+      "non_partner": 0.1,
+      "basic": 0.05,
+      "pro": 0.03
+    }
+  },
   "genres": [
     "힙합",
     "하우스/테크노",

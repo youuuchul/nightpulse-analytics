@@ -77,10 +77,18 @@ export function screenColor(k: string): string {
   return SCREEN_GROUPS.find((g) => g.screens.includes(k))?.color ?? 'var(--muted)'
 }
 
-export const REVENUE_KINDS: { key: 'ticket' | 'subscription' | 'b2b'; label: string; color: string }[] = [
-  { key: 'ticket', label: '티켓', color: S(1) },
-  { key: 'subscription', label: '구독', color: S(2) },
-  { key: 'b2b', label: 'B2B', color: S(3) },
+export const REVENUE_KINDS: { key: 'fee' | 'membership' | 'plan'; label: string; color: string; metricId: string }[] = [
+  { key: 'fee', label: '수수료', color: S(1), metricId: 'M10' },
+  { key: 'membership', label: '멤버십', color: S(2), metricId: 'M03' },
+  { key: 'plan', label: '파트너 플랜', color: S(3), metricId: 'M04' },
+]
+
+export const GMV_COLOR = 'var(--ink-2)'
+
+export const FEE_TIERS: { key: 'none' | 'basic' | 'pro'; label: string; rate: number; color: string }[] = [
+  { key: 'none', label: '비파트너', rate: 0.1, color: 'var(--exit)' },
+  { key: 'basic', label: '베이직', rate: 0.05, color: S(7) },
+  { key: 'pro', label: '프로', rate: 0.03, color: S(5) },
 ]
 
 export const PLAN_LABEL: Record<string, string> = { basic: '베이직', pro: '프로' }

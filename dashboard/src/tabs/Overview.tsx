@@ -1,15 +1,15 @@
 import { useMemo } from 'react'
 import { inRange, segFilter, sum } from '../lib/agg'
 import { md } from '../lib/date'
-import { num, pct, ratio, won } from '../lib/format'
+import { num, won } from '../lib/format'
 import { F, uniquePersons } from '../lib/persons'
 import { ready, useTable, waitOf } from '../lib/source'
-import type { DailyMetric, HourlyMetric } from '../lib/types'
+import type { DailyMetric, DailySubscription, HourlyMetric } from '../lib/types'
 import TrendCard, { type TrendMetric } from '../components/TrendCard'
 import RevenueCard from '../components/RevenueCard'
 import { sumRevenue } from '../lib/revenue'
 import { Pending, SectionTitle, Tile, TileRow } from '../components/ui'
-import { delta, ptDelta, type TabProps, vsLabel } from './common'
+import { delta, type TabProps, vsLabel } from './common'
 
 const KEYS = [
   'persons',
@@ -35,6 +35,16 @@ const APPLY_PAY: [M, M] = [
   { label: '결제', unit: '건', value: (r) => r.pay_count, hour: (r) => r.pay_count },
 ]
 const AMOUNT: [M] = [{ label: '결제 금액', unit: '원', value: (r) => r.pay_amount, format: won }]
+
+/** 날짜 d 이하 마지막 날의 구독 행. */
+function subAt(rows: DailySubscription[] | undefined, d: string): DailySubscription | undefined {
+  let last: DailySubscription | undefined
+  for (const r of rows ?? []) {
+    if (r.kst_date > d) break
+    last = r
+  }
+  return last
+}
 
 export default function Overview({ data, s, set, range }: TabProps) {
   const seg = segFilter(s)
@@ -75,9 +85,7 @@ export default function Overview({ data, s, set, range }: TabProps) {
           partners += r.partner_total
         }
     }
-    const subs = data.daily_subscription?.filter((r) => r.kst_date <= to)
-    const subscribers = subs?.length ? subs[subs.length - 1].active_subscribers : null
-    return { to, members, venues, registered, partners, subscribers }
+    return { to, members, venues, registered, partners }
   }, [data, venueL])
 
   const segOn = s.ch !== 'all' || s.pf !== 'all' || s.ms !== 'all'
@@ -86,8 +94,9 @@ export default function Overview({ data, s, set, range }: TabProps) {
   const rPrev = rev ? sumRevenue(rev, range.prevFrom, range.prevTo) : null
 
   const vs = vsLabel(data, range)
-  const engaged = ratio(cur.engaged_sessions, cur.sessions)
-  const engagedPrev = ratio(prev.engaged_sessions, prev.sessions)
+  const subEnd = subAt(data.daily_subscription, range.to)
+  const subPrev = subAt(data.daily_subscription, range.prevTo)
+  const money = !segOn && rCur && rPrev ? { cur: rCur, prev: rPrev } : null
 
   const card = {
     daily: data.daily_metrics,
@@ -128,58 +137,33 @@ export default function Overview({ data, s, set, range }: TabProps) {
             </span>
           </>
         )}
-        {status.subscribers != null && (
-          <span className="text-ink2">
-            구독자 <span className="tnum font-semibold text-ink">{num(status.subscribers)}</span>명
-          </span>
-        )}
       </section>
 
-      <TileRow cols="sm:grid-cols-4 lg:grid-cols-7" title={`핵심 지표 · ${vs}`}>
+      <TileRow cols={money ? 'lg:grid-cols-6' : 'lg:grid-cols-4'} title={`핵심 지표 · ${vs}`}>
         <Tile metricId="V12" label="방문자" value={num(vCur)} unit="명" delta={delta(data, range, vCur, vPrev)} wait={waitOf(pdL)} />
-        <Tile
-          metricId="V08"
-          label="활성 세션 비율"
-          value={pct(engaged)}
-          sub={`세션 ${num(cur.sessions)} 중`}
-          delta={ptDelta(data, range, engaged, engagedPrev)}
-        />
         <Tile metricId="V02" label="신규 방문자" value={num(cur.new_persons)} unit="명" delta={d('new_persons')} />
         <Tile metricId="C10" label="가입" value={num(cur.signups)} unit="명" delta={d('signups')} />
-        <Tile metricId="C11" label="신청" value={num(cur.applies)} unit="건" delta={d('applies')} />
         <Tile metricId="C12" label="결제" value={num(cur.pay_count)} unit="건" delta={d('pay_count')} />
-        <Tile metricId="C13" label="결제 금액" value={won(cur.pay_amount)} unit="원" delta={d('pay_amount')} />
+        {money && (
+          <Tile
+            metricId="M01"
+            label="플랫폼 매출"
+            value={won(money.cur.total)}
+            unit="원"
+            delta={delta(data, range, money.cur.total, money.prev.total)}
+          />
+        )}
+        {money && (
+          <Tile
+            metricId="S01"
+            label="활성 구독자"
+            value={num(subEnd?.active_subscribers)}
+            unit="명"
+            sub={subEnd ? `${md(subEnd.kst_date)} 기준` : undefined}
+            delta={delta(data, range, subEnd?.active_subscribers ?? null, subPrev?.active_subscribers ?? null)}
+          />
+        )}
       </TileRow>
-
-      {!segOn && rCur && rPrev && (
-        <TileRow cols="sm:grid-cols-4 lg:grid-cols-4" title={`매출 · ${vs}`}>
-          <Tile metricId="M01" label="총 매출" value={won(rCur.total)} unit="원" delta={delta(data, range, rCur.total, rPrev.total)} />
-          <Tile
-            metricId="M02"
-            label="티켓"
-            value={won(rCur.ticket)}
-            unit="원"
-            sub={`총 매출의 ${pct(ratio(rCur.ticket, rCur.total), 0)}`}
-            delta={delta(data, range, rCur.ticket, rPrev.ticket)}
-          />
-          <Tile
-            metricId="M03"
-            label="구독"
-            value={won(rCur.subscription)}
-            unit="원"
-            sub={`총 매출의 ${pct(ratio(rCur.subscription, rCur.total), 0)}`}
-            delta={delta(data, range, rCur.subscription, rPrev.subscription)}
-          />
-          <Tile
-            metricId="M04"
-            label="B2B"
-            value={won(rCur.b2b)}
-            unit="원"
-            sub={`총 매출의 ${pct(ratio(rCur.b2b, rCur.total), 0)}`}
-            delta={delta(data, range, rCur.b2b, rPrev.b2b)}
-          />
-        </TileRow>
-      )}
 
       <SectionTitle>추이</SectionTitle>
       <TrendCard title="방문자" metrics={VISITORS} {...card} personWait={waitOf(pdL)} />

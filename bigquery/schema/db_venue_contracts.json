@@ -15,13 +15,13 @@
     "name": "plan",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "요금제 basic / pro"
+    "description": "요금제 basic / pro. 현재값(종료 계약은 종료 시점 값) — 변경 이력은 db_venue_contract_changes"
   },
   {
     "name": "monthly_fee",
     "type": "INTEGER",
     "mode": "NULLABLE",
-    "description": "월 이용료 (원) basic 99,000 / pro 299,000"
+    "description": "월 이용료 (원) basic 49,000 / pro 149,000. plan 의 현재 요금 — 기간별 요금은 db_venue_contract_changes 로 복원"
   },
   {
     "name": "started_at",

@@ -12,7 +12,7 @@ bigquery/load_all.sh --only 7          # 한 단계만 (1~9)
 ```
 
 - BigQuery 명령은 모두 `scripts/bq.sh` 를 거친다. GCP 프로젝트 ID `nightpulse-analytics`(초기 명칭 유지), 리전 `asia-northeast3` 가 래퍼에 고정돼 있다.
-- 입력은 생성기 출력 `data/raw/` 9개 파일(이벤트 NDJSON 1 + RDB CSV 7 + 광고 CSV 1), 스키마는 `bigquery/schema/<표>.json`.
+- 입력은 생성기 출력 `data/raw/` 10개 파일(이벤트 NDJSON 1 + RDB CSV 8 + 광고 CSV 1), 스키마는 `bigquery/schema/<표>.json`.
 - 단계마다 stdout 한 줄(`[단계] 표 ok rows=… bytes=… 초`)과 `ops.build_log` 1행을 남긴다. 실행 ID(`run_id`)는 시작 시각(UTC)이다.
 
 ## 단계
@@ -32,6 +32,7 @@ python3 bigquery/build_catalog.py --export dashboard/public/catalog.json   # + �
 |---|---|
 | 생성기를 다시 돌렸다 | `bigquery/load_all.sh` |
 | 채널 규칙만 바꿨다 (`01_map_channel.sql`) | `--only 2` 후 `--skip-raw` (4단계부터 다시 계산돼야 한다) |
+| 수수료율만 바꿨다 (`01_map_fee_rate.sql`) | `--only 2` → `--only 6` → `--only 7` → `--only 8` (주문 원장 수수료부터 마트까지) |
 | 마트 SQL 하나를 고쳤다 | `--only 7` 후 `--only 8` |
 | 검사 기준만 바꿨다 | `--only 8` |
 
@@ -45,7 +46,7 @@ python3 bigquery/build_catalog.py --export dashboard/public/catalog.json   # + �
 | `[1]` 적재 오류 (스키마·형식) | 오류 메시지의 열 이름 | `bigquery/schema/*.json` 과 CSV 헤더 대조 |
 | `[n] … 실패: … bytesBilled` | `NP_MAX_BYTES` (기본 5GB) | 날짜 필터·열 선택을 먼저 줄인다. 상한을 올리는 건 마지막 |
 | `… Cannot replace a table with a different partitioning spec` 류 | 표의 파티션·클러스터 설정을 바꿨다 | `CREATE OR REPLACE` 는 설정 변경을 거부한다. `scripts/bq.sh rm -f -t <데이터셋>.<표>` 로 그 표만 지우고 해당 단계를 다시 돌린다 |
-| `[8] 검사 실패 k건` | 아래 첫 쿼리 | C(대조)는 SQL 버그, R(범위)은 생성기 보정, I(무결성)는 원천 문제일 가능성이 크다. C9 는 결제 원장에 신청이 없는 티켓 결제, C10·C11 은 활성 규칙·날짜(KST) 변환 차이부터 본다 |
+| `[8] 검사 실패 k건` | 아래 첫 쿼리 | C(대조)는 SQL 버그, R(범위)은 생성기 보정, I(무결성)는 원천 문제일 가능성이 크다. C9 는 결제 원장에 신청이 없는 티켓 결제·부분 환불, C14 는 수수료 등급 누락(`fee_tier` NULL), C15 는 계약 기간 밖 요금제 변경·`from_fee` 가 직전 요금과 다른 변경, C10·C11 은 활성 규칙·날짜(KST) 변환 차이부터 본다. R10·R11 은 수수료율·플랜 요금·파트너 행사 비중(생성기 보정) |
 
 ```sql
 -- 마지막 실행의 실패 항목
@@ -66,11 +67,11 @@ ORDER BY started_at;
 
 ## 검사 (8단계)
 
-검사 24개(C1a·C1b·C2~C11, R1~R8, I1~I4)의 ID·통과 기준·대상 표·최근 관측값은 [bigquery/README.md § 검사](../bigquery/README.md#검사). 하나라도 통과하지 못하면 `load_all.sh` 가 exit 1. 범위 검사(R)의 분자·분모 정의는 [metrics.md](metrics.md) 의 해당 지표와 같다.
+검사 32개(C1a·C1b·C2~C11·C12a·C12b·C13~C15, R1~R11, I1~I4)의 ID·통과 기준·대상 표·최근 관측값은 [bigquery/README.md § 검사](../bigquery/README.md#검사). 하나라도 통과하지 못하면 `load_all.sh` 가 exit 1. 범위 검사(R)의 분자·분모 정의는 [metrics.md](metrics.md) 의 해당 지표와 같다.
 
 ## 비용
 
-전체 실행 1회에 쿼리 처리량 약 7.3GB(52주·이벤트 약 964만 행 기준, 정제 2.2GB·세션 1.4GB가 대부분). 표 41개(마트 18개) 전체 재생성 기준. 단계당 상한 `NP_MAX_BYTES` 기본 5GB. 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
+전체 실행 1회에 쿼리 처리량 약 7.3GB(52주·이벤트 약 964만 행 기준, 정제 2.2GB·세션 1.4GB가 대부분). 표 48개(마트 21개) 전체 재생성 기준(처리량은 표 41개 시점 측정, 추가 표 7개는 계약·구독 규모라 각 1MB 이하 예상 — 재측정 필요). 단계당 상한 `NP_MAX_BYTES` 기본 5GB. 적재는 무료다. 무료 한도(월 1TB 쿼리·10GB 저장) 안에서 하루 여러 번 돌려도 된다.
 
 | 단계 | 처리량 | 비고 |
 |---|---:|---|

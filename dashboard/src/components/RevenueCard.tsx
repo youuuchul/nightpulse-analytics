@@ -3,27 +3,25 @@ import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, 
 import type { Range } from '../lib/agg'
 import { addDays, addMonths, eachDay, md } from '../lib/date'
 import { compact, won } from '../lib/format'
-import { REVENUE_KINDS } from '../lib/labels'
-import { revenueByDay } from '../lib/revenue'
-import type { DailyRevenue, RevenueKind } from '../lib/types'
+import { GMV_COLOR, REVENUE_KINDS } from '../lib/labels'
+import { type DayRevenue, revenueByDay } from '../lib/revenue'
+import type { DailyRevenue } from '../lib/types'
 import MetricHelp from './MetricHelp'
 import { type Bucket, DeltaMark, GRAIN_LABEL, MiniSeg, autoGrain, buckets, change } from './TrendCard'
 
 type Grain = 'auto' | 'day' | 'week' | 'month'
 
-interface Point {
+interface Point extends DayRevenue {
   i: number
   x: string
-  ticket: number
-  subscription: number
-  b2b: number
   total: number
   prev: number | null
 }
 
 /**
- * 매출 구성 추이 카드 — 종류별(티켓·구독·B2B) 누적 막대 + 전기 합계 점선 + 종류별 분해 타일.
- * 매출 마트에는 세그먼트 축이 없어 세그먼트 상태를 받지 않는다.
+ * 매출 구성 추이 카드 — 플랫폼 매출(수수료·멤버십·파트너 플랜) 누적 막대 + 거래액 보조선(오른쪽 축)
+ * + 전기 플랫폼 매출 점선 + 분해 타일. 매출 마트에는 세그먼트 축이 없어 세그먼트 상태를 받지 않는다.
+ * tiles = false 면 분해 타일 없이 차트만 그린다(같은 값을 스코어보드가 보여 주는 탭).
  */
 export default function RevenueCard({
   rows,
@@ -31,12 +29,14 @@ export default function RevenueCard({
   dataFrom,
   dataTo,
   onDrill,
+  tiles: withTiles = true,
 }: {
   rows?: DailyRevenue[]
   range: Range
   dataFrom: string
   dataTo: string
   onDrill: (p: { p: '1'; d: string } | { p: 'custom'; from: string; to: string }) => void
+  tiles?: boolean
 }) {
   const [pick, setPick] = useState<Grain>('auto')
   const hoverIdx = useRef<number | null>(null)
@@ -48,12 +48,18 @@ export default function RevenueCard({
   const grainOk = { day: !range.oneDay, week: range.days >= 8, month: monthCount >= 2 }
   const grain = pick === 'auto' || !grainOk[pick] ? auto : pick
   const chartable = grain !== 'hour'
+  const sumOf = (z: DayRevenue) => z.fee + z.membership + z.plan
 
-  const sumSpan = (a: string, b: string) => {
-    const z = { ticket: 0, subscription: 0, b2b: 0 }
+  const sumSpan = (a: string, b: string): DayRevenue => {
+    const z = { fee: 0, membership: 0, plan: 0, gmv: 0 }
     for (const d of eachDay(a, b)) {
       const v = byDay.get(d)
-      if (v) for (const k of Object.keys(z) as RevenueKind[]) z[k] += v[k]
+      if (v) {
+        z.fee += v.fee
+        z.membership += v.membership
+        z.plan += v.plan
+        z.gmv += v.gmv
+      }
     }
     return z
   }
@@ -68,8 +74,8 @@ export default function RevenueCard({
         i,
         x: b.label,
         ...c,
-        total: c.ticket + c.subscription + c.b2b,
-        prev: hasPrev ? p.ticket + p.subscription + p.b2b : null,
+        total: sumOf(c),
+        prev: hasPrev ? sumOf(p) : null,
       }
     })
     return { points, bks }
@@ -78,8 +84,16 @@ export default function RevenueCard({
   const cur = sumSpan(range.from, range.to)
   const prev = hasPrev ? sumSpan(range.prevFrom, range.prevTo) : null
   const tiles = [
-    { label: '전체', cur: cur.ticket + cur.subscription + cur.b2b, prev: prev ? prev.ticket + prev.subscription + prev.b2b : null, color: '' },
-    ...REVENUE_KINDS.map((k) => ({ label: k.label, cur: cur[k.key], prev: prev ? prev[k.key] : null, color: k.color })),
+    { label: '플랫폼 매출', cur: sumOf(cur), prev: prev ? sumOf(prev) : null, color: '', line: false, id: 'M01' },
+    ...REVENUE_KINDS.map((k) => ({
+      label: k.label,
+      cur: cur[k.key],
+      prev: prev ? prev[k.key] : null,
+      color: k.color,
+      line: false,
+      id: k.metricId,
+    })),
+    { label: '거래액', cur: cur.gmv, prev: prev ? prev.gmv : null, color: GMV_COLOR, line: true, id: 'M09' },
   ]
 
   const spanOf = (a: string, b: string) =>
@@ -129,7 +143,7 @@ export default function RevenueCard({
       {!rows ? (
         <div className="flex min-h-[22px] items-center text-sm text-muted">데이터 없음</div>
       ) : (
-        <div className={chartable ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_188px]' : ''}>
+        <div className={chartable && withTiles ? 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_188px]' : ''}>
           {chartable && (
             <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink2">
@@ -139,16 +153,20 @@ export default function RevenueCard({
                     {k.label}
                   </span>
                 ))}
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-0.5 w-3.5 rounded-full" style={{ background: GMV_COLOR }} />
+                  거래액 · 오른쪽 축
+                </span>
                 {hasPrev && (
                   <span className="inline-flex items-center gap-1.5">
                     <svg width="14" height="2" aria-hidden>
                       <line x1="0" y1="1" x2="14" y2="1" stroke="var(--muted)" strokeWidth="2" strokeDasharray="3 3" />
                     </svg>
-                    전기 합계
+                    전기 플랫폼 매출
                   </span>
                 )}
               </div>
-              <div className="-ml-2 h-[260px] cursor-pointer">
+              <div className={`-ml-2 cursor-pointer ${withTiles ? 'h-[300px]' : 'h-[280px]'}`}>
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart
                     data={series.points}
@@ -175,6 +193,16 @@ export default function RevenueCard({
                       interval="preserveStartEnd"
                     />
                     <YAxis
+                      yAxisId="l"
+                      tickFormatter={compact}
+                      tick={{ fill: 'var(--muted)', fontSize: 11 }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={44}
+                    />
+                    <YAxis
+                      yAxisId="r"
+                      orientation="right"
                       tickFormatter={compact}
                       tick={{ fill: 'var(--muted)', fontSize: 11 }}
                       tickLine={false}
@@ -203,8 +231,15 @@ export default function RevenueCard({
                               </div>
                             ))}
                             <div className="mt-1 flex justify-between gap-4 border-t border-line pt-1">
-                              <span className="text-ink2">합계</span>
+                              <span className="text-ink2">플랫폼 매출</span>
                               <span className="tnum font-medium text-ink">{won(p.total)}</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-4 py-0.5">
+                              <span className="inline-flex items-center gap-1.5 text-ink2">
+                                <span className="inline-block h-0.5 w-2.5 rounded-full" style={{ background: GMV_COLOR }} />
+                                거래액
+                              </span>
+                              <span className="tnum font-medium text-ink">{won(p.gmv)}</span>
                             </div>
                             {hasPrev && (
                               <>
@@ -223,6 +258,7 @@ export default function RevenueCard({
                     {REVENUE_KINDS.map((k, i) => (
                       <Bar
                         key={k.key}
+                        yAxisId="l"
                         dataKey={k.key}
                         stackId="r"
                         fill={k.color}
@@ -233,8 +269,18 @@ export default function RevenueCard({
                         isAnimationActive={false}
                       />
                     ))}
+                    <Line
+                      yAxisId="r"
+                      dataKey="gmv"
+                      stroke={GMV_COLOR}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4, fill: GMV_COLOR, stroke: 'var(--surface)', strokeWidth: 2 }}
+                      isAnimationActive={false}
+                    />
                     {hasPrev && (
                       <Line
+                        yAxisId="l"
                         dataKey="prev"
                         stroke="var(--muted)"
                         strokeWidth={1.5}
@@ -250,17 +296,24 @@ export default function RevenueCard({
             </div>
           )}
 
+          {(withTiles || !chartable) && (
           <div className="self-start overflow-hidden rounded-lg border border-line">
             <div
               className={`-mb-px -mr-px grid [&>*]:border-b [&>*]:border-r [&>*]:border-line ${
-                chartable ? 'grid-cols-2 lg:grid-cols-1' : 'grid-cols-2 sm:grid-cols-4'
+                chartable ? 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-1' : 'grid-cols-2 sm:grid-cols-5'
               }`}
             >
               {tiles.map((t) => (
-                <div key={t.label} className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
-                  <div className="inline-flex items-center gap-1.5 truncate text-xs text-ink2">
-                    {t.color && <span className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: t.color }} />}
-                    {t.label}
+                <div key={t.label} className="flex min-w-0 flex-col gap-0.5 px-3 py-2">
+                  <div className="flex min-w-0 items-center gap-1.5 text-xs text-ink2">
+                    {t.color &&
+                      (t.line ? (
+                        <span className="inline-block h-0.5 w-2.5 shrink-0 rounded-full" style={{ background: t.color }} />
+                      ) : (
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-sm" style={{ background: t.color }} />
+                      ))}
+                    <span className="truncate">{t.label}</span>
+                    <MetricHelp id={t.id} />
                   </div>
                   <div className="flex items-baseline gap-1">
                     <span className="tnum text-lg font-semibold leading-tight text-ink">{won(t.cur)}</span>
@@ -275,6 +328,7 @@ export default function RevenueCard({
               ))}
             </div>
           </div>
+          )}
         </div>
       )}
     </section>

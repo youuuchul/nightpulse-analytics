@@ -1,0 +1,56 @@
+[
+  {
+    "name": "change_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "플랜 변경 ID"
+  },
+  {
+    "name": "contract_id",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "계약 ID (db_venue_contracts). 한 계약에 변경 여러 건 가능, 하루 1건 이하"
+  },
+  {
+    "name": "venue_id",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "공간 ID"
+  },
+  {
+    "name": "changed_at",
+    "type": "TIMESTAMP",
+    "mode": "REQUIRED",
+    "description": "변경 시각 (UTC, KST 자정). 이날부터 새 요금. 계약 시작일 다음 날 ~ 종료일 전날"
+  },
+  {
+    "name": "from_plan",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "변경 전 요금제 basic / pro"
+  },
+  {
+    "name": "to_plan",
+    "type": "STRING",
+    "mode": "REQUIRED",
+    "description": "변경 후 요금제 basic / pro. basic -> pro = 업그레이드"
+  },
+  {
+    "name": "from_fee",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "변경 전 월 이용료 (원)"
+  },
+  {
+    "name": "to_fee",
+    "type": "INTEGER",
+    "mode": "REQUIRED",
+    "description": "변경 후 월 이용료 (원)"
+  },
+  {
+    "name": "snapshot_date",
+    "type": "DATE",
+    "mode": "REQUIRED",
+    "description": "스냅샷 기준일 (생성 종료일, KST)"
+  }
+]

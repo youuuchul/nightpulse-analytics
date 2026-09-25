@@ -133,26 +133,71 @@ export interface MonthlySummary {
   cancels: number
   w1_retention: number | null
   top_channel: string | null
-  ticket_amount?: number
-  subscription_amount?: number
-  b2b_amount?: number
+  gmv_amount?: number
+  fee_amount?: number
+  membership_amount?: number
+  partner_plan_amount?: number
+  platform_revenue?: number
+  ad_spend?: number
   active_subscribers_eom?: number
   partner_total_eom?: number
   registered_total_eom?: number
 }
 
-export type RevenueKind = 'ticket' | 'subscription' | 'b2b'
+export type RevenueKind = 'ticket' | 'membership' | 'partner_plan'
+export type FeeTier = 'none' | 'basic' | 'pro'
 
+/**
+ * 티켓 행: gmv − discount = paid(환불 주문 제외), net = 수수료, pay_count 는 환불 포함(실결제 = pay_count − refund_count).
+ * 멤버십·파트너 플랜 행: gmv 없음(null), net = 매출.
+ */
 export interface DailyRevenue {
   kst_date: string
   kind: RevenueKind
-  partner_flag: boolean | null
+  fee_tier: FeeTier | null
   pay_count: number
-  gross_amount: number
+  gmv_amount: number | null
+  paid_amount: number
   discount_amount: number
-  refund_amount?: number
+  refund_count: number
+  refund_amount: number
   net_amount: number
   payers: number
+}
+
+export type ContractPlan = 'basic' | 'pro' | 'all'
+
+export interface MonthlyContract {
+  month: string
+  plan: ContractPlan
+  contracts_bom: number
+  new_contracts: number
+  churned_contracts: number
+  upgrades: number
+  downgrades: number
+  contracts_eom: number
+  mrr_bom: number
+  mrr_new: number
+  mrr_expansion: number
+  mrr_contraction: number
+  mrr_churn: number
+  mrr_eom: number
+  arpa: number | null
+}
+
+export interface ContractCohort {
+  cohort_month: string
+  month_offset: number
+  cohort_size: number
+  retained: number
+  mrr_retained: number
+}
+
+export interface SubscriptionCohort {
+  cohort_month: string
+  month_offset: number
+  cohort_size: number
+  retained: number
 }
 
 export interface DailySubscription {
@@ -163,6 +208,7 @@ export interface DailySubscription {
   mrr: number
   subscriber_ticket_payers: number
   subscriber_ticket_amount: number
+  discount_amount?: number
 }
 
 export interface DailyVenueRegistry {
@@ -239,6 +285,9 @@ export interface Data {
   daily_subscription?: DailySubscription[]
   daily_venue_registry?: DailyVenueRegistry[]
   venue_registry?: VenueRegistry[]
+  monthly_contract?: MonthlyContract[]
+  contract_cohort?: ContractCohort[]
+  subscription_cohort?: SubscriptionCohort[]
 }
 
 export interface LazyTables {

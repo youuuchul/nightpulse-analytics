@@ -1,0 +1,158 @@
+# Placewave 비즈니스 모델과 지표 체계
+
+> 2026-09-25 · A안(파트너 플랜 4.9만 · 14.9만) 적용. 수치는 합성 데이터 기준 실행(seed 20260923, 2025-09-22 ~ 2026-09-20) 재집계. 대시보드·지표 가이드(`dashboard/public/metrics.json`)·마트가 이 문서의 §3 체계를 따른다.
+
+## 요약 — Placewave는 어떻게 돈을 벌고, 무엇을 보면 건강한가
+
+- 돈은 세 갈래로 번다. ① 티켓이 팔릴 때 공간에서 받는 **거래 수수료**, ② 소비자가 내는 **월 멤버십**(9,900원), ③ 공간이 내는 **파트너 플랜 월 구독료**.
+- 티켓 결제액 전체(거래액, GMV)는 플랫폼 매출이 아니다. 플랫폼 매출은 거래액 중 수수료 몫 + 멤버십 + 파트너 플랜이다.
+- 제안 수수료율: 비파트너 10%, 파트너 베이직 5%, 파트너 프로 3%. 1년 거래액 13.3억에 적용하면 수수료 매출 약 0.78억(실효 5.9%).
+- 파트너 플랜 요금은 베이직 월 4.9만 · 프로 월 14.9만(A안). 1년 플랫폼 매출 2.61억 = 수수료 0.78억 + 멤버십 1.00억 + 파트너 플랜 0.84억. 파트너가 Placewave에서 판 거래액 대비 내는 비용(수수료 + 플랜)은 13%로 공급 측이 버틸 수 있는 수준이다(옛 요금 9.9만 · 29.9만이면 21%, §5).
+- 건강 신호는 축마다 셋이다.
+  - 거래: 거래액이 늘고, 실효 수수료율이 5~7%에 머물고, 환불률이 10% 안쪽인가.
+  - 멤버십: 활성 구독자와 MRR이 늘고, 월 해지율이 6% 안쪽이며, 할인 부담이 구독 매출의 30%를 넘지 않는가.
+  - 파트너: 활성 계약·플랜 MRR이 늘고, 계약 월 해지율 2% 안쪽, GRR이 유지되며, 파트너 부담률이 15% 안쪽인가.
+- 개요 탭은 한 줄로 본다: 방문자 · 신규 방문자 · 가입 · 결제 · 플랫폼 매출 · 활성 구독자. 그 아래 매출 구성(수수료·멤버십·파트너 플랜)과 거래액 보조선.
+
+## 1. 제품
+
+Placewave는 도심의 공간 — 카페·바·라운지·라이브홀·루프탑·팝업 — 과 그 공간에서 열리는 이벤트를 찾고, 신청하고, 결제하는 서비스다. 소비자는 지도와 검색으로 오늘 갈 곳을 고르고 티켓을 산다. 공간 사업자는 공간을 등록해 노출을 받고, 파트너 플랜에 가입하면 수수료 우대·상단 노출·멤버 할인 채널을 얻는다. Placewave는 양쪽을 연결하고 결제를 대행하며, 거래·멤버십·파트너 플랜에서 매출을 낸다.
+
+| 주체 | 하는 일 | 플랫폼에 내는 것 | 받는 것 |
+|---|---|---|---|
+| 소비자 | 탐색 → 신청 → 결제, 선택적으로 멤버십 | 티켓 정가(멤버는 파트너 행사 15% 할인), 멤버십 월 9,900원 | 발견, 간편 결제, 멤버 할인 |
+| 공간 사업자 | 공간 등록, 이벤트 개설, 선택적으로 파트너 플랜 | 거래 수수료, 파트너 플랜 월 구독료 | 노출, 판매 채널, 정산 |
+| Placewave | 목록·결제·정산 운영 | — | 수수료 + 멤버십 + 파트너 플랜 |
+
+## 2. 수익 모델 3축
+
+용어를 먼저 고정한다. **거래액(GMV)** = 결제 완료 티켓의 정가 합(환불 제외, 멤버 할인 전). **티켓 결제액** = 소비자가 실제 낸 돈(정가 − 멤버 할인). **플랫폼 매출** = 수수료 + 멤버십 + 파트너 플랜. 거래액과 결제액은 규모 지표이고 매출이 아니다.
+
+### ① 거래 수수료
+
+- 산식: 수수료 = Σ 정가 × 수수료율(개최 시점의 공간 등급). 환불되면 수수료도 되돌린다. 인식일은 결제일.
+- 제안 율과 근거:
+
+| 공간 등급 | 율 | 근거 |
+|---|---|---|
+| 비파트너 | 10% | 소비자 마켓플레이스 중앙값이 약 9~10%, 해외 이벤트 티켓 플랫폼의 실효 부담이 5만 원대 티켓에서 약 10% |
+| 파트너 베이직 | 5% | 무료 플랜 5%·유료 플랜 0%로 나눈 이벤트 호스팅 플랫폼 구조, 국내 공연 예매처 판매 수수료 5~7% |
+| 파트너 프로 | 3% | 상위 플랜 가입 유인. 국내 결제대행 원가(2~3%대)를 밑돌지 않는 하한 |
+
+- 멤버 할인 15%는 **플랫폼 부담**으로 둔다(수수료는 정가 기준, 할인은 멤버십 비용). 파트너는 정가 − 수수료를 정산받으므로 멤버 할인이 파트너 수익을 깎지 않는다. 할인액은 멤버십 순기여에서 뺀다.
+- 우리 데이터(1년): 거래액 13.27억 = 비파트너 3.34억 + 베이직 7.31억 + 프로 2.63억 → 수수료 0.334 + 0.366 + 0.079 = **0.78억**, 실효 수수료율 5.9%. 참고로 티켓 결제액은 13.03억, 환불 3,758건(결제 대비 10.2%).
+
+### ② 소비자 멤버십
+
+- 월 9,900원 자동 결제, 회원만 가입. 혜택: 파트너 공간 이벤트 15% 할인(플랫폼 부담). 할인 외 혜택(선예매·멤버 전용 이벤트)은 비용 없이 체감 가치를 올리는 수단으로 제품 정의에 둔다.
+- 매출 = 구독 결제 합(월 반복). MRR = 기준일 활성 구독자 × 9,900.
+- 우리 데이터: 구독 매출 **1.00억**, 활성 2,000명(MRR 1,980만), 월 해지율 5.5%, 할인 부담 0.24억(구독 매출의 24%) → 멤버십 순기여 0.76억.
+- 주의: 구독자 1인·월 평균 할인 2,375원으로 요금(9,900원)의 24%만 돌려받는다. 할인만으로는 본전이 안 나므로 할인 외 혜택이 없으면 해지율이 올라갈 구조다.
+
+### ③ 파트너 플랜
+
+- 베이직 월 4.9만 · 프로 월 14.9만. 혜택: 수수료 우대(5%/3%), 목록·지도 상단 노출, 멤버 할인 채널, 프로는 전용 통계.
+- 매출 = 활성 계약 월 요금의 일할 합. 거래액과 무관하게 발생한다.
+- 우리 데이터(A안 요금 환산): 파트너 플랜 매출 **0.84억**, 기준일 활성 180(베이직 122·프로 58), 플랜 MRR 1,462만, ARPA 8.1만, 계약 월 해지율 1.9%. 요금제 이동은 월 1% 베이직→프로 업그레이드·0.3% 다운그레이드로 두어 NRR 이 GRR 과 갈라지게 한다.
+
+## 3. 지표 체계
+
+상태: 유지 = 그대로, 개명 = 이름만, 재정의 = 산식이 바뀜, 신설 = 새 지표. 마트 열의 `*` 는 §4에서 새로 만드는 열.
+
+| 축 | 코드 | 이름 | 영문 | 정의·산식 | 단위 | 마트 열 | 화면 | 상태 |
+|---|---|---|---|---|---|---|---|---|
+| 전체 | M01 | 플랫폼 매출 | Platform revenue | 수수료 + 구독 + 파트너 플랜 (티켓 결제액 제외) | 원 | `daily_revenue.net_amount` 전 kind 합 | 개요 스코어보드 | 재정의(총 매출) |
+| 전체 | M05 | 매출 구성 | Revenue mix | 종류별 net_amount ÷ 플랫폼 매출 | % | `daily_revenue.net_amount`, `kind` | 개요 매출 구성 카드 | 재정의 |
+| 거래 | M09 | 거래액 | GMV | 결제 완료 티켓 정가 합, 환불 제외, 할인 전 | 원 | `daily_revenue.gmv_amount*` | 매출 구성 보조선, 행사·결제 | 신설 |
+| 거래 | M10 | 수수료 매출 | Commission revenue | Σ 정가 × 등급별 율, 환불 시 차감 | 원 | `daily_revenue.net_amount`(kind=ticket) | 개요 매출 구성 | 신설 |
+| 거래 | M11 | 실효 수수료율 | Take rate | 수수료 매출 ÷ 거래액 | % | `net_amount`, `gmv_amount*` | 행사·결제 매출 구성 | 신설 |
+| 거래 | M02 | 티켓 결제액 | Ticket payments | 정가 − 멤버 할인, 환불 제외 (매출 아님) | 원 | `daily_revenue.paid_amount*` | 행사·결제 | 개명·재정의(티켓 매출) |
+| 거래 | M06 | 객단가 | AOV | 거래액 ÷ 결제 건 | 원 | `gmv_amount*`, `pay_count` | 행사·결제 | 재정의(정가 기준 명시) |
+| 거래 | M12 | 환불률 | Refund rate | 환불 건 ÷ 결제 건 (금액 기준 병기) | % | `refund_count*`, `refund_amount*` | 행사·결제 | 신설 |
+| 거래 | M08 | 파트너 거래액 비중 | Partner GMV share | 파트너 공간 거래액 ÷ 거래액 | % | `gmv_amount*`, `fee_tier*` | 행사·결제 | 재정의(순매출→거래액) |
+| 거래 | C05·C12·C13 | 결제 전환·결제·결제 금액(로그) | — | 현행 | — | 현행 | 현행 | 유지(C13 라벨에 `로그` 명시) |
+| 멤버십 | S01 | 활성 구독자 | Active subscribers | 기준일 활성 구독 회원 | 명 | `daily_subscription.active_subscribers` | 개요·회원 구독 | 개명(구독자) |
+| 멤버십 | S02·S03 | 신규 구독·구독 해지 | New / Churned | 현행 | 건 | 현행 | 회원 구독 | 유지 |
+| 멤버십 | S04 | 구독 MRR (ARR 보조) | MRR / ARR | 활성 × 월 요금, ARR = MRR × 12 | 원 | `daily_subscription.mrr` | 회원 구독 | 유지 |
+| 멤버십 | S05 | 구독 월 해지율 | Subscriber churn | 기간 해지 ÷ 구독자·월(Σ 일별 활성 ÷ 30). 짧은 기간에는 월초 활성 기준과 같고, 출시 전부터 걸친 기간에도 계산된다. 단일 요금이라 매출 해지율과 같다 | % | 현행 | 회원 구독 | 개명(월 이탈률) |
+| 멤버십 | S08 | 구독 LTV(추정) | Subscriber LTV | (월 요금 − 1인·월 할인) ÷ 월 해지율 | 원 | `mrr`, `churned_subscribers`, 할인액 | 회원 구독 | 신설 |
+| 멤버십 | S09 | 구독 코호트 유지율 | Subscription cohort retention | 시작 월 코호트 중 n개월 뒤 활성 | % | `subscription_cohort*` | 회원 구독 히트맵 | 신설 |
+| 멤버십 | S10 | 회원 대비 구독 비중 | Subscriber penetration | 활성 구독자 ÷ 누적 회원 | % | `active_subscribers`, `signups` | 회원 구독 | 신설 |
+| 멤버십 | S11 | 멤버 할인 부담률 | Benefit cost ratio | 멤버 할인액 ÷ 구독 매출 | % | `discount_amount`, `net_amount`(membership) | 회원 구독 | 신설(M07 짝) |
+| 멤버십 | M03·M07·S06·S07 | 구독 매출·할인액·구독자 결제 비교·구독자 결제액 | — | 현행 | — | 현행 | 현행 | 유지 |
+| 파트너 | M04 | 파트너 플랜 매출 | Partner plan revenue | 활성 계약 월 요금 일할 합 | 원 | `daily_revenue.net_amount`(kind=partner_plan*) | 개요 매출 구성 | 개명(B2B 매출) |
+| 파트너 | P05 | 파트너 플랜 MRR (ARR 보조) | Plan MRR / ARR | 기준일 활성 계약 월 요금 합 | 원 | `daily_venue_registry.mrr_*` | 공간 | 개명(B2B MRR) |
+| 파트너 | P02·P03·P04 | 파트너 공간·신규 계약·계약 해지 | Active / New / Churned contracts | 현행 | 곳·건 | 현행 | 공간 | 유지 |
+| 파트너 | P06 | 파트너 전환율 | Partner conversion | 파트너 공간 ÷ 등록 공간 | % | 현행 | 공간 | 개명(파트너 비중) |
+| 파트너 | P10 | ARPA | ARPA | 플랜 MRR ÷ 활성 계약 | 원 | `mrr_*`, `partner_total` | 공간 | 신설 |
+| 파트너 | P11 | 계약 월 해지율 | Logo churn | 월 해지 계약 ÷ 월초 활성 계약 | % | `monthly_contract*` | 공간 | 신설 |
+| 파트너 | P12 | 매출 해지율 | Revenue churn | (해지 + 다운그레이드 MRR) ÷ 월초 MRR | % | `monthly_contract*` | 공간 | 신설 |
+| 파트너 | P13 | GRR | Gross revenue retention | (월초 MRR − 해지 − 다운그레이드) ÷ 월초 MRR | % | `monthly_contract*` | 공간 | 신설 |
+| 파트너 | P14 | NRR | Net revenue retention | GRR 분자 + 업그레이드 MRR, ÷ 월초 MRR | % | `monthly_contract*` | 공간 | 신설 |
+| 파트너 | P15 | 계약 코호트 유지율 | Contract cohort retention | 계약 시작 월 코호트 중 n개월 뒤 활성(건·MRR) | % | `contract_cohort*` | 공간 히트맵 | 신설 |
+| 파트너 | P16 | 파트너 부담률 | Partner cost ratio | (파트너 공간 수수료 + 플랜 매출) ÷ 파트너 거래액 | % | `net_amount`, `gmv_amount*`, `fee_tier*` | 공간 | 신설 |
+
+- 신설 15개(M09~M12, S08~S11, P10~P16), 개명·재정의 10개(M01·M02·M04·M05·M06·M08·S01·S05·P05·P06). 반영 후 지표 99개.
+- 겹침: M02 티켓 결제액(원장)과 C13 결제 금액(로그)은 같은 돈을 원천만 달리 센다 — 둘 다 두되 C13 라벨에 `로그`를 붙이고 합계 비교는 검사 C9에만 둔다. C07 결제자당 금액은 사람 단위라 M06 객단가(건 단위)와 다르므로 유지.
+- 보류: 재구독(데이터상 회원당 구독 1건), 구독·파트너 CAC payback(영업·멤버십 마케팅 비용 원천 없음). 데이터가 생길 때 추가하고 빈 카드는 만들지 않는다.
+- A06 ROAS 는 거래액 기준 그대로 두되, 월간 탭에 `광고비 ÷ 플랫폼 매출` 을 두는 안은 §4 P3.
+
+## 4. 마트·화면 변경 제안
+
+| 순위 | 대상 | 변경 | 검사 |
+|---|---|---|---|
+| P1 | `staging.map_fee_rate`(신설) | (fee_tier, rate, valid_from) 규칙 표. 등급 non/basic/pro, 율의 유일한 원본 | — |
+| P1 | `staging.fct_order` | 티켓 행에 개최 시점 `fee_tier`, `list_price`, `fee_amount`(환불 시 0) | fee = Σ 정가 × 율 재계산 일치 |
+| P1 | `marts.daily_revenue` | kind 를 `ticket / membership / partner_plan` 로. 티켓 행 열: `pay_count, gmv_amount, discount_amount, paid_amount, refund_count, refund_amount, fee_tier`(partner_flag 대체), `net_amount = 수수료`. Σ net_amount = 플랫폼 매출 한 줄 유지 | C9 를 `paid_amount` 대 원장으로 바꾸고, `gmv_amount − discount_amount = paid_amount` 행 단위 단언 추가 |
+| P1 | 개요 탭 | 스코어보드 한 줄: 방문자·신규 방문자·가입·결제·플랫폼 매출·활성 구독자(뒤 둘은 세그먼트 필터 시 숨김 — 현행 매출 행 규칙). 매출 구성 카드: 수수료·멤버십·파트너 플랜 누적 막대 + 거래액 보조선(오른쪽 축), 분해 타일에 실효 수수료율 | 캡처 90일·1년·1일, 필터 적용 시 숨김 확인 |
+| P1 | `metrics.json`·`docs/metrics.md` | §3 개명·재정의·신설 반영, 매출 세 갈래 공통 규칙 문구 교체 | 지표 수 = 99 |
+| P2 | `marts.monthly_contract`(신설) | 월 × 요금제: `contracts_start, new, churned, mrr_start, mrr_new, mrr_churned, mrr_expansion, mrr_contraction, mrr_end` | mrr_start + new − churned ± 변경 = mrr_end, mrr_end = `daily_venue_registry` 월말 |
+| P2 | `marts.contract_cohort`·`subscription_cohort`(신설) | 시작 월 × 경과 월: `cohort_size, retained, mrr_retained` | 0개월 retained = cohort_size |
+| P2 | 공간 탭 | 스코어보드에 ARPA·계약 월 해지율·GRR, 추이 아래 계약 코호트 히트맵 | — |
+| P2 | 회원 탭 구독 보기 | 월 해지율 옆 LTV·할인 부담률, 구독 코호트 히트맵 | — |
+| P3 | 생성기 | 수수료율·플랜 요금 상수화, 월 1% 베이직→프로 업그레이드·0.3% 다운그레이드 추가(없으면 NRR = GRR 이라 P14 가 의미 없음), 단언 추가: 실효 수수료율 5~7%, 파트너 부담률 ≤ 15% | `validate.py` |
+| P3 | 월간 탭 | `monthly_summary` 에 `gmv_amount, fee_amount, plan_amount` 추가, `광고비 ÷ 플랫폼 매출` | — |
+
+## 5. 시나리오 수치 재조정
+
+1년(2025-09-22 ~ 2026-09-20) 합계, 단위 억 원. 수수료율은 §2 제안값.
+
+| 안 | 거래액 | 수수료 | 멤버십 | 파트너 플랜 | 플랫폼 매출 | 실효 수수료율 | 파트너 부담률 | 9월 기준 연 환산 |
+|---|---|---|---|---|---|---|---|---|
+| 0. 현재 데이터 + 수수료만 적용 | 13.27 | 0.78 | 1.00 | 1.69 | 3.46 | 5.9% | 21.4% | 약 7.4 |
+| **A. 플랜 요금 4.9만/14.9만 (권장)** | 13.27 | 0.78 | 1.00 | 0.84 | **2.61** | 5.9% | 12.9% | 약 5.6 |
+| B. 요금 유지, 파트너 행사 2배 | 약 23.2 | 약 1.22 | 1.00 | 1.69 | 약 3.91 | 5.3% | 약 13.0% | — |
+
+계산 근거.
+
+- 파트너 부담률 = (파트너 공간 수수료 + 플랜 매출) ÷ 파트너 거래액(9.94억). 현 요금이면 파트너 1곳이 월 평균 약 100만 원어치를 Placewave에서 팔면서(8월 파트너 거래액 1.74억 ÷ 168곳) 플랜료만 평균 16.3만 원을 낸다. 수수료까지 더하면 매출의 21%로, 이벤트 티켓 플랫폼 실효 부담(약 8.5~14%)이나 배달 앱 정률 수수료(6.8%)보다 한참 높다. 해지율 1.9%가 유지되기 어려운 값이다.
+- A 안 파트너 플랜 매출 = 현 데이터 요금제별 일할 매출(베이직 0.70억·프로 0.99억) × 새 요금 비율 = 0.84억. 새 요금은 이벤트 호스팅 플랫폼 유료 플랜(월 약 8~9만 원 상당)과 예약 SaaS 하위 플랜 사이. ARPA 8.1만, 파트너 플랜 MRR 1,462만.
+- 9월 기준 연 환산 = 8월 수수료(약 1,220만) + 9월 20일 구독 MRR 1,980만 + 플랜 MRR(현 2,942만 / A 1,462만), × 12.
+- 1년차 규모 판단: 플랫폼 매출 2.6억에 광고비 1.35억(매출의 52%), 기말 연 환산 5.6억. 1년차 서비스가 성장 투자 단계에서 보이는 모양으로 자연스럽다. B 안은 파트너 공간당 행사가 연 약 11회(월 1회 미만)라 늘릴 여지는 있지만, 거래액이 현 생성기 범위(연 티켓 매출 12~18억)와 사람 수 210,000명 기준 전환 범위를 벗어나 생성기 전반을 다시 맞춰야 한다.
+- 권장: A 안. 생성기에서 바꿀 것은 플랜 요금 상수 두 개와 단언 범위(B2B 매출 → 파트너 플랜 매출 0.7~1.0억)뿐이고 거래액·구독자·계약 수는 그대로 둔다. 멤버십은 요금·구독자 수를 유지하되 S11 할인 부담률(현재 24%)과 S05 해지율을 함께 보며, 할인 외 혜택을 제품 정의에 넣는다.
+
+## 출처
+
+1. 마켓플레이스 수수료율 범위와 중앙값 — https://twosided.io/blog/marketplace-take-rate
+2. 마켓플레이스 수수료율 개요 — https://www.tidemarkcap.com/vskp-chapter/marketplace-take-rates
+3. 마켓플레이스 수수료율 가이드 — https://origami-marketplace.com/en-gb/marketplace-take-rate-a-guide-for-marketplace-operators/
+4. 이벤트 티켓 플랫폼 수수료 구조와 실효 부담 — https://checkoutpage.com/blog/eventbrite-fees
+5. 이벤트 티켓 플랫폼 수수료 2026 — https://www.simpletix.com/eventbrite-fees-explained-2026/
+6. 이벤트 호스팅 플랫폼 무료 5%·유료 플랜 0% 구조 — https://help.luma.com/p/luma-plus
+7. 이벤트 호스팅 플랫폼 요금 — https://luma.com/pricing
+8. 국내 공연 예매처 판매 수수료 5~7% — https://www.hankookilbo.com/news/article/201103061273831467
+9. 공연 티켓 가격 구성과 중개 수수료 — https://www.khan.co.kr/article/201302262143395
+10. 배달 앱 정액 광고(월 8.8만)와 정률 수수료(6.8%) — https://zdnet.co.kr/view/?no=20220418165235
+11. 정액 광고 폐지와 정률 전환 — https://www.etnews.com/20250703000229
+12. 예약 SaaS 월 요금과 건당 수수료 비교 — https://restaurantbookingsystem.com/compare/restaurant-booking-system-pricing/
+13. 예약 시스템 비용 벤치마크 — https://restaurantbookingsystem.com/academy/booking-platform-pricing-transparency-2026/
+14. 유료 멤버십 혜택 설계 — https://antavo.com/blog/subscription-loyalty-programs/
+15. 유료 멤버십 설계 원칙 — https://www.voucherify.io/blog/paid-memberships-can-you-buy-loyalty
+16. 구독 지표 정의(MRR·ARR·해지율·ARPU·LTV·코호트) — https://www.zuora.com/glossary/subscription-metrics-arr-tcv/
+17. 구독 지표 FAQ — https://www.zoho.com/billing/academy/billing-basics/faqs-saas-metrics-and-kpis.html
+18. SaaS 지표(NRR·GRR·logo·revenue churn·CAC payback) — https://www.finmodelbuilder.com/blog/saas-metrics-guide.html
+19. SaaS 지표 체계 — https://beancount.io/blog/2026/05/10/saas-metrics-founders-must-track-2026-ltv-cac-nrr-churn-cac-payback-benchmarks-guide
+20. SMB SaaS 해지율·NRR·GRR 벤치마크 — https://www.crv.com/content/saas-churn-rate
+21. NRR 산식과 벤치마크 — https://www.gainsight.com/blog/net-revenue-retention/
+22. GMV 정의(환불·할인 처리, 순매출과의 차이) — https://www.metabase.com/metrics/gmv
+23. GMV·AOV·전환율 — https://www.mida.so/blog/important-ecommerce-metrics-aov-cr-rpv-gmv

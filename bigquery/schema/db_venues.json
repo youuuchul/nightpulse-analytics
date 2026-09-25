@@ -15,7 +15,7 @@
     "name": "region",
     "type": "STRING",
     "mode": "NULLABLE",
-    "description": "상권 (서울 나이트라이프 상권 9개 + 기타)"
+    "description": "상권 (서울 주요 상권 9개 + 기타)"
   },
   {
     "name": "district",

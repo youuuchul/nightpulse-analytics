@@ -11,6 +11,7 @@ export interface MetricDef {
   denominator: string
   mart_columns: string[]
   why: string
+  axis?: string
 }
 
 export interface TabGuide {
@@ -23,6 +24,7 @@ export interface TabGuide {
 
 export interface MetricSpec {
   groups: { id: string; name: string }[]
+  axes?: { id: string; name: string }[]
   tabs: TabGuide[]
   metrics: MetricDef[]
 }

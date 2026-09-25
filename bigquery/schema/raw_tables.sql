@@ -50,6 +50,13 @@
 -- 원천: data/raw/db_venue_contracts.csv (생성기 출력). ended_at NULL = 진행 중
 -- 소비: staging.dim_contract
 
+-- 표: raw.db_venue_contract_changes — 서비스 RDB 파트너 계약 요금제 변경 스냅샷 (합성)
+-- 1행: 요금제 변경 1건
+-- 키: change_id
+-- 파티션·클러스터: 없음 / 없음
+-- 원천: data/raw/db_venue_contract_changes.csv (생성기 출력). changed_at(UTC, KST 자정)부터 to_plan·to_fee 적용
+-- 소비: staging.dim_contract_change
+
 -- 표: raw.db_subscriptions — 서비스 RDB 소비자 구독 스냅샷 (합성)
 -- 1행: 구독 1건
 -- 키: subscription_id

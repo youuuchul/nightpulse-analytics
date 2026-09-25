@@ -1,6 +1,6 @@
 """BigQuery 마트 → dashboard/public/data/ 분할 추출기.
 
-marts 데이터셋의 표 18개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 분할 파일로 쓴다.
+marts 데이터셋의 표 21개를 개인 GCP 래퍼(scripts/bq.sh)로 읽어 분할 파일로 쓴다.
 조회는 SELECT 뿐이며 표를 만들거나 바꾸지 않는다. 마트가 적재된 뒤에 실행한다.
 
     uv run dashboard/scripts/extract.py
@@ -158,9 +158,12 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
             "cancels",
             "w1_retention",
             "top_channel",
-            "ticket_amount",
-            "subscription_amount",
-            "b2b_amount",
+            "gmv_amount",
+            "fee_amount",
+            "membership_amount",
+            "partner_plan_amount",
+            "platform_revenue",
+            "ad_spend",
             "active_subscribers_eom",
             "partner_total_eom",
             "registered_total_eom",
@@ -171,15 +174,17 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
         [
             "kst_date",
             "kind",
-            "partner_flag",
+            "fee_tier",
             "pay_count",
-            "gross_amount",
+            "gmv_amount",
+            "paid_amount",
             "discount_amount",
+            "refund_count",
             "refund_amount",
             "net_amount",
             "payers",
         ],
-        ["kst_date", "kind", "partner_flag"],
+        ["kst_date", "kind", "fee_tier"],
     ),
     "daily_subscription": (
         [
@@ -190,6 +195,7 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
             "mrr",
             "subscriber_ticket_payers",
             "subscriber_ticket_amount",
+            "discount_amount",
         ],
         ["kst_date"],
     ),
@@ -231,6 +237,34 @@ TABLES: dict[str, tuple[list[str], list[str]]] = {
         ],
         ["venue_id"],
     ),
+    "monthly_contract": (
+        [
+            "month",
+            "plan",
+            "contracts_bom",
+            "new_contracts",
+            "churned_contracts",
+            "upgrades",
+            "downgrades",
+            "contracts_eom",
+            "mrr_bom",
+            "mrr_new",
+            "mrr_expansion",
+            "mrr_contraction",
+            "mrr_churn",
+            "mrr_eom",
+            "arpa",
+        ],
+        ["month", "plan"],
+    ),
+    "contract_cohort": (
+        ["cohort_month", "month_offset", "cohort_size", "retained", "mrr_retained"],
+        ["cohort_month", "month_offset"],
+    ),
+    "subscription_cohort": (
+        ["cohort_month", "month_offset", "cohort_size", "retained"],
+        ["cohort_month", "month_offset"],
+    ),
 }
 
 STRING_COLS = {
@@ -258,6 +292,7 @@ STRING_COLS = {
     "from_screen",
     "to_screen",
     "kind",
+    "fee_tier",
     "name",
     "district",
     "venue_type",
@@ -270,7 +305,7 @@ STRING_COLS = {
     "as_of_date",
 }
 FLOAT_COLS = {"w1_retention", "lat", "lng"}
-BOOL_COLS = {"partner_flag", "is_partner"}
+BOOL_COLS = {"is_partner"}
 MONTH_COLS = {"cohort_month", "month"}
 # 표마다 타입이 다른 열: weekly_path.step 은 정수 1~4 (funnel_daily.step 은 문자열)
 INT_OVERRIDE: dict[str, set[str]] = {"weekly_path": {"step"}}

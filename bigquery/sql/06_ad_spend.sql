@@ -3,7 +3,7 @@
 -- 키: (campaign_id, kst_date)
 -- 파티션·클러스터: kst_date / campaign_id
 -- 원천: raw.ads_spend
--- 소비: marts.daily_ad, ops.reconciliation (집행일)
+-- 소비: marts.daily_ad·monthly_summary (월 광고비), ops.reconciliation (집행일)
 
 CREATE OR REPLACE TABLE staging.ad_spend (
   kst_date DATE OPTIONS(description='집행일 (KST). 일 파티션'),

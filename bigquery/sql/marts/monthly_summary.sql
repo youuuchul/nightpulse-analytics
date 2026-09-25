@@ -3,6 +3,7 @@
 -- 키: month
 -- 파티션·클러스터: DATE_TRUNC(month, MONTH) / 없음
 -- 원천: staging.int_person_day (방문), staging.int_session (세션·채널), staging.dim_member (가입), staging.fct_order (원장),
+--       staging.ad_spend (월 광고비),
 --       marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry (W1 리텐션·매출 구성·월말 구독자·월말 공간
 --       — 같은 층 마트를 재사용해 정의를 한 곳에 둔다. 먼저 생성돼야 한다)
 -- 소비: 주간·월간 탭 월간 보기의 브리핑 표. 비율은 분자·분모 열로 둔다.
@@ -10,8 +11,11 @@
 --
 -- 원장 열(applies·pay_count·pay_amount·cancels)은 신청일이 속한 달 기준. W1 은 첫 방문 주(월요일)가 그 달에 속한 코호트의 합.
 -- top_channel = 방문 세션이 가장 많은 세션 채널 2단계 값.
--- 매출 구성 열(ticket·subscription·b2b_amount)은 daily_revenue net_amount 의 월 합(결제일·계약 활성일 기준)이라
--- 신청일 기준인 pay_amount·net_amount 와 월 경계에서 다를 수 있다. *_eom 은 그 달 마지막 관측일 값.
+-- 매출 구성 열은 daily_revenue 의 월 합(결제일·계약 활성일 기준)이라 신청일 기준인 pay_amount·net_amount 와 월 경계에서 다를 수 있다.
+--   gmv_amount = 티켓 거래액(정가, 환불 주문 제외), fee_amount = 수수료 매출(ticket net), membership_amount = 멤버십 매출,
+--   partner_plan_amount = 파트너 플랜 매출, platform_revenue = 세 매출의 합(티켓 결제액은 매출이 아니라 넣지 않는다).
+-- ad_spend = 그 달 광고비 합(staging.ad_spend 집행일 기준). 광고비 ÷ 플랫폼 매출은 화면에서 계산한다.
+-- *_eom 은 그 달 마지막 관측일 값.
 
 CREATE OR REPLACE TABLE marts.monthly_summary (
   month DATE OPTIONS(description='월 (1일). 월 파티션'),
@@ -33,15 +37,18 @@ CREATE OR REPLACE TABLE marts.monthly_summary (
   w1_cohort_size INT64 OPTIONS(description='W1 분모: 그 달 시작 주 코호트 크기 합 (W1 관측 완료분)'),
   w1_retained INT64 OPTIONS(description='W1 분자: 그 코호트 중 다음 주 방문자 합'),
   top_channel_sessions INT64 OPTIONS(description='top_channel 의 방문 세션 수'),
-  ticket_amount INT64 OPTIONS(description='티켓 순매출 (원, 결제일 기준)'),
-  subscription_amount INT64 OPTIONS(description='구독 순매출 (원, 결제일 기준)'),
-  b2b_amount INT64 OPTIONS(description='B2B 계약 매출 (원, 활성일 안분)'),
+  gmv_amount INT64 OPTIONS(description='티켓 거래액 = 정가 합, 환불 주문 제외 (원, 결제일 기준)'),
+  fee_amount INT64 OPTIONS(description='수수료 매출 (원, 결제일 기준)'),
+  membership_amount INT64 OPTIONS(description='멤버십 매출 (원, 결제일 기준, 환불 제외)'),
+  partner_plan_amount INT64 OPTIONS(description='파트너 플랜 매출 (원, 활성일 일할)'),
+  platform_revenue INT64 OPTIONS(description='플랫폼 매출 = 수수료 + 멤버십 + 파트너 플랜 (원)'),
+  ad_spend INT64 OPTIONS(description='광고비 합 (원, 집행일 기준)'),
   active_subscribers_eom INT64 OPTIONS(description='월말 활성 구독 회원 수'),
   partner_total_eom INT64 OPTIONS(description='월말 활성 파트너 공간 수'),
   registered_total_eom INT64 OPTIONS(description='월말 등록 공간 누적')
 )
 PARTITION BY DATE_TRUNC(month, MONTH)
-OPTIONS(description='월간 브리핑 표. 1행 = 월. 원천 staging.int_person_day·int_session·dim_member·fct_order, marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry')
+OPTIONS(description='월간 브리핑 표. 1행 = 월. 원천 staging.int_person_day·int_session·dim_member·fct_order·ad_spend, marts.weekly_cohort·daily_revenue·daily_subscription·daily_venue_registry')
 AS
 WITH pd AS (
   SELECT person_id, kst_date, is_visit, is_first_visit_day
@@ -100,10 +107,18 @@ orders AS (
 rev AS (
   SELECT
     DATE_TRUNC(kst_date, MONTH) AS month,
-    SUM(IF(kind = 'ticket', net_amount, 0)) AS ticket_amount,
-    SUM(IF(kind = 'subscription', net_amount, 0)) AS subscription_amount,
-    SUM(IF(kind = 'b2b', net_amount, 0)) AS b2b_amount
+    SUM(IF(kind = 'ticket', gmv_amount, 0)) AS gmv_amount,
+    SUM(IF(kind = 'ticket', net_amount, 0)) AS fee_amount,
+    SUM(IF(kind = 'membership', net_amount, 0)) AS membership_amount,
+    SUM(IF(kind = 'partner_plan', net_amount, 0)) AS partner_plan_amount,
+    SUM(net_amount) AS platform_revenue
   FROM marts.daily_revenue
+  WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+  GROUP BY 1
+),
+ad AS (
+  SELECT DATE_TRUNC(kst_date, MONTH) AS month, SUM(spend) AS ad_spend
+  FROM staging.ad_spend
   WHERE kst_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
   GROUP BY 1
 ),
@@ -156,9 +171,12 @@ SELECT
   COALESCE(w.w1_cohort_size, 0) AS w1_cohort_size,
   COALESCE(w.w1_retained, 0) AS w1_retained,
   c.top_channel_sessions,
-  COALESCE(r.ticket_amount, 0) AS ticket_amount,
-  COALESCE(r.subscription_amount, 0) AS subscription_amount,
-  COALESCE(r.b2b_amount, 0) AS b2b_amount,
+  COALESCE(r.gmv_amount, 0) AS gmv_amount,
+  COALESCE(r.fee_amount, 0) AS fee_amount,
+  COALESCE(r.membership_amount, 0) AS membership_amount,
+  COALESCE(r.partner_plan_amount, 0) AS partner_plan_amount,
+  COALESCE(r.platform_revenue, 0) AS platform_revenue,
+  COALESCE(a.ad_spend, 0) AS ad_spend,
   COALESCE(se.active_subscribers_eom, 0) AS active_subscribers_eom,
   COALESCE(ve.partner_total_eom, 0) AS partner_total_eom,
   COALESCE(ve.registered_total_eom, 0) AS registered_total_eom
@@ -169,5 +187,6 @@ LEFT JOIN signup AS su USING (month)
 LEFT JOIN orders AS o USING (month)
 LEFT JOIN w1 AS w USING (month)
 LEFT JOIN rev AS r USING (month)
+LEFT JOIN ad AS a USING (month)
 LEFT JOIN sub_eom AS se USING (month)
 LEFT JOIN venue_eom AS ve USING (month);

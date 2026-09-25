@@ -3,7 +3,7 @@
 -- 키: subscription_id
 -- 파티션·클러스터: 없음 / member_id
 -- 원천: raw.db_subscriptions, raw.db_payments (구독 결제 집계)
--- 소비: staging.int_person_day, marts.daily_subscription
+-- 소비: staging.int_person_day, marts.daily_subscription·subscription_cohort
 --
 -- 활성 규칙(구독·계약 공통, 이 규칙은 여기와 06_dim_contract.sql 에만 적는다)
 --   날짜 d 에 활성 = start_date <= d AND (end_date IS NULL OR end_date > d). 날짜는 KST

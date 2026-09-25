@@ -59,7 +59,14 @@ SCREEN_NEXT: dict[str, list[tuple[str, float]]] = {
 REGIONS: list[dict] = NAMES["regions"]
 GENRES: list[str] = NAMES["genres"]
 VENUE_TYPES: list[str] = NAMES["venue_types"]
-PLANS = [("basic", 99000, 0.7), ("pro", 299000, 0.3)]
+PLANS = [("basic", 0.7), ("pro", 0.3)]
+PLAN_FEE = {"basic": 49000, "pro": 149000}
+FEE_RATE = {"none": 0.10, "basic": 0.05, "pro": 0.03}
+FEE_TIERS = ["none", "basic", "pro"]
+MEMBER_DISCOUNT = 0.15
+REFUND_RATE = 0.10
+UPGRADE = 0.01
+DOWNGRADE = 0.003
 SUB_PRICE = 9900
 SUB_LAUNCH = date(2025, 12, 1)
 PD = {
@@ -695,7 +702,10 @@ def build_v2(
     payments: list[tuple[date, int, int, int]],
     pd_flags: dict[tuple[int, date], int],
 ) -> None:
-    """시나리오 2.0 마트(공간 원장·계약·구독·매출)와 person_day 를 샘플로 만든다.
+    """시나리오 2.0 마트(공간 원장·계약·구독·매출·월 계약·코호트)와 person_day 를 샘플로 만든다.
+
+    매출은 A안(docs/business_model.md) 기준: 티켓은 수수료(정가 × 등급별 율)만 플랫폼 매출이고,
+    멤버십 월 9,900원, 파트너 플랜 월 4.9만·14.9만(월 1% 업그레이드·0.3% 다운그레이드).
 
     Args:
         seed: 난수 시드.
@@ -771,20 +781,36 @@ def build_v2(
         start = v["registered_day"] + (int(rng.expovariate(1 / 20)) if is_event else int(rng.expovariate(1 / 60)))
         if start >= n_days:
             continue
-        plan, fee, _ = pick(rng, [((a, b, c), c) for a, b, c in PLANS])
+        plan = pick(rng, PLANS)
+        segs = [(start, plan)]
         end = None
         m = start + 30
         while m < n_days:
             if rng.random() < 0.02:
                 end = m
                 break
+            u = rng.random()
+            if plan == "basic" and u < UPGRADE:
+                plan = "pro"
+                segs.append((m, plan))
+            elif plan == "pro" and u < DOWNGRADE:
+                plan = "basic"
+                segs.append((m, plan))
             m += 30
-        contracts.append({"venue_id": v["venue_id"], "plan": plan, "fee": fee, "start": start, "end": end})
+        contracts.append({"venue_id": v["venue_id"], "start": start, "end": end, "segs": segs})
     by_venue = {c["venue_id"]: c for c in contracts}
 
-    def partner_on(vid: int, di: int) -> bool:
+    def plan_at(c: dict, di: int) -> str | None:
+        if not (c["start"] <= di and (c["end"] is None or di < c["end"])):
+            return None
+        return [pl for d0, pl in c["segs"] if d0 <= di][-1]
+
+    def tier_on(vid: int, di: int) -> str:
         c = by_venue.get(vid)
-        return c is not None and c["start"] <= di and (c["end"] is None or di < c["end"])
+        return (plan_at(c, di) if c else None) or "none"
+
+    def partner_on(vid: int, di: int) -> bool:
+        return tier_on(vid, di) != "none"
 
     # 구독: 회원만, 12/01 출시, 월 이탈 6%
     subs: dict[int, tuple[int, int | None]] = {}
@@ -829,29 +855,34 @@ def build_v2(
     payers_t: dict[tuple, set[int]] = defaultdict(set)
     sub_pay: dict[int, list[int]] = defaultdict(lambda: [0, 0, 0])
     sub_payers: dict[int, set[int]] = defaultdict(set)
+    sub_disc: dict[int, int] = defaultdict(int)
     v_events: dict[int, int] = defaultdict(int)
     v_amount: dict[int, int] = defaultdict(int)
     for d, pid, vid, amount in payments:
         di = (d - from_date).days
-        partner = partner_on(vid, di)
+        tier = tier_on(vid, di)
         sub = sub_on(pid, di)
-        disc = round(amount * 0.15) if (partner and sub) else 0
-        refund = amount - disc if rng.random() < 0.03 else 0
-        r = rev[(di, "ticket", partner)]
+        disc = round(amount * MEMBER_DISCOUNT) if (tier != "none" and sub) else 0
+        r = rev[(di, "ticket", tier)]
         r["pay_count"] += 1
-        r["gross_amount"] += amount
+        payers_t[(di, tier)].add(pid)
+        if rng.random() < REFUND_RATE:
+            r["refund_count"] += 1
+            r["refund_amount"] += amount - disc
+            continue
+        r["gmv_amount"] += amount
         r["discount_amount"] += disc
-        r["refund_amount"] += refund
-        r["net_amount"] += amount - disc - refund
-        payers_t[(di, partner)].add(pid)
+        r["paid_amount"] += amount - disc
+        r["net_amount"] += round(amount * FEE_RATE[tier])
         v_amount[vid] += amount - disc
         if sub:
             sub_pay[di][0] += amount - disc
             sub_payers[di].add(pid)
+            sub_disc[di] += disc
     for e in events:
         v_events[e["venue_id"]] += 1
-    for (di, partner), ps in payers_t.items():
-        rev[(di, "ticket", partner)]["payers"] = len(ps)
+    for (di, tier), ps in payers_t.items():
+        rev[(di, "ticket", tier)]["payers"] = len(ps)
 
     ds = lambda i: (from_date + timedelta(days=i)).isoformat()  # noqa: E731
     subs_rows = []
@@ -861,16 +892,16 @@ def build_v2(
         churned = sum(1 for _, e in subs.values() if e == di)
         billed = [pid for pid, (s0, e) in subs.items() if di >= s0 and (di - s0) % 30 == 0 and (e is None or di < e)]
         if billed:
-            r = rev[(di, "subscription", None)]
+            r = rev[(di, "membership", None)]
             r["pay_count"] = r["payers"] = len(billed)
-            r["gross_amount"] = r["net_amount"] = len(billed) * SUB_PRICE
+            r["paid_amount"] = r["net_amount"] = len(billed) * SUB_PRICE
         d = from_date + timedelta(days=di)
         dim = (date(d.year + d.month // 12, d.month % 12 + 1, 1) - d.replace(day=1)).days
-        act = [c for c in contracts if c["start"] <= di and (c["end"] is None or di < c["end"])]
-        if act:
-            r = rev[(di, "b2b", None)]
-            r["pay_count"] = r["payers"] = len(act)
-            r["gross_amount"] = r["net_amount"] = round(sum(c["fee"] for c in act) / dim)
+        fees = [PLAN_FEE[pl] for c in contracts if (pl := plan_at(c, di))]
+        if fees:
+            r = rev[(di, "partner_plan", None)]
+            r["pay_count"] = r["payers"] = len(fees)
+            r["paid_amount"] = r["net_amount"] = round(sum(fees) / dim)
         subs_rows.append(
             {
                 "kst_date": ds(di),
@@ -880,20 +911,32 @@ def build_v2(
                 "mrr": active * SUB_PRICE,
                 "subscriber_ticket_payers": len(sub_payers[di]),
                 "subscriber_ticket_amount": sub_pay[di][0],
+                "discount_amount": sub_disc[di],
             }
         )
-    kinds = ["ticket", "subscription", "b2b"]
+    kinds = ["ticket", "membership", "partner_plan"]
+    rev_cols = [
+        "pay_count",
+        "gmv_amount",
+        "paid_amount",
+        "discount_amount",
+        "refund_count",
+        "refund_amount",
+        "net_amount",
+        "payers",
+    ]
     out["daily_revenue"] = [
         {
             "kst_date": ds(k[0]),
             "kind": k[1],
-            "partner_flag": k[2],
-            **{
-                c: v.get(c, 0)
-                for c in ["pay_count", "gross_amount", "discount_amount", "refund_amount", "net_amount", "payers"]
-            },
+            "fee_tier": k[2],
+            **{c: v.get(c, 0) for c in rev_cols},
+            **({} if k[1] == "ticket" else {"gmv_amount": None}),
         }
-        for k, v in sorted(rev.items(), key=lambda kv: (kv[0][0], kinds.index(kv[0][1]), not kv[0][2]))
+        for k, v in sorted(
+            rev.items(),
+            key=lambda kv: (kv[0][0], kinds.index(kv[0][1]), FEE_TIERS.index(kv[0][2]) if kv[0][2] else 0),
+        )
     ]
     out["daily_subscription"] = subs_rows
 
@@ -904,7 +947,7 @@ def build_v2(
             vs = [v for v in reg if v["region"] == rg]
             ids = {v["venue_id"] for v in vs}
             cs = [c for c in contracts if c["venue_id"] in ids]
-            act = [c for c in cs if c["start"] <= di and (c["end"] is None or di < c["end"])]
+            act = [pl for c in cs if (pl := plan_at(c, di))]
             dvr.append(
                 {
                     "kst_date": ds(di),
@@ -914,8 +957,8 @@ def build_v2(
                     "new_registered": sum(1 for v in vs if v["registered_day"] == di),
                     "new_contracts": sum(1 for c in cs if c["start"] == di),
                     "churned_contracts": sum(1 for c in cs if c["end"] == di),
-                    "mrr_basic": sum(c["fee"] for c in act if c["plan"] == "basic"),
-                    "mrr_pro": sum(c["fee"] for c in act if c["plan"] == "pro"),
+                    "mrr_basic": PLAN_FEE["basic"] * act.count("basic"),
+                    "mrr_pro": PLAN_FEE["pro"] * act.count("pro"),
                 }
             )
     out["daily_venue_registry"] = dvr
@@ -946,7 +989,7 @@ def build_v2(
                 "capacity_band": v["capacity_band"],
                 "registered_at": ds(v["registered_day"]),
                 "is_partner": partner,
-                "plan": c["plan"] if c else None,
+                "plan": ([pl for d0, pl in c["segs"] if d0 <= last][-1] if c["start"] <= last else None) if c else None,
                 "contract_started_at": ds(c["start"]) if c else None,
                 "contract_ended_at": ds(c["end"]) if c and c["end"] is not None else None,
                 "events_365d": v_events.get(v["venue_id"], 0),
@@ -959,20 +1002,30 @@ def build_v2(
 
     by_month: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for r in out["daily_revenue"]:
-        by_month[r["kst_date"][:7]][r["kind"]] += r["net_amount"]
+        z = by_month[r["kst_date"][:7]]
+        z[r["kind"]] += r["net_amount"]
+        z["gmv"] += r["gmv_amount"] or 0
+    for r in out["daily_ad"]:
+        by_month[r["kst_date"][:7]]["ad"] += r["spend"]
     eom: dict[str, int] = {}
     for i in range(n_days):
         eom[ds(i)[:7]] = i
     for row in out["monthly_summary"]:
         m = row["month"]
         i = eom[m]
-        row["ticket_amount"] = by_month[m]["ticket"]
-        row["subscription_amount"] = by_month[m]["subscription"]
-        row["b2b_amount"] = by_month[m]["b2b"]
+        z = by_month[m]
+        row["gmv_amount"] = z["gmv"]
+        row["fee_amount"] = z["ticket"]
+        row["membership_amount"] = z["membership"]
+        row["partner_plan_amount"] = z["partner_plan"]
+        row["platform_revenue"] = z["ticket"] + z["membership"] + z["partner_plan"]
+        row["ad_spend"] = z["ad"]
         row["active_subscribers_eom"] = subs_rows[i]["active_subscribers"]
         day_rows = [r for r in dvr if r["kst_date"] == ds(i)]
         row["partner_total_eom"] = sum(r["partner_total"] for r in day_rows)
         row["registered_total_eom"] = sum(r["registered_total"] for r in day_rows)
+
+    out.update(contract_marts(from_date, n_days, contracts, plan_at, subs))
 
     codes = {"c": ["non_paid", "paid"], "p": ["android", "ios", "web"], "m": ["guest", "member"]}
     rows = []
@@ -993,6 +1046,113 @@ def build_v2(
         "cols": ["pk", "d", "c", "p", "m", "f"],
         "codes": codes,
         "rows": rows,
+    }
+
+
+def month_add(m: str, k: int) -> str:
+    """'YYYY-MM' 에 k개월을 더한다."""
+    y, mo = int(m[:4]), int(m[5:]) - 1 + k
+    return f"{y + mo // 12:04d}-{mo % 12 + 1:02d}"
+
+
+def contract_marts(
+    from_date: date,
+    n_days: int,
+    contracts: list[dict],
+    plan_at,
+    subs: dict[int, tuple[int, int | None]],
+) -> dict:
+    """monthly_contract · contract_cohort · subscription_cohort 샘플을 만든다.
+
+    월초 = 그 달 1일 직전 날의 상태(데이터 시작 전이면 0), 월말 = 그 달 마지막 날(기준일이 먼저면 기준일).
+    플랜별 행의 업·다운그레이드와 MRR 증감은 변경 전 플랜에 귀속한다. 코호트는 월말이 기준일 이하인 경과 월만 낸다.
+
+    Args:
+        from_date: 데이터 시작일.
+        n_days: 데이터 일수.
+        contracts: 계약 목록(start·end·segs).
+        plan_at: (계약, 일 인덱스) → 그날 플랜 또는 None.
+        subs: 사람 → (구독 시작 일 인덱스, 해지 일 인덱스 또는 None).
+
+    Returns:
+        세 표를 담은 사전.
+    """
+    to_date = from_date + timedelta(days=n_days - 1)
+    idx = lambda d: (d - from_date).days  # noqa: E731
+
+    def bounds(m: str) -> tuple[int, int, bool]:
+        first = date(int(m[:4]), int(m[5:]), 1)
+        last = date.fromisoformat(month_add(m, 1) + "-01") - timedelta(days=1)
+        return idx(first), min(idx(last), n_days - 1), last <= to_date
+
+    months = sorted({(from_date + timedelta(days=i)).isoformat()[:7] for i in range(n_days)})
+    fee = lambda pl: PLAN_FEE[pl] if pl else 0  # noqa: E731
+    mc = []
+    for m in months:
+        a, b, _ = bounds(m)
+        z = {p: defaultdict(int) for p in ("basic", "pro")}
+        for c in contracts:
+            p0 = plan_at(c, a - 1) if a - 1 >= 0 else None
+            p1 = plan_at(c, b)
+            if p0:
+                z[p0]["contracts_bom"] += 1
+                z[p0]["mrr_bom"] += fee(p0)
+            if p1:
+                z[p1]["contracts_eom"] += 1
+                z[p1]["mrr_eom"] += fee(p1)
+            if a <= c["start"] <= b:
+                p = c["segs"][0][1]
+                z[p]["new_contracts"] += 1
+                z[p]["mrr_new"] += fee(p)
+            if c["end"] is not None and a <= c["end"] <= b:
+                p = plan_at(c, c["end"] - 1)
+                z[p]["churned_contracts"] += 1
+                z[p]["mrr_churn"] += fee(p)
+            for (_, before), (d1, after) in zip(c["segs"], c["segs"][1:], strict=False):
+                if a <= d1 <= b:
+                    if fee(after) > fee(before):
+                        z[before]["upgrades"] += 1
+                        z[before]["mrr_expansion"] += fee(after) - fee(before)
+                    else:
+                        z[before]["downgrades"] += 1
+                        z[before]["mrr_contraction"] += fee(before) - fee(after)
+        cols = [
+            "contracts_bom", "new_contracts", "churned_contracts", "upgrades", "downgrades", "contracts_eom",
+            "mrr_bom", "mrr_new", "mrr_expansion", "mrr_contraction", "mrr_churn", "mrr_eom",
+        ]  # fmt: skip
+        z["all"] = {k: z["basic"][k] + z["pro"][k] for k in cols}
+        for p in ("basic", "pro", "all"):
+            row = {"month": m, "plan": p, **{k: z[p][k] for k in cols}}
+            row["arpa"] = round(row["mrr_eom"] / row["contracts_eom"]) if row["contracts_eom"] else None
+            mc.append(row)
+
+    def cohorts(items: list[tuple[int, int | None, dict | None]], with_mrr: bool) -> list[dict]:
+        by: dict[str, list] = defaultdict(list)
+        for s0, end, c in items:
+            by[(from_date + timedelta(days=s0)).isoformat()[:7]].append((s0, end, c))
+        out = []
+        for cm in sorted(by):
+            members = by[cm]
+            k = 0
+            while True:
+                m = month_add(cm, k)
+                if m > months[-1]:
+                    break
+                _, b, done = bounds(m)
+                if not done:
+                    break
+                alive = [(s0, e, c) for s0, e, c in members if s0 <= b and (e is None or b < e)]
+                row = {"cohort_month": cm, "month_offset": k, "cohort_size": len(members), "retained": len(alive)}
+                if with_mrr:
+                    row["mrr_retained"] = sum(fee(plan_at(c, b)) for _, _, c in alive)
+                out.append(row)
+                k += 1
+        return out
+
+    return {
+        "monthly_contract": mc,
+        "contract_cohort": cohorts([(c["start"], c["end"], c) for c in contracts], True),
+        "subscription_cohort": cohorts([(s0, e, None) for s0, e in subs.values()], False),
     }
 
 

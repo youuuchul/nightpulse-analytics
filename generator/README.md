@@ -31,18 +31,19 @@ uv run generator/validate.py --data data/ --weeks 52 --end-date 2026-09-20
 | `name_map.csv` | 회원 취향 장르 비중의 모양 (지역·유무료 행은 쓰지 않는다 — 상권은 `names.json`, 가격대는 생성기 상수) |
 | `screen_mix.csv` | 참고용 (화면별 조회 비중) |
 | `user_day_flags.csv` | 사용하지 않음 (마트 단계 검증용으로 남김, 범위 안 플래그만) |
-| `names.json` | 명칭·공간 사전 — 상권 10(서울 상권 9 + 기타: 구·비중·중심 좌표·장르/유형 경향), 장르 6·공간 유형 6·유형별 규모 비중, 가상 상호 조합용 단어, 행사 유형 5·행사명 템플릿, 캠페인 7 |
+| `names.json` | 명칭·공간 사전과 요금표 — `pricing`(파트너 플랜 월 요금 basic 49,000 / pro 149,000, 공간 등급별 거래 수수료율 비파트너 10% / basic 5% / pro 3%, `docs/business_model.md` A안), 상권 10(서울 상권 9 + 기타: 구·비중·중심 좌표·장르/유형 경향), 장르 6·공간 유형 6·유형별 규모 비중, 가상 상호 조합용 단어, 행사 유형 5·행사명 템플릿, 캠페인 7 |
 
 ## 출력
 
-`data/raw/` (gitignore, `data/MANIFEST.txt` 만 커밋). 파일 이름은 BigQuery `raw` 표 이름과 같고, 스키마는 `bigquery/schema/<표 이름>.json`. 서비스 RDB 스냅샷(`db_*`) 7개에는 `snapshot_date`(생성 종료일) 열이 붙는다.
+`data/raw/` (gitignore, `data/MANIFEST.txt` 만 커밋). 파일 이름은 BigQuery `raw` 표 이름과 같고, 스키마는 `bigquery/schema/<표 이름>.json`. 서비스 RDB 스냅샷(`db_*`) 8개에는 `snapshot_date`(생성 종료일) 열이 붙는다.
 
 | 파일 | 그레인 | 비고 |
 |---|---|---|
 | `ga4_events.ndjson.gz` | 이벤트 1행 | GA4 BigQuery export 를 단순화한 형태 |
 | `db_members.csv` | 회원 1행 | 이름·연락처·이메일 컬럼 없음 |
 | `db_venues.csv` | 공간 1행 | 1,800곳. 상권·구·좌표·장르·유형·규모·등록 시각·상태(active/closed) |
-| `db_venue_contracts.csv` | 파트너 계약 1행 | 계약 이력 그대로 (basic 99,000 / pro 299,000, 해지 시 ended) |
+| `db_venue_contracts.csv` | 파트너 계약 1행 | `plan`·`monthly_fee` 는 현재값(종료 계약은 종료 시점), 요금은 `names.json` pricing (basic 49,000 / pro 149,000), 해지 시 ended |
+| `db_venue_contract_changes.csv` | 플랜 변경 1행 | 같은 `contract_id` 안의 업그레이드·다운그레이드 이력 (`from_plan`·`to_plan`·`from_fee`·`to_fee`). 기간별 플랜 요금은 계약 + 이 표로 복원 |
 | `db_events.csv` | 행사 1행 | 약 2,400건. 가격대 4종·정원·개최 시점 파트너 여부 |
 | `db_applications.csv` | 신청 1행 | `order_id` 로 이벤트와 1:1 |
 | `db_payments.csv` | 결제 1행 | `kind` = ticket(`purchase` 와 1:1) / subscription(월 반복). `amount` = 실결제액, `discount_amount` = 할인액 |
@@ -54,7 +55,7 @@ uv run generator/validate.py --data data/ --weeks 52 --end-date 2026-09-20
 - `ga4_events.event_date`: `YYYY-MM-DD`, **KST 기준 날짜**. BigQuery `DATE` 로 적재해 일 파티션 컬럼으로 쓴다.
 - `ga4_events.event_timestamp`: UTC unix 마이크로초(정수). 시(hour) 분석은 KST 로 변환해서 한다.
 - `ga_session_id`: 세션 시작 unix 초.
-- 원장의 시각 컬럼(`signed_up_at`·`registered_at`·`starts_at`·`applied_at`·`cancel_at`·`paid_at`·`started_at`·`ended_at`): `YYYY-MM-DDTHH:MM:SSZ` (UTC). 계약 `started_at`·`ended_at` 은 KST 자정이다(파트너 여부는 KST 날짜 단위).
+- 원장의 시각 컬럼(`signed_up_at`·`registered_at`·`starts_at`·`applied_at`·`cancel_at`·`paid_at`·`started_at`·`ended_at`·`changed_at`): `YYYY-MM-DDTHH:MM:SSZ` (UTC). 계약 `started_at`·`ended_at`·`changed_at` 은 KST 자정이다(파트너 여부는 KST 날짜 단위).
 - 날짜 컬럼(`ads_spend.date`, `db_*.snapshot_date`): `YYYY-MM-DD` (KST).
 - 빈 `cancel_at`·`ended_at`·`event_id`·`subscription_id` 는 빈 문자열이며 적재 시 NULL 이 된다. BOOL 열(`is_partner_venue`·`marketing_opt_in`)은 `true`/`false`.
 
@@ -97,7 +98,7 @@ GA4 원본과 다른 점(의도한 단순화):
 ### 순서
 
 1. **공간 목록**: 1,800곳. 상권은 `names.json` 비중대로 정확히 나눠(최대 잔여법) 섞는다. 좌표는 상권 중심(성수·건대는 중심 2개) 주변 부중심 2~4개(중심에서 σ 250m) + 공간별 지터(σ 180~300m), 기타는 상권 밖 서울 동네 14곳 주변(σ 500m). 신촌·마포와 종로·을지로는 경도·위도 경계로 구를 가른다. 장르·유형은 상권별 경향 가중, 규모는 유형별 비중, 상호는 가상 단어 조합(한글 70% / 영문 30%, 중복 없음). 등록일은 런칭일 초기 일괄 300곳 + 기준점(10주 600 · 24주 1,000 · 40주 1,400 · 52주 1,800) 사이 일 증가분(평일 가중). 3%는 기간 중 폐업. 개별 인기 지수는 파레토(모양 1.3, 상한 60).
-2. **파트너 계약**: 기준 곡선(런칭 8 → 10주 30 → 24주 80 → 40주 130 → 52주 180)의 부족분을 날마다 신규 계약으로 채운다. 후보는 노출 중인 비파트너 공간(해지 이력 없음)이고 개별 인기 지수 가중. 해지는 월마다 1.5~2.5% 에서 뽑은 월 해지율을 일 위험으로 나눠 적용, 폐업하면 종료. 플랜 basic 70% / pro 30%. 계약 시작·종료는 KST 자정이며 그날부터 파트너/비파트너.
+2. **파트너 계약**: 기준 곡선(런칭 8 → 10주 30 → 24주 80 → 40주 130 → 52주 180)의 부족분을 날마다 신규 계약으로 채운다. 후보는 노출 중인 비파트너 공간(해지 이력 없음)이고 개별 인기 지수 가중. 해지는 월마다 1.5~2.5% 에서 뽑은 월 해지율을 일 위험으로 나눠 적용, 폐업하면 종료. 플랜 basic 70% / pro 30%. 계약 시작·종료는 KST 자정이며 그날부터 파트너/비파트너. 진행 계약은 월마다 1~2% 에서 뽑은 비율로 플랜을 바꾸고(업그레이드 basic→pro 80%, 다운그레이드 20%, 계약당 하루 1회, 시작 다음 날부터 종료 전날까지), 변경일 KST 자정부터 새 요금이다. 플랜 변경은 별도 난수열(`[seed, 2]`)을 써서 다른 산출물에 영향을 주지 않는다.
 3. **공간 상세 조회 분포**: 날마다 `파트너 가중(2.5) x 개별 인기 지수` 를(상권 비중은 공간 수에 이미 반영되므로 곱하지 않는다) 보이는 공간(등록 다음 날부터, 초기 일괄은 첫날부터, 폐업 전)에만 두고 누적합으로 뽑는다. 로그와 원장이 같은 목록을 쓴다.
 4. **행사**: 관측 종료 후 6주(`EVENT_FUTURE_WEEKS`)까지 예정 행사를 만든다 — 원장 `db_events` 에 미래 개최 행사가 들어가고, 마지막 주에도 신청 가능한 행사가 평소만큼 있다. 관측 후 개최 행사의 파트너 여부는 종료일 계약 상태. 주당 건수는 구간 곡선(런칭 15→25, 광고 30→45, 안정 45→55, 피크 55→65, 전체 x1.07, 포아송). 시작은 목~토 밤에 몰리고 공개는 시작 10~28일 전. 개최 공간은 공개일에 노출 중이고 시작일에 영업 중인 공간 중에서 75% 는 그날 파트너, 25% 는 비파트너(개별 인기 지수^0.5 가중 — 파트너 선정에 이미 인기가 반영돼 이중 쏠림을 막는다). 가격대 무료 20% / standard 1.5~3만 45% / premium 4~8만 30% / package 10~18만 5%, 정원은 공간 규모대 안에서. 관측 마지막 날에도 신청 가능한 행사가 최소 1건 있도록 보장한다(요일 가중만 따르면 마지막 날이 일요일 등 저빈도 요일일 때 그날 시작하는 행사가 0건이 될 수 있어 신청·결제가 끊긴다).
 5. **광고 계획**: 캠페인 7개(`np_c07_autumn` 은 2026-09-01~09-20, 날짜로 지정), 집행 구간이 서로 다르다. 일 예산 → 노출(CPM) → 클릭을 seed 비율로 계산하고, 광고비는 `AD_SPEND_SCALE` 로 따로 맞춘다(노출·클릭은 그대로, CPM 이 바뀜 — 연 광고비 ≈ 연 티켓 매출의 9%). 광고 유입 세션은 클릭의 60~90%(캠페인별, 기본 80%). 유입 세션 중 45%는 신규 사람, 나머지는 기존 방문자의 그날 첫 세션.
@@ -145,7 +146,7 @@ seed 창은 몇 주 길이라 단발 급증이 섞여 있다. 1년치에 그대�
 
 ## 보정 손잡이
 
-`generate.py` 상단 상수. 리텐션 모양은 `RETURN_BASE`·`CASUAL_SIGMA`·`CASUAL_TAIL`·`CORE_SHARE`·`CORE_LIFE_WEEKS`, 규모는 `CORE_DAILY`·`CORE_SESSIONS_PER_DAY`, 가입률은 `SIGNUP_INTENT`, 신청률은 `APPLY_MULT`, 결제 완료율은 `PAY_SUCCESS`, 취소율은 `CANCEL_PER_SESSION`, 연 티켓 매출 규모는 `MEMBER_APPLY_NUDGE`·`PRICE_TIERS`(가격대별 신청 배수로 객단가), 구독 이탈은 `SUB_HAZARD`, 공간·계약·구독 곡선은 `REGISTRY_ANCHORS`·`PARTNER_ANCHORS`·`SUB_ANCHORS`, 광고비 규모는 `AD_SPEND_SCALE`, 광고 세션 비중은 `AD_BUDGET_SCALE`·`PAID_NEW_SHARE`, 클릭 대비 세션은 `AD_SESSION_RATIO` 로 맞춘다. 값을 바꾸면 SHA256 이 바뀌므로 MANIFEST 를 다시 커밋한다.
+`generate.py` 상단 상수. 리텐션 모양은 `RETURN_BASE`·`CASUAL_SIGMA`·`CASUAL_TAIL`·`CORE_SHARE`·`CORE_LIFE_WEEKS`, 규모는 `CORE_DAILY`·`CORE_SESSIONS_PER_DAY`, 가입률은 `SIGNUP_INTENT`, 신청률은 `APPLY_MULT`, 결제 완료율은 `PAY_SUCCESS`, 취소율은 `CANCEL_PER_SESSION`, 연 티켓 매출 규모는 `MEMBER_APPLY_NUDGE`·`PRICE_TIERS`(가격대별 신청 배수로 객단가), 구독 이탈은 `SUB_HAZARD`, 공간·계약·구독 곡선은 `REGISTRY_ANCHORS`·`PARTNER_ANCHORS`·`SUB_ANCHORS`, 플랜 변경은 `PLAN_CHANGE_MONTHLY`·`PLAN_UPGRADE_SHARE`(요금·수수료율은 `seed/names.json` pricing), 광고비 규모는 `AD_SPEND_SCALE`, 광고 세션 비중은 `AD_BUDGET_SCALE`·`PAID_NEW_SHARE`, 클릭 대비 세션은 `AD_SESSION_RATIO` 로 맞춘다. 값을 바꾸면 SHA256 이 바뀌므로 MANIFEST 를 다시 커밋한다.
 
 ## 검증 단언 (`validate.py`)
 
@@ -172,6 +173,8 @@ seed 창은 몇 주 길이라 단발 급증이 섞여 있다. 1년치에 그대�
 사람 = 기기에 붙은 `user_id`(있으면) 또는 기기. 자동 로드 세션은 비율 계산에서 뺀다.
 
 시나리오 2.0 정합성: 공간당 진행 계약 1건 이하 · 계약 요금·상태 규칙 · 계약 공간이 원장에 있고 등록 후 계약 · 공간 상세 `is_partner` = 조회일 계약 상태 · 공간 상세 조회는 등록 후 · 행사 개최 공간이 개최 전 등록 · `is_partner_venue` = 개최일 계약 상태 · 행사별 신청(결제 대기 제외) ≤ 정원 · `subscribe` 수 = 구독 행 수(회원·시각 일치) · 해지 이벤트 = canceled 구독(시각 포함) · 구독자는 회원이고 가입 후 구독 · 구독 결제 = 시작일 기준 월 반복(해지·관측 끝 이후 미청구) · `subscribe` order_id = 1회차 결제 · 티켓 할인 규칙(구독 중 x 파트너 행사 15%, 실결제 = 정가 - 할인) · `user_properties.subscriber` = 그 시점 구독 상태(원장 시각은 초 단위라 경계 초의 행은 로그의 마이크로초 경계로 판정).
+
+수익 모델(`docs/business_model.md` A안, 요금·율은 `names.json` pricing): 요금 상수 일치(플랜 변경 from/to 요금 = 요금표, 계약 현재 플랜 = 마지막 변경) · 플랜 변경 정합(from ≠ to, 직전 변경과 연쇄, 변경일에 계약 진행 중, 계약·공간 일치) · 실효 수수료율 5~7%(수수료 = 결제 완료 티켓 정가 x 개최일 공간 등급 율, ÷ 거래액) · 파트너 부담률 ≤ 15%((파트너 공간 수수료 + 파트너 플랜 매출) ÷ 파트너 거래액, 플랜 매출은 그날 플랜 요금 일할 합).
 
 시나리오 2.0 범위(`docs/scenario_v2.md` §7):
 
@@ -209,9 +212,14 @@ seed 창은 몇 주 길이라 단발 급증이 섞여 있다. 1년치에 그대�
 | 행사 (관측 후 예정 410 포함) / 파트너 공간 개최 | 2,812 / 73.8% |
 | 티켓 결제 완료 / 객단가 / 연 티켓 매출 | 33,267 / 39,183원 / 13.0억 |
 | 구독 누적 / 활성 / 월 이탈률 | 2,422 / 2,000 / 5.5% |
-| 구독 매출 / B2B 매출(일할) | 1.00억 / 1.69억 |
+| 파트너 계약 현재 플랜 basic / pro, 플랜 변경 업 / 다운 | 124 / 76, 15 / 3 (계약·월 대비 1.74%) |
+| 거래액 (비파트너 / basic / pro 공간) | 13.27억 (3.34 / 6.70 / 3.24억) |
+| 수수료 / 실효 수수료율 | 0.77억 / 5.77% |
+| 멤버십(구독) 매출 / 파트너 플랜 매출(일할) | 1.00억 / 0.89억 |
+| 플랫폼 매출 (수수료 + 멤버십 + 파트너 플랜) | 2.65억 |
+| 파트너 부담률 | 13.34% = (파트너 공간 수수료 0.43억 + 플랜 0.89억) ÷ 파트너 거래액 9.94억 |
 | 광고비 ÷ 연 티켓 매출 | 10.4% |
 | 상권 비중 오차 최대 | 0.00%p (최대 잔여법으로 정확 배분) |
 | 상권별 조회 / 행사 비중 오차 최대 | +1.25%p(압구정·청담) / -2.71%p(이태원·한남) |
 
-단언 60개 통과(1.0 30개 + 2.0 28개 + 마지막 7일 신청·캠페인 공백기 신규 2개), 같은 seed 재실행 시 SHA256 동일(`data/MANIFEST.txt`). 생성 282초 · 최대 RSS 381MB, 검증 102초 · 최대 RSS 1.23GB(노트북 1대, `/usr/bin/time -l` 측정). 월별 매출 구성·등록/파트너 누적·구독자 표는 `data/summary.md`.
+단언 64개 통과(1.0 30개 + 2.0 28개 + 마지막 7일 신청·캠페인 공백기 신규 2개 + 수익 모델 4개), 같은 seed 재실행 시 SHA256 동일(`data/MANIFEST.txt`). 요금 A안 반영 전 실행과 비교하면 `db_venue_contracts`(요금·현재 플랜)·`ga4_events`(호스트 `placewave.app`)만 바뀌고 나머지 원장 6종은 바이트 단위로 같다. 생성 282초 · 최대 RSS 381MB, 검증 102초 · 최대 RSS 1.23GB(노트북 1대, `/usr/bin/time -l` 측정. A안 재생성은 같은 실행 2개를 동시에 돌려 473초 · 309MB, 검증 142초 · 1.17GB). 월별 결제 유입·플랫폼 매출(수수료 + 멤버십 + 파트너 플랜)·등록/파트너 누적·구독자 표는 `data/summary.md`.

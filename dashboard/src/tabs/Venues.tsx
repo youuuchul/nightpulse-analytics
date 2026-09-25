@@ -42,7 +42,7 @@ export default function Venues({ data, s, range }: TabProps) {
   const cols: Col<VenueRow>[] = [
     { key: 'venue_name', label: '공간', value: (r) => r.venue_name, render: (r) => <span className="text-ink">{r.venue_name}</span> },
     { key: 'region', label: '지역', value: (r) => r.region },
-    { key: 'genre', label: '장르', value: (r) => r.genre },
+    { key: 'genre', label: '무드', value: (r) => r.genre },
     { key: 'detail_viewers', label: '조회 사람(일 합)', value: (r) => r.detail_viewers, render: (r) => num(r.detail_viewers), num: true },
     { key: 'applies', label: '신청', value: (r) => r.applies, render: (r) => num(r.applies), num: true },
     { key: 'pay_count', label: '결제', value: (r) => r.pay_count, render: (r) => num(r.pay_count), num: true },

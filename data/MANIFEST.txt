@@ -1,8 +1,8 @@
-# NightPulse 합성 데이터 MANIFEST (실제 서비스 데이터 아님)
+# Placewave 합성 데이터 MANIFEST (실제 서비스 데이터 아님)
 seed: 20260923
 args: weeks=52 persons=210000 end_date=2026-09-20
-generated_at_utc: 2026-09-23 16:27:08
-elapsed_sec: 269.6
+generated_at_utc: 2026-09-25 09:49:32
+elapsed_sec: 472.9
 
 file	rows	sha256
 raw/ads_spend.csv	153	5979f4607077fed2c2ae1386fce01b187668032c95c29f04d74cc61d59ef3e50
@@ -11,6 +11,7 @@ raw/db_events.csv	2812	c267f53a255e1fc813a8316f377dcbb1bb8b19b4fe03188644ed9b5b2
 raw/db_members.csv	22008	a08151909442046bd70ad24e58ddfc5ce1da436a0116adc0bc7b452fbeef0748
 raw/db_payments.csv	47078	80865235e9e5e0dcff2964be2bba196581d251793ebc5fdfb9b3274e3d634802
 raw/db_subscriptions.csv	2422	56658ef26ef0fb6f7b01138616474a824d041fd3e62868912f60011e900705ff
-raw/db_venue_contracts.csv	200	8571a8aebd87c6cf0bc2afbdad5d53b958abd99163e758031b4fbcbd3b979a5a
+raw/db_venue_contract_changes.csv	18	4847ec9631be8b4a3f3d5f9a2b305f0fc5c1bb06040a9eefd4942d1b891d6265
+raw/db_venue_contracts.csv	200	0d509ebff483db2a1658ac9ae29c8574221d4e5db4c2e3b5b08b15276523a995
 raw/db_venues.csv	1800	9a586226ff9664da977aaf4064e2663cbdc21704b1372fede6440ebf995d069e
-raw/ga4_events.ndjson.gz	9642756	3970774ad0beeb4399c7591b8017b1aed3b0eb498e3deff2c6929448403c0ee0
+raw/ga4_events.ndjson.gz	9642756	53bb4acaec6e3c809b3c66352ed2d0333f29498c484190697836a1300ff4e3f3

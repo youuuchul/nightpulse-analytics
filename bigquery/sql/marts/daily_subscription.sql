@@ -11,6 +11,8 @@
 -- mrr = 그날 활성 구독의 월 구독료 합(안분하지 않은 월 기준 값). 실제 구독 매출은 daily_revenue kind = subscription.
 -- 이탈률은 저장하지 않는다. 화면에서 기간 churned ÷ 기간 시작일 active_subscribers 로 계산한다.
 -- 구독자 티켓 결제 = 결제일에 활성 구독이 있던 회원의 티켓 결제(환불 차감 순매출). 비구독 회원 값은 daily_revenue ticket 에서 뺀다.
+-- discount_amount = 그날(결제일) 티켓 멤버 할인 합, 환불 주문 제외. 할인은 플랫폼 부담이라 멤버십 순기여에서 뺀다.
+--   daily_revenue ticket 의 discount_amount 일 합과 같다(할인은 결제 시점 구독자에게만 붙는다).
 -- 날짜 범위: 첫 구독 시작일 ~ 스냅샷 기준일. 행이 없는 날은 없다(0 으로 채운다).
 
 CREATE OR REPLACE TABLE marts.daily_subscription (
@@ -20,7 +22,8 @@ CREATE OR REPLACE TABLE marts.daily_subscription (
   churned_subscribers INT64 OPTIONS(description='그날 종료한 구독 수'),
   mrr INT64 OPTIONS(description='그날 활성 구독의 월 구독료 합 (원)'),
   subscriber_ticket_payers INT64 OPTIONS(description='그날 티켓을 결제한 활성 구독 회원 수'),
-  subscriber_ticket_amount INT64 OPTIONS(description='활성 구독 회원의 그날 티켓 순매출 (원, 실결제액 - 환불)')
+  subscriber_ticket_amount INT64 OPTIONS(description='활성 구독 회원의 그날 티켓 순매출 (원, 실결제액 - 환불)'),
+  discount_amount INT64 OPTIONS(description='그날 티켓 멤버 할인 합 (원, 환불 주문 제외, 플랫폼 부담)')
 )
 PARTITION BY kst_date
 OPTIONS(description='구독 일 마트. 1행 = 일. 원천 staging.dim_subscription·fct_order. 활성 = start_date <= d < end_date')
@@ -69,6 +72,15 @@ sub_ticket AS (
     AND o.kind = 'ticket'
     AND o.is_paid
   GROUP BY 1
+),
+disc AS (
+  SELECT paid_date AS kst_date, SUM(discount_amount) AS amount
+  FROM staging.fct_order
+  WHERE applied_date BETWEEN DATE '2000-01-01' AND DATE '2099-12-31'
+    AND kind = 'ticket'
+    AND is_paid
+    AND refund_amount = 0
+  GROUP BY 1
 )
 SELECT
   sp.kst_date,
@@ -77,9 +89,11 @@ SELECT
   COALESCE(en.n, 0) AS churned_subscribers,
   COALESCE(a.mrr, 0) AS mrr,
   COALESCE(t.payers, 0) AS subscriber_ticket_payers,
-  COALESCE(t.amount, 0) AS subscriber_ticket_amount
+  COALESCE(t.amount, 0) AS subscriber_ticket_amount,
+  COALESCE(di.amount, 0) AS discount_amount
 FROM spine AS sp
 LEFT JOIN active AS a USING (kst_date)
 LEFT JOIN started AS st USING (kst_date)
 LEFT JOIN ended AS en USING (kst_date)
-LEFT JOIN sub_ticket AS t USING (kst_date);
+LEFT JOIN sub_ticket AS t USING (kst_date)
+LEFT JOIN disc AS di USING (kst_date);
